@@ -26,8 +26,11 @@
 #include <algorithm>
 #include <cstring>
 
+// NOTE: This may be the real ARM library or a mock, depending on the
+// platfom that we are building for.
+#include <arm_math.h>
+
 #include <kc1fsz-tools/Log.h>
-//#include <itu-g711-codec/codec.h>
 
 #include "IAX2Util.h"
 #include "MessageConsumer.h"
@@ -90,18 +93,7 @@ sudo udevadmin trigger
 LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
     unsigned destBusId, unsigned destCallId) 
-:   _log(log),
-    _clock(clock),
-    _captureConsumer(captureConsumer),
-    _busId(busId),
-    _callId(callId),
-    _destBusId(destBusId), 
-    _destCallId(destCallId),
-    _startTimeMs(_clock.time()),
-    _dtmfDetector(clock, BLOCK_SIZE_8K / 2) {
-
-    _resampler.setRates(48000, 8000);
-
+:   LineRadio(log, clock, captureConsumer, busId, callId, destBusId, destCallId) {
     _toneOmega = 400.0 * 2.0 * 3.1415926 / (float)48000.0;
     _tonePhi = 0;
 }
@@ -320,45 +312,6 @@ void LineUsb::_checkTimeouts() {
     }
 }
 
-void LineUsb::resetStatistics() {
-    _captureClipCount = 0;
-    _capturePcmValueMax = 0;
-    _capturePcmValueSum = 0;
-    _capturePcmValueCount = 0;
-    _playClipCount = 0;
-    _playPcmValueMax = 0;
-    _playPcmValueSum = 0;
-    _playPcmValueCount = 0;
-}
-
-static float dbVfs(int16_t v) {
-    float fv = (float)v / 32767.0;
-    if (fv == 0)
-        return -96;
-    return 20.0 * log10(fv);
-}
-
-void LineUsb::oneSecTick() {
-    // Stats
-    if (_capturePcmValueCount) {
-        uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
-        _log.info("TXLEVEL %6u %5.1f %5.1f", _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg));
-    }
-    /*
-    if (_playPcmValueCount) {
-        uint32_t avg = _playPcmValueSum / _playPcmValueCount;
-        _log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
-    }
-    */
-    resetStatistics();
-
-    if (_captureGapTotal) {
-        //_log.info("Capture gap avg (us) %u", _captureGapTotal / _captureGapCount);
-        _captureGapTotal = 0;
-        _captureGapCount = 0;
-    }
-}
-
 // ===== Capture Related =========================================================
 
 // On startup the capture card is in STATE_PREPARED
@@ -494,87 +447,6 @@ void LineUsb::_captureIfPossible() {
     }
 }
 
-void LineUsb::_captureStart() {
-    if (_record) {
-        _captureRecordCounter++;
-        _log.info("Started audio capturing %u-%u", _startTimeMs, _captureRecordCounter);
-        char fname[32];
-        snprintf(fname, 32, "capture-%u-%06u.txt", _startTimeMs, _captureRecordCounter);
-        _captureFile.open(fname, std::ios_base::out);
-    }
-}
-
-void LineUsb::_captureEnd() {
-    if (_record) {
-        _log.info("Ended audio capturing");
-        _captureFile.close();
-    }
-}
-
-void LineUsb::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
-
-    // Jitter stats
-    if (!_lastFullCaptureUs == 0) {
-        uint32_t gap = _clock.timeUs() - _lastFullCaptureUs;
-        _captureGapTotal += gap;
-        _captureGapCount++;
-    }
-    _lastFullCaptureUs = _clock.timeUs();
-
-    // Power
-    for (unsigned i = 0; i < frameLen; i++) {
-        int16_t sample = abs(frame[i]);
-        if (sample > _clipThreshold) {
-            _captureClipCount++;
-            _captureClips++;
-        }
-        if (sample > _capturePcmValueMax)
-            _capturePcmValueMax = sample;
-        _capturePcmValueSum += sample;
-        _capturePcmValueCount++;
-    }
-
-    if (_record) {
-        for (unsigned i = 0; i < frameLen; i++)
-                _captureFile << frame[i] << endl;
-    }
-}
-
-void LineUsb::_processCapturedAudio(const int16_t* block, unsigned blockLen,
-    uint64_t actualCaptureUs, uint64_t idealCaptureUs) {
-
-    assert(blockLen == BLOCK_SIZE_48K);
-
-    // Decimate from 48k to 8k
-    int16_t pcm8k[BLOCK_SIZE_8K];
-    assert(_resampler.getInBlockSize() == BLOCK_SIZE_48K);
-    assert(_resampler.getOutBlockSize() == BLOCK_SIZE_8K);
-    _resampler.resample(block, blockLen, pcm8k, BLOCK_SIZE_8K);
-
-    // Check for DTMF signaling. The detector
-    // is configured for a frame size of 80 so we
-    // pass the audio in two pieces.
-    _dtmfDetector.processBlock(pcm8k);
-    _dtmfDetector.processBlock(pcm8k + (BLOCK_SIZE_8K / 2));
-
-    // TODO: SIGNALING
-    if (_dtmfDetector.isDetectionPending()) {
-        _log.info("DTMF %c", _dtmfDetector.popDetection());
-    }
-
-    // Make an SLIN_48K buffer in CODEC format.
-    uint8_t outBuffer[BLOCK_SIZE_48K * 2];
-    Transcoder_SLIN_48K transcoder;
-    transcoder.encode(block, blockLen, outBuffer, BLOCK_SIZE_48K * 2);
-
-    // Make an audio message and send it to the listeners for processing
-    Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
-        BLOCK_SIZE_48K * 2, outBuffer, idealCaptureUs);
-    msg.setSource(_busId, _callId);
-    msg.setDest(_destBusId, _destCallId);
-    _captureConsumer.consume(msg);
-}
-
 // ===== Play Related =========================================================
 
 void LineUsb::consume(const Message& frame) {
@@ -694,39 +566,6 @@ void LineUsb::_playIfPossible() {
     }
 
     _firstPlayOfTalkspurt = false;
-}
-
-void LineUsb::_playStart() {
-    if (_record) {
-        _playRecordCounter++;
-        _log.info("Started audio playing %u-%u", _startTimeMs, _playRecordCounter);
-        char fname[32];
-        snprintf(fname, 32, "play-%u-%06u.txt", _startTimeMs, _playRecordCounter);
-        _playFile.open(fname, std::ios_base::out);
-    }
-}
-
-void LineUsb::_playEnd() {
-    if (_record) {
-        _log.info("Ended audio playing");
-        _playFile.close();
-    }
-}
-
-void LineUsb::_analyzePlayedAudio(const int16_t* frame, unsigned frameLen) {   
-    for (unsigned i = 0; i < frameLen; i++) {
-        if (_record)
-            _playFile << frame[i] << endl;
-        int16_t sample = abs(frame[i]);
-        if (sample > _clipThreshold) {
-            _playClipCount++;
-            _playClips++;
-        }
-        if (sample > _playPcmValueMax)
-            _playPcmValueMax = sample;
-        _playPcmValueSum += sample;
-        _playPcmValueCount++;
-    }
 }
 
 }
