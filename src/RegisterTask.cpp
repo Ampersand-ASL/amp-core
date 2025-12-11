@@ -46,36 +46,6 @@ RegisterTask::RegisterTask(Log& log, Clock& clock)
 RegisterTask::~RegisterTask() {
 }
 
-int RegisterTask::getPolls(pollfd* fds, unsigned fdsCapacity) {
-
-    unsigned pollfdUsed = 0;
-
-    if (_state == State::STATE_QUERY_RUNNING) {
-
-        // Pull out the set of FDs used by curl
-        fd_set rdSet, wrSet, exSet;
-        int maxFd = 0;
-        curl_multi_fdset(_multiHandle, &rdSet, &wrSet, &exSet, &maxFd);
-
-        // Now scan the old fd_sets and allocate some pollfds.
-        for (int fd = 0; fd < maxFd; fd++) {
-            if (FD_ISSET(fd, &rdSet) || FD_ISSET(fd, &wrSet)) {
-                if (fdsCapacity == 0)
-                    return -1;
-                fds[pollfdUsed].fd = fd;
-                fds[pollfdUsed].events = 0;
-                if (FD_ISSET(fd, &rdSet))
-                    fds[pollfdUsed].events |= POLLIN;
-                if (FD_ISSET(fd, &wrSet))
-                    fds[pollfdUsed].events |= POLLOUT;
-                pollfdUsed++;
-                fdsCapacity--;
-            }
-        }
-    }
-    return pollfdUsed;
-}
-
 void RegisterTask::configure(const char* regServerUrl, 
     const char* nodeNumber, const char* password, unsigned iaxPort) {
     _regServerUrl = regServerUrl;
@@ -84,7 +54,7 @@ void RegisterTask::configure(const char* regServerUrl,
     _iaxPort = iaxPort;
 }
 
-void RegisterTask::_registerStart() {     
+void RegisterTask::doRegister() {     
 
     _multiHandle = curl_multi_init();
     _curl = curl_easy_init();
@@ -93,12 +63,8 @@ void RegisterTask::_registerStart() {
     curl_easy_setopt(_curl, CURLOPT_USERAGENT, AST_CURL_USER_AGENT);
     curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, _writeCallback);
     curl_easy_setopt(_curl, CURLOPT_WRITEDATA, this);
-
-    curl_multi_add_handle(_multiHandle, _curl);
-
     // Cache the CA cert bundle in memory for a week 
     curl_easy_setopt(_curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
-
     _headers = curl_slist_append(_headers, "Content-Type: application/json");
     curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, _headers);
 
@@ -122,66 +88,37 @@ void RegisterTask::_registerStart() {
     _resultArea[0] = 0;
     _resultAreaLen = 0;
 
-    _state = State::STATE_QUERY_RUNNING;
+    CURLcode res = curl_easy_perform(_curl);
+    if (rc != CURLE_OK) {
+        _log.error("Registration failed (1) for %s", _nodeNumber.c_str());
+    }
+    else {
+        long http_code = 0;
+        curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
+        printf("HTTP code %ld\n", http_code);
+        printf("GOT %s\n", _resultArea);
+        char* r0 = strstr(_resultArea, "successfully registered");
+        if (http_code == 200 && r0 != 0) {
+            _log.info("Successfully registered %s", _nodeNumber.c_str());
+            _lastGoodRegistrationMs = _clock.time();
+        }
+        else {
+            _log.error("Registration failed for %s", _nodeNumber.c_str());
+        }
+    }
 
-}
-
-void RegisterTask::_registerEnd() {
-    curl_multi_remove_handle(_multiHandle, _curl);
     curl_slist_free_all(_headers);
-    curl_easy_cleanup(_curl);
-    curl_multi_cleanup(_multiHandle);
+    curl_easy_cleanup(_curl)
     _headers = 0;
     _curl = 0;
-    _multiHandle = 0;
 }
 
 void RegisterTask::tenSecTick() {
     if (_clock.time() >= _nextRegisterMs) {
         _nextRegisterMs = _clock.time() + _regIntervalMs;
         if (!_nodeNumber.empty())
-            _registerStart();
+            doRegister();
     }
-}
-
-bool RegisterTask::run2() {  
-
-    const State originalState = _state;
-
-    if (_state == State::STATE_QUERY_RUNNING) {
-        int still_running = 1;
-        CURLMcode mc = curl_multi_perform(_multiHandle, &still_running);
-        if (mc != CURLM_OK) {
-            _log.error("curl_multi_perform or curl_multi_wait failed: %s", 
-                curl_multi_strerror(mc));
-            _state = State::STATE_CLEANUP;
-        }
-        else {
-            int queued;
-            CURLMsg* msg = curl_multi_info_read(_multiHandle, &queued);
-            if (msg && msg->msg == CURLMSG_DONE) {
-                long http_code = 0;
-                curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
-                //printf("HTTP code %ld\n", http_code);
-                //printf("GOT %s\n", _resultArea);
-                char* r0 = strstr(_resultArea, "successfully registered");
-                if (http_code == 200 && r0 != 0) {
-                    _log.info("Successfully registered %s", _nodeNumber.c_str());
-                    _lastGoodRegistrationMs = _clock.time();
-                }
-                else {
-                    _log.error("Registration failed for %s", _nodeNumber.c_str());
-                }
-                _state = State::STATE_CLEANUP;
-            }
-        }
-    }
-    else if (_state == State::STATE_CLEANUP) {
-        _registerEnd();
-        _state = State::STATE_IDLE;
-    }
-
-    return _state != originalState;
 }
 
 // Callback function to handle received data

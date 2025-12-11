@@ -36,10 +36,12 @@ public:
     void configure(const char* regServerUrl, const char* nodeNumber, const char* password, 
         unsigned iaxPort);
 
+    void doRegister();
+
     // ----- Runnable -------
 
-    int getPolls(pollfd* fds, unsigned fdsCapacity);
-    bool run2();
+    int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
+    bool run2() { }
     void audioRateTick() { }
     void tenSecTick();
 
@@ -47,15 +49,6 @@ private:
 
     static size_t _writeCallback(void* contents, size_t size, size_t nmemb, void* userp);
     void _writeCallback2(const char* contents, size_t size);
-
-    void _registerStart();
-    void _registerEnd();
-
-    enum State {
-        STATE_IDLE,
-        STATE_QUERY_RUNNING,
-        STATE_CLEANUP
-    };
 
     Log& _log;
     Clock& _clock;
@@ -69,12 +62,10 @@ private:
     unsigned _resultAreaLen = 0;
     char _resultArea[RESULT_AREA_SIZE];
 
-    State _state = State::STATE_IDLE;
     uint32_t _regIntervalMs;
     uint32_t _nextRegisterMs = 0;
     uint32_t _lastGoodRegistrationMs = 0;
 
-    CURLM* _multiHandle = 0;
     CURL* _curl = 0;
     curl_slist* _headers = 0;
 
