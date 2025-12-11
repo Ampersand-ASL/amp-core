@@ -37,7 +37,7 @@ public:
      * @returns The number of pollfds consumed, or -1 if there is not 
      * enough capacity.
      */
-    virtual int getPolls(pollfd* fds, unsigned fdsCapacity) = 0;
+    virtual int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
 
     virtual void run() { run2(); }
 
@@ -57,7 +57,7 @@ public:
      * in "real time," this function will be called for every 20m tick of 
      * the system clock (i.e. none will be skipped entirely).
      */
-    virtual void audioRateTick() = 0;
+    virtual void audioRateTick() { }
 
     virtual void oneSecTick() { }
     

@@ -72,13 +72,17 @@ void AdaptorOut::consume(const Message& frame) {
                 codeSize, code, frame.getOriginUs());
             outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
             outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
-            _sink(outFrame);
+
+            if (_sink)
+                _sink(outFrame);
         }
         else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
             // No support for interpolation
-            if (frame.getType() == Message::Type::AUDIO)
+            if (frame.getType() == Message::Type::AUDIO) {
                 // No conversion needed
-                _sink(frame);
+                if (_sink)
+                    _sink(frame);
+            }
             else
                 assert(false);
         }
@@ -87,7 +91,8 @@ void AdaptorOut::consume(const Message& frame) {
         // No support
         assert(false);
     } else {
-        _sink(frame);
+        if (_sink)
+            _sink(frame);
     }
 }
 
