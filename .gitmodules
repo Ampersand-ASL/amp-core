@@ -1,0 +1,15 @@
+[submodule "kc1fsz-tools-cpp"]
+	path = kc1fsz-tools-cpp
+	url = https://github.com/brucemack/kc1fsz-tools-cpp.git
+[submodule "itu-g711-codec"]
+	path = itu-g711-codec
+	url = https://github.com/brucemack/itu-g711-codec.git
+[submodule "ed25519"]
+	path = ed25519
+	url = https://github.com/orlp/ed25519.git
+[submodule "cmsis-dsp-mock"]
+	path = cmsis-dsp-mock
+	url = https://github.com/brucemack/cmsis-dsp-mock.git
+[submodule "sound-map"]
+	path = sound-map
+	url = https://github.com/Ampersand-ASL/sound-map.git

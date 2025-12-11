@@ -1,0 +1,63 @@
+/**
+ * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#pragma once
+
+#include <poll.h>
+#include <cstdint>
+
+#include "kc1fsz-tools/Runnable.h"
+
+namespace kc1fsz {
+
+class Runnable2 : public Runnable {
+public:
+
+    /**
+     * Fulls up the poll list with any file desriptors that need to be
+     * monitored for aysnchronous activity. 
+     * 
+     * @returns The number of pollfds consumed, or -1 if there is not 
+     * enough capacity.
+     */
+    virtual int getPolls(pollfd* fds, unsigned fdsCapacity) = 0;
+
+    virtual void run() { run2(); }
+
+    /**
+     * This is called whenever a poll event is detected, or when a 
+     * previous call to run2() indicates that more work might be 
+     * pending. An event loop will keep calling this function until
+     * it returns false.
+     * 
+     * @returns If any work might still be pending
+     */
+    virtual bool run2() = 0;
+
+    /**
+     * Called at the audio interval (usually every 20ms), as precisely
+     * as possible. Although the tick may happen slightly ahead or behind 
+     * in "real time," this function will be called for every 20m tick of 
+     * the system clock (i.e. none will be skipped entirely).
+     */
+    virtual void audioRateTick() = 0;
+
+    virtual void oneSecTick() { }
+    
+    virtual void tenSecTick() { }
+};
+
+}
