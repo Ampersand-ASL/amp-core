@@ -41,7 +41,7 @@ public:
     // ----- Runnable -------
 
     int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
-    bool run2() { }
+    bool run2() { return false; }
     void audioRateTick() { }
     void tenSecTick();
 

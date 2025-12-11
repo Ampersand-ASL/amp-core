@@ -25,8 +25,10 @@ int main(int,const char**) {
     StdClock clock;
 
     RegisterTask task(log, clock);
-    task.configure("https://register.allstarlink.org", "61057", "microlink");
-    task.doRegister()
+    task.configure("https://register.allstarlink.org", "61057", "yyyy", 4569);
+    task.doRegister();
+    task.configure("https://register.allstarlink.org", "61057", "xxxx", 4569);
+    task.doRegister();
 
     curl_global_cleanup();
 

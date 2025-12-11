@@ -56,7 +56,6 @@ void RegisterTask::configure(const char* regServerUrl,
 
 void RegisterTask::doRegister() {     
 
-    _multiHandle = curl_multi_init();
     _curl = curl_easy_init();
 
     curl_easy_setopt(_curl, CURLOPT_NOSIGNAL, 1L);
@@ -89,14 +88,14 @@ void RegisterTask::doRegister() {
     _resultAreaLen = 0;
 
     CURLcode res = curl_easy_perform(_curl);
-    if (rc != CURLE_OK) {
+    if (res != CURLE_OK) {
         _log.error("Registration failed (1) for %s", _nodeNumber.c_str());
     }
     else {
         long http_code = 0;
         curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
-        printf("HTTP code %ld\n", http_code);
-        printf("GOT %s\n", _resultArea);
+        //printf("HTTP code %ld\n", http_code);
+        //printf("GOT %s\n", _resultArea);
         char* r0 = strstr(_resultArea, "successfully registered");
         if (http_code == 200 && r0 != 0) {
             _log.info("Successfully registered %s", _nodeNumber.c_str());
@@ -108,7 +107,7 @@ void RegisterTask::doRegister() {
     }
 
     curl_slist_free_all(_headers);
-    curl_easy_cleanup(_curl)
+    curl_easy_cleanup(_curl);
     _headers = 0;
     _curl = 0;
 }
