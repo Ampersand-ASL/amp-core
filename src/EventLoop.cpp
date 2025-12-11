@@ -73,8 +73,12 @@ void EventLoop::run(Log& log, Clock& clock,
         sleepMs = std::max(sleepMs, (uint32_t)2);
 
         // Block waiting for activity or timeout
+        int rc = 0;
 #ifdef _WIN32
-        int rc = WSAPoll(fds, fdsSize, sleepMs);
+        if (fdsSize > 0)
+            rc = WSAPoll(fds, fdsSize, sleepMs);
+        else 
+            Sleep(sleepMs);
 #else        
         int rc = poll(fds, fdsSize, sleepMs);
 #endif
