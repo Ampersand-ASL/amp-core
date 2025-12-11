@@ -16,7 +16,11 @@
  */
 #pragma once
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <poll.h>
+#endif
 #include <cstdint>
 
 #include "kc1fsz-tools/Runnable.h"

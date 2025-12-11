@@ -17,11 +17,18 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
-#include <sys/types.h>
+#include <poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <poll.h>
+#endif
+
+#include <sys/types.h>
 
 #include <cstring>
 #include <iostream>
@@ -125,14 +132,7 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
         return -1;
     }
 
-    // Make non-blocking
-    int flags = fcntl(iaxSockFd, F_GETFL, 0);
-    if (flags == -1) {
-        _log.error("open fcntl failed (%d)", errno);
-        ::close(iaxSockFd);
-        return -1;
-    }
-    if (fcntl(iaxSockFd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (makeNonBlocking(iaxSockFd) != 0) {
         _log.error("open fcntl failed (%d)", errno);
         ::close(iaxSockFd);
         return -1;
@@ -159,13 +159,8 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
         return -1;
     }
     // Make non-blocking
-    flags = ::fcntl(dnsSockFd, F_GETFL, 0);
-    if (flags == -1) {
-        ::close(iaxSockFd);
-        ::close(dnsSockFd);
-        return -1;
-    }
-    if (fcntl(dnsSockFd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (makeNonBlocking(dnsSockFd) != 0) {
+        _log.error("Failed to make DNS socket non-blocking %d", errno);
         ::close(iaxSockFd);
         ::close(dnsSockFd);
         return -1;
@@ -320,7 +315,12 @@ bool LineIAX2::_processInboundIAXData() {
     uint8_t readBuffer[readBufferSize];
     struct sockaddr_storage peerAddr;
     socklen_t peerAddrLen = sizeof(peerAddr);
+// Windows uses slightly different types on the socket calls
+#ifdef _WIN32    
+    int rc = recvfrom(_iaxSockFd, (char*)readBuffer, readBufferSize, 0, (sockaddr*)&peerAddr, &peerAddrLen);
+#else
     int rc = recvfrom(_iaxSockFd, readBuffer, readBufferSize, 0, (sockaddr*)&peerAddr, &peerAddrLen);
+#endif
     if (rc == 0) {
         return false;
     } else if (rc == -1 && errno == 11) {
@@ -347,7 +347,12 @@ bool LineIAX2::_processInboundDNSData() {
     uint8_t readBuffer[readBufferSize];
     struct sockaddr_storage peerAddr;
     socklen_t peerAddrLen = sizeof(peerAddr);
+// Windows uses slightly different types on the socket calls
+#ifdef _WIN32    
+    int rc = recvfrom(_dnsSockFd, (char*)readBuffer, readBufferSize, 0, (sockaddr*)&peerAddr, &peerAddrLen);
+#else
     int rc = recvfrom(_dnsSockFd, readBuffer, readBufferSize, 0, (sockaddr*)&peerAddr, &peerAddrLen);
+#endif
     if (rc == 0) {
         return false;
     } else if (rc == -1 && errno == 11) {
@@ -1646,8 +1651,17 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame,
 
 void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
-    int rc = ::sendto(_iaxSockFd, b, len, 0, &peerAddr, getIPAddrSize(peerAddr));
-    if (rc < 0) {
+
+    int rc = ::sendto(_iaxSockFd, 
+// Windows uses slightly different types on the socket calls
+#ifdef _WIN32    
+        (const char*)b,
+#else
+        b
+#endif
+        len, 0, &peerAddr, getIPAddrSize(peerAddr));
+
+if (rc < 0) {
         if (errno == 101) {
             char temp[64];
             formatIPAddrAndPort(peerAddr, temp, 64);
@@ -1677,8 +1691,16 @@ void LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(53);
     inet_pton(AF_INET, DNS_IP_ADDR, &dest_addr.sin_addr); 
-    int rc = ::sendto(_dnsSockFd, dnsPacket, dnsPacketLen, 0, 
-        (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
+    int rc = ::sendto(_dnsSockFd, 
+// Windows uses slightly different types on the socket calls
+#ifdef _WIN32    
+        (const char*)dnsPacket, 
+#else
+        dnsPacket, 
+#endif
+        dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
     if (rc < 0) {
         _log.error("DNS send error");
     }
@@ -1708,8 +1730,14 @@ void LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(53);
     inet_pton(AF_INET, DNS_IP_ADDR, &dest_addr.sin_addr); 
-    int rc = ::sendto(_dnsSockFd, dnsPacket, dnsPacketLen, 0, 
-        (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    int rc = ::sendto(_dnsSockFd, 
+// Windows uses slightly different types on the socket calls
+#ifdef _WIN32    
+        (const char*)dnsPacket, 
+#else
+        dnsPacket, 
+#endif
+        dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
     if (rc < 0) {
         _log.error("DNS send error");
     }
