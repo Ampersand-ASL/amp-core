@@ -14,7 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <sys/select.h>
 #include <iostream>
 
 #include "kc1fsz-tools/Log.h"

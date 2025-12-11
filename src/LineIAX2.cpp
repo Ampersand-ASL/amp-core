@@ -16,12 +16,12 @@
  */
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
+#include <errno.h>
 #include <sys/socket.h>
 #include <poll.h>
 #include <netinet/in.h>
@@ -323,9 +323,17 @@ bool LineIAX2::_processInboundIAXData() {
 #endif
     if (rc == 0) {
         return false;
-    } else if (rc == -1 && errno == 11) {
+    } 
+#ifdef _WIN32
+    else if (rc == -1 && WSAGetLastError() == WSAEWOULDBLOCK) {
         return false;
-    } else if (rc > 0) {
+    }
+#else
+    else if (rc == -1 && errno == 11) {
+        return false;
+    } 
+#endif
+    else if (rc > 0) {
         _processReceivedIAXPacket(readBuffer, rc, (const sockaddr&)peerAddr, _clock.timeUs());
         // Return back to be nice, but indicate that there might be more
         return true;
@@ -355,9 +363,17 @@ bool LineIAX2::_processInboundDNSData() {
 #endif
     if (rc == 0) {
         return false;
-    } else if (rc == -1 && errno == 11) {
+    } 
+#ifdef _WIN32
+    else if (rc == -1 && WSAGetLastError() == WSAEWOULDBLOCK) {
         return false;
-    } else if (rc > 0) {
+    }
+#else
+    else if (rc == -1 && errno == 11) {
+        return false;
+    } 
+#endif
+    else if (rc > 0) {
         _processReceivedDNSPacket(readBuffer, rc, (const sockaddr&)peerAddr);
         // Return back to be nice, but indicate that there might be more
         return true;
@@ -1661,8 +1677,13 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
 #endif
         len, 0, &peerAddr, getIPAddrSize(peerAddr));
 
-if (rc < 0) {
+    if (rc < 0) {
+// No errno on Windows
+#ifdef _WIN32
+        if (WSAGetLastError() == WSAENETUNREACH) {
+#else
         if (errno == 101) {
+#endif        
             char temp[64];
             formatIPAddrAndPort(peerAddr, temp, 64);
             _log.error("Network is unreachable to %s", temp);
