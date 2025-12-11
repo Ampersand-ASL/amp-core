@@ -1657,7 +1657,7 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
 #ifdef _WIN32    
         (const char*)b,
 #else
-        b
+        b,
 #endif
         len, 0, &peerAddr, getIPAddrSize(peerAddr));
 
