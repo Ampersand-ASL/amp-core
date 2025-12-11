@@ -58,9 +58,9 @@ public:
     /**
      * Utility
      */
-    static void g711ToPcm48(arm_fir_instance_q15* upsampleFilter,
-        const uint8_t* inG711, unsigned inG711Len,
-        int16_t* outPcm48, unsigned outPcm48Len);
+    //static void g711ToPcm48(arm_fir_instance_q15* upsampleFilter,
+    //    const uint8_t* inG711, unsigned inG711Len,
+    //    int16_t* outPcm48, unsigned outPcm48Len);
 
     // ----- Runnable ---------------------------------------------------------
 

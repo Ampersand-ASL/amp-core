@@ -27,7 +27,7 @@
 #include <cstring>
 
 #include <kc1fsz-tools/Log.h>
-#include <itu-g711-codec/codec.h>
+//#include <itu-g711-codec/codec.h>
 
 #include "IAX2Util.h"
 #include "MessageConsumer.h"
