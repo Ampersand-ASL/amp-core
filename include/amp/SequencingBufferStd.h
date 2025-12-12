@@ -27,7 +27,7 @@ namespace kc1fsz {
     namespace amp {
 
 /**
- * Adaptive Jitter Bufer.
+ * Adaptive Jitter Buffer.
  * 
  * The method I've settled on at the moment is called "Ramjee Algorithm 1" after a 
  * paper by Ramjee, Kurose, Towsley, and Schulzrinne called "Adaptive Playout 

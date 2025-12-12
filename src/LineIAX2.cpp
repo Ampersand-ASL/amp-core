@@ -1317,11 +1317,16 @@ bool LineIAX2::_progressCall(Call& call) {
                 call.localNumber.c_str(), call.remoteNumber.c_str()); 
             
             // Put sequence back to the beginning and generate a new call ID
+            // #### TODO: THIS IS PROBLEMATIC BECAUSE SOME THINGS IN THE 
+            // #### STATE NEED TO BE ESTABLISHED IN THE call() FUNCTION
+            // #### AND SOME THINGS HERE.  KEEP THE RECONNECT CASE IN MIND
+            // #### (WHICH DOESN'T GO THROUGH call() AGAIN).
             call.outSeqNo = 0;
             call.expectedInSeqNo = 0;
             call.localCallId = _localCallIdCounter++;
             call.remoteCallId = 0;
             call.reTx.reset();
+            call.jitBuf.reset();
 
             // Make a NEW frame
             //
