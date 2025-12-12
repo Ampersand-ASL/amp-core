@@ -147,9 +147,6 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
     _captureConsumer.consume(msg);
 }
 
-
-
-
 void LineRadio::_analyzePlayedAudio(const int16_t* frame, unsigned frameLen) {   
     for (unsigned i = 0; i < frameLen; i++) {
         if (_record)
