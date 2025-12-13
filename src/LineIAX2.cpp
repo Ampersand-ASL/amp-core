@@ -958,7 +958,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         // Make a signal Message and queue it into the jitter buffer.
         Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0);
-        msg.setSource(_busId, call.localCallId);
+        unkeyMsg.setSource(_busId, call.localCallId);
         // #### TODO: MAKE SURE THERE IS NO WAY THAT THIS CAN BE DROPPED 
         // #### IN THE JITTER BUFFER.
         call.jitBuf.consumeSignal(_log, unkeyMsg, 
@@ -1977,7 +1977,6 @@ public:
     }
 
     virtual void playSignal(const Message& payload, uint32_t localTime) {   
-        _log.info("Passing signal out of JB");
         _bus.consume(payload);
     }
 
