@@ -151,9 +151,9 @@ void NodeParrot::_consumeSignalInSession(Session& s, const Message& msg) {
     if (msg.getType() == Message::SIGNAL &&
         msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
         if (s.state == State::RECORDING) {
-            log.info("Record end (UNKEY)");
+            _log.info("Record end (UNKEY)");
             s.state = State::PAUSE_AFTER_RECORD;
-            s.stateStartTime = clock.time();
+            s.stateStartTime = _clock.time();
         }
     }
 }
