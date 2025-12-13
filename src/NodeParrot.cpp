@@ -52,72 +52,83 @@ void NodeParrot::reset() {
 
 void NodeParrot::consume(const Message& msg) { 
 
-    if (msg.getType() == Message::SIGNAL) {
-        if (msg.getFormat() == Message::SignalType::CALL_START) {
-            // Remove old/existing session for this call (if any)
-            _sessions.visitIf(
-                // Visitor
-                RESET_VISITOR,
-                // Predicate
-                [msg](const Session& s) { return s.belongsTo(msg); });
-            // Add new session for this call
-            int newIndex = _sessions.firstIndex([](const Session& s) { return !s.active; });
-            if (newIndex == -1) {
-                _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
-                // #### TODO: NEED TO TEST THIS AFTER RACE CONDITION IS RESOLVED
-                Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
-                    _clock.timeUs());
-                msg.setDest(msg.getSourceBusId(), msg.getSourceCallId());
-                _bus.consume(msg);
-            }
-            else {                
-                PayloadCallStart payload;
-                assert(msg.size() == sizeof(payload));
-                memcpy(&payload, msg.raw(), sizeof(payload));
+    if (msg.getType() == Message::SIGNAL && 
+        msg.getFormat() == Message::SignalType::CALL_START) {
+        
+        // Remove old/existing session for this call (if any)
+        _sessions.visitIf(
+            // Visitor
+            RESET_VISITOR,
+            // Predicate
+            [msg](const Session& s) { return s.belongsTo(msg); });
+        // Add new session for this call
+        int newIndex = _sessions.firstIndex([](const Session& s) { return !s.active; });
+        if (newIndex == -1) {
+            _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
+            // #### TODO: NEED TO TEST THIS AFTER RACE CONDITION IS RESOLVED
+            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
+                _clock.timeUs());
+            msg.setDest(msg.getSourceBusId(), msg.getSourceCallId());
+            _bus.consume(msg);
+        }
+        else {                
+            PayloadCallStart payload;
+            assert(msg.size() == sizeof(payload));
+            memcpy(&payload, msg.raw(), sizeof(payload));
 
-                _log.info("Call started %d codec %X", msg.getSourceCallId(), payload.codec);
+            _log.info("Call started %d codec %X", msg.getSourceCallId(), payload.codec);
 
-                Session& s = _sessions.at(newIndex);
-                s.active = true;
-                s.lineId = msg.getSourceBusId();
-                s.callId = msg.getSourceCallId();
-                s.callStartTime = _clock.time();
-                s.state = State::CONNECTED;
-                s.stateStartTime = _clock.time();
-                s.adaptorIn.setCodec(payload.codec);
-                // This handles frames coming in from the outside via consume()
-                s.adaptorIn.setSink([this](const Message& msg) {
+            Session& s = _sessions.at(newIndex);
+            s.active = true;
+            s.lineId = msg.getSourceBusId();
+            s.callId = msg.getSourceCallId();
+            s.callStartTime = _clock.time();
+            s.state = State::CONNECTED;
+            s.stateStartTime = _clock.time();
+            s.adaptorIn.setCodec(payload.codec);
+            s.adaptorIn.setSink(
+                // This handles Messages coming in from the outside via consume()
+                // but AFTER the de-jitter, PLC, and transcoding has happened.
+                [this](const Message& msg) {
                     this->_sessions.visitIf(
                         // Visitor
                         [this, msg](Session& s) { 
-                            this->_consumeAudioInSession(s, msg);
+                            if (msg.getType() == Message::Type::AUDIO) 
+                                this->_consumeAudioInSession(s, msg);
+                            else if (msg.getType() == Message::Type::SIGNAL)
+                                this->_consumeSignalInSession(s, msg);
                             // Can stop after first hit
                             return false;
                         },
                         // Predicate
                         [msg](const Session& s) { return s.belongsTo(msg); }
                     );
-                });
-                s.adaptorOut.setCodec(payload.codec);
-                // This handles frames that need to go out (i.e. playback)
-                s.adaptorOut.setSink([this](const Message& msg) {
-                    this->_bus.consume(msg);
-                });
-            }
+                }
+            );
+            s.adaptorOut.setCodec(payload.codec);
+            // This handles frames that need to go out (i.e. playback)
+            s.adaptorOut.setSink([this](const Message& msg) {
+                this->_bus.consume(msg);
+            });
         }
-        else if (msg.getFormat() == Message::SignalType::CALL_END) {
+    }
+    else if (msg.getType() == Message::SIGNAL && 
+             msg.getFormat() == Message::SignalType::CALL_END) {
 
-            _log.info("Call ended %d", msg.getSourceCallId());
+        _log.info("Call ended %d", msg.getSourceCallId());
 
-            _sessions.visitIf(
-                // Visitor
-                RESET_VISITOR,
-                // Predicate
-                [msg](const Session& s) { return s.belongsTo(msg); });
-        }
-    } 
+        _sessions.visitIf(
+            // Visitor
+            RESET_VISITOR,
+            // Predicate
+            [msg](const Session& s) { return s.belongsTo(msg); });
+    }
+    // These are all the message types that get passed directly to the call's
+    // input adaptor for processing.
     else if (msg.getType() == Message::AUDIO || 
-             msg.getType() == Message::AUDIO_INTERPOLATE) {
+             msg.getType() == Message::AUDIO_INTERPOLATE || 
+             (msg.getType() == Message::SIGNAL && 
+              msg.getFormat() == Message::SignalType::RADIO_UNKEY)) {
 
         _sessions.visitIf(
             // Visitor
@@ -129,6 +140,21 @@ void NodeParrot::consume(const Message& msg) {
             // Predicate
             [msg](const Session& s) { return s.belongsTo(msg); }
         );
+    }
+}
+
+/**
+ * This function is called when a signal is received from the input
+ * adaptor.
+ */
+void NodeParrot::_consumeSignalInSession(Session& s, const Message& msg) { 
+    if (msg.getType() == Message::SIGNAL &&
+        msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
+        if (s.state == State::RECORDING) {
+            log.info("Record end (UNKEY)");
+            s.state = State::PAUSE_AFTER_RECORD;
+            s.stateStartTime = clock.time();
+        }
     }
 }
 

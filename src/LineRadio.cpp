@@ -174,10 +174,17 @@ void LineRadio::_captureStart() {
 }
 
 void LineRadio::_captureEnd() {
+
     if (_record) {
         _log.info("Ended audio capturing");
         _captureFile.close();
     }
+
+    // Send the unkey message 
+    Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0);
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
 }
 
 void LineRadio::_playStart() {

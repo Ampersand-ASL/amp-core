@@ -83,6 +83,7 @@ void AdaptorIn::consume(const Message& frame) {
             assert(false);
         }
     }
+    // Non-audio messages are key passed right through
     else {
         if (_sink)
             _sink(frame);

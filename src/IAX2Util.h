@@ -60,6 +60,10 @@ enum IAXSubclass {
     IAX2_SUBCLASS_IAX_CALLTOKEN = 40
 };
 
+enum ControlSubclass {
+    IAX2_SUBCLASS_CONTROL_UNKEY = 0x0d
+};
+
 // See: https://datatracker.ietf.org/doc/html/rfc5457#page-19
 enum CODECType {
     IAX2_CODEC_UNKNOWN   = 0,

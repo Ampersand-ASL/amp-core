@@ -229,7 +229,7 @@ private:
 
         // This is used for tracking LAGRQ/LAGRP latency
         int32_t lastLagMs = 0;
-        uint32_t nextLagrqMs = 0;
+        uint32_t lastLagrqMs = 0;
         const uint32_t lagrqIntervalMs = 10 * 1000;
 
         amp::SequencingBufferStd<Message> jitBuf;
@@ -330,6 +330,8 @@ private:
     uint32_t _voxUnkeyMs = 100;
     // Controls whether source IP validation is required
     bool _sourceIpValidationRequired = false;
+    // Diagnostics    
+    unsigned _invalidCallPacketCounter = 0;
 
     /**
      * @return true if there might be more work to be done

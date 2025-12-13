@@ -115,6 +115,7 @@ private:
 
     void _consumeAudioInSession(Session&, const Message& frame);
     void _produceAudioInSession(Session&, const Message& frame);
+    void _consumeSignalInSession(Session& s, const Message& msg);
 
 public:
 

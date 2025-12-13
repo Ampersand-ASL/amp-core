@@ -39,7 +39,9 @@ public:
         SIGNALTYPE_NONE = 0,
         CALL_START,
         CALL_END,
-        CALL_TERMINATE
+        CALL_TERMINATE,
+        RADIO_KEY,
+        RADIO_UNKEY
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 

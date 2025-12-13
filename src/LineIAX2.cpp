@@ -218,7 +218,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     call.state = Call::State::STATE_LOOKUP_0;
     // Moved to place where NEW is sent
     call.localStartMs = _clock.time();
-    call.nextLagrqMs = _clock.time() + call.lagrqIntervalMs;
+    call.lastLagrqMs = _clock.time();
     call.nextLMs = _clock.time() + 10 * 1000;
     call.lastFrameRxMs = _clock.time();
 
@@ -573,7 +573,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 // Move the entire address in for use when sending out messages
                 memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
                 // Schedule the ping out
-                call.nextLagrqMs = _clock.time() + call.lagrqIntervalMs;
+                call.lastLagrqMs = _clock.time();
                 call.nextLMs = _clock.time() + 10 * 1000;
                 call.lastFrameRxMs = _clock.time();
                 call.supportedCodecs = supportedCodecs;
@@ -680,8 +680,9 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
         }
 
         if (!validCall) {
-            _log.info("Call not recognized %d/%d, ignoring", frame.getSourceCallId(),
-                destCallId);
+            _invalidCallPacketCounter++;
+            if (_trace)
+                _log.info("Call not recognized %d/%d, ignoring", frame.getSourceCallId(), destCallId);
             /*
             #### TODO: NEED TO REVIEW THIS - WE WERE GETTING INTO A LOOP WITH
             #### BOTH SIDES SENDING INVAL MESSAGES.
@@ -942,16 +943,25 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         }
     }
     // STOP_SOUNDS
-    else if (frame.getType() == 4 && frame.getSubclass() == 255) {
+    else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && frame.getSubclass() == 255) {
         _log.info("Call %u got STOP_SOUNDS", call.localCallId);
     }
     // KEY
-    else if (frame.getType() == 4 && frame.getSubclass() == 12) {
+    else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && frame.getSubclass() == 12) {
         _log.info("Call %u got KEY", call.localCallId);            
     }
     // UNKEY
-    else if (frame.getType() == 4 && frame.getSubclass() == 13) {
-        _log.info("Call call %u got UNKEY", call.localCallId);            
+    else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
+             frame.getSubclass() == ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY) {
+        
+        _log.info("Call %u got UNKEY", call.localCallId);
+
+        // Make a signal Message and queue it into the jitter buffer.
+        Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0);
+        // #### TODO: MAKE SURE THERE IS NO WAY THAT THIS CAN BE DROPPED 
+        // #### IN THE JITTER BUFFER.
+        call.jitBuf.consumeSignal(_log, unkeyMsg, 
+            frame.getTimeStamp(), call.localElapsedMs(_clock));
     }
     // LAGRQ
     // 6.7.4.  LAGRQ Lag Request Message
@@ -981,7 +991,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // This message does not require any IEs.
     else if (frame.isTypeClass(6, 0x0c)) {
         call.lastLagMs = call.localElapsedMs(_clock) - frame.getTimeStamp();
-        //_log.info("Peer reported lag %d ms (LAGRP)", call.lastLagMs);                
     }
     // PING
     else if (frame.isTypeClass(6, 0x02)) {
@@ -1600,6 +1609,9 @@ void LineIAX2::consume(const Message& msg) {
                 if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
                     line->_hangupCall(call);
                 }
+                else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
+                    line->_log.info("Explicit unkey consumed");
+                }
             }
         },
         // Predicate (filters the calls)
@@ -1893,7 +1905,7 @@ void LineIAX2::Call::reset() {
     lastPingTimeMs = 0;
     pingCount = 0;
     lastLagMs = 0;
-    nextLagrqMs = 0;
+    lastLagrqMs = 0;
     jitBuf.reset();
     lastRxVoiceFrameUs = 0;
 }
@@ -1953,17 +1965,19 @@ void LineIAX2::Call::setNetworkDelayEstimate(unsigned ms, bool first) {
 /** 
  * Adaptor that links the SequencingBuffer to the MessgeBus
  */
-class Adpator : public amp::SequencingBufferSink<Message> {
+class JBOutAdaptor : public amp::SequencingBufferSink<Message> {
 public:
 
-    Adpator(Log& log, MessageConsumer& bus, unsigned busId, unsigned callId) 
+    JBOutAdaptor(Log& log, MessageConsumer& bus, unsigned busId, unsigned callId) 
     :   _log(log),
         _bus(bus),
         _busId(busId),
         _callId(callId) {        
     }
 
-    virtual void playSignal(const Message& payload, uint32_t localTime) {        
+    virtual void playSignal(const Message& payload, uint32_t localTime) {   
+        _log.info("Passing signal out of JB");
+        _bus.consume(payload);
     }
 
     virtual void playVoice(const Message& payload, uint32_t localTime) {        
@@ -1985,12 +1999,12 @@ private:
 
 /**
  * Take care of anything that needs to happen on the audio clock. 
- * IMPORTANT: These are time-sesnsitive operations.
+ * IMPORTANT: These are time-sensitive operations.
  */
 void LineIAX2::Call::audioRateTick(Log& log, Clock& clock, 
     MessageConsumer& cons, unsigned localBusId, LineIAX2& line) {    
 
-    Adpator adaptor(log, cons, localBusId, localCallId);
+    JBOutAdaptor adaptor(log, cons, localBusId, localCallId);
     jitBuf.playOut(log, localElapsedMs(clock), &adaptor);
 
     // Look for VOX drop
@@ -2053,7 +2067,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     }
 
     // Need a LAGRQ?
-    if (clock.isPast(nextLagrqMs)) {
+    if (clock.isPast(lastLagrqMs + lagrqIntervalMs)) {
         // 6.7.4.  LAGRQ Lag Request Message
         // A LAGRQ is a lag request.  It is sent to determine the lag between
         // two IAX endpoints, including the amount of time used to process a
@@ -2069,7 +2083,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             dispenseElapsedMs(clock), 
             outSeqNo, expectedInSeqNo, 6, 0x0b);
         line._sendFrameToPeer(lagrqFrame, *this);
-        nextLagrqMs = clock.time() + lagrqIntervalMs;
+        lastLagrqMs = clock.time();
     }
 
     // Inactive call?
