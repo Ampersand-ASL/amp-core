@@ -78,9 +78,11 @@ void EventLoop::run(Log& log, Clock& clock,
         if (fdsSize > 0)
             rc = WSAPoll(fds, fdsSize, sleepMs);
         else 
+            // WARNING: It isn't really possible to sleep less than 15-20ms
+            // on Windows, so don't expect a very short sleep here.
             Sleep(sleepMs);
 #else        
-        int rc = poll(fds, fdsSize, sleepMs);
+        rc = poll(fds, fdsSize, sleepMs);
 #endif
         if (rc < 0) {
             log.error("Poll error");
