@@ -90,7 +90,10 @@ void AdaptorOut::consume(const Message& frame) {
     else if (frame.getType() == Message::Type::AUDIO_INTERPOLATE) {
         // No support
         assert(false);
-    } else {
+    } 
+    // Non-audio messages are key passed right through, transcoding
+    // not relevant here.
+    else {
         if (_sink)
             _sink(frame);
     }

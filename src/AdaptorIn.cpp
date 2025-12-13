@@ -86,9 +86,9 @@ void AdaptorIn::consume(const Message& frame) {
             assert(false);
         }
     }
-    // Non-audio messages are key passed right through
+    // Non-audio messages are key passed right through, transcoding
+    // not relevant here.
     else {
-        cout << "Non-audio passed out of Adapter In" << endl;
         if (_sink)
             _sink(frame);
     }
