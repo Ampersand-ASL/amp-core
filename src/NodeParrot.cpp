@@ -331,8 +331,8 @@ void NodeParrot::Session::audioRateTick(Log& log, Clock& clock, NodeParrot& node
         }
     }
     else if (state == State::RECORDING) {
-        if (clock.isPast(lastAudioTime + 500)) {
-            log.info("Record end");
+        if (clock.isPast(lastAudioTime + 5000)) {
+            log.info("Record end (Long silence)");
             state = State::PAUSE_AFTER_RECORD;
             stateStartTime = clock.time();
         }
