@@ -15,9 +15,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <cassert>
+#include <iostream>
 
 #include "Message.h"
 #include "AdaptorIn.h"
+
+using namespace std;
 
 namespace kc1fsz {
 
@@ -85,6 +88,7 @@ void AdaptorIn::consume(const Message& frame) {
     }
     // Non-audio messages are key passed right through
     else {
+        cout << "Non-audio passed out of Adapter In" << endl;
         if (_sink)
             _sink(frame);
     }

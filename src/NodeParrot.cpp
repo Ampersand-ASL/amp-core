@@ -95,8 +95,10 @@ void NodeParrot::consume(const Message& msg) {
                         [this, msg](Session& s) { 
                             if (msg.getType() == Message::Type::AUDIO) 
                                 this->_consumeAudioInSession(s, msg);
-                            else if (msg.getType() == Message::Type::SIGNAL)
+                            else if (msg.getType() == Message::Type::SIGNAL) {
+                                cout << "B" << endl;
                                 this->_consumeSignalInSession(s, msg);
+                            }
                             // Can stop after first hit
                             return false;
                         },
@@ -148,6 +150,8 @@ void NodeParrot::consume(const Message& msg) {
  * adaptor.
  */
 void NodeParrot::_consumeSignalInSession(Session& s, const Message& msg) { 
+    cout << "C" << endl;
+
     if (msg.getType() == Message::SIGNAL &&
         msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
         if (s.state == State::RECORDING) {
