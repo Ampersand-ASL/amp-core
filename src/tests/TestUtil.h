@@ -15,13 +15,13 @@ class Log;
 enum Type { UNKNOWN, SIGNAL, VOICE, VOICE_INTERPOLATE };
 
 struct TestInput {
-    uint32_t rxTime = 0;
-    uint32_t remoteTime = 0;
+    uint32_t rxMs = 0;
+    uint32_t origMs = 0;
     Type type = Type::UNKNOWN;
     int token = 0;
 };
 
-void play(Log& log, unsigned gapT, unsigned lastT, std::vector<TestInput>& ins,
+void play(Log& log, unsigned gapMs, unsigned lastMs, std::vector<TestInput>& ins,
     SequencingBuffer<int>& jb, SequencingBufferSink<int>* sink, 
     bool displayTick = true);
 }

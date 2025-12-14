@@ -82,10 +82,13 @@ void NodeParrot::consume(const Message& msg) {
             s.active = true;
             s.lineId = msg.getSourceBusId();
             s.callId = msg.getSourceCallId();
-            s.callStartTime = _clock.time();
+            s.callStartTime = msg.getOriginUs() / 1000;
             s.state = State::CONNECTED;
             s.stateStartTime = _clock.time();
+
+            s.adaptorIn.reset();
             s.adaptorIn.setCodec(payload.codec);
+            s.adaptorIn.setStartTime(s.callStartTime);
             s.adaptorIn.setSink(
                 // This handles Messages coming in from the outside via consume()
                 // but AFTER the de-jitter, PLC, and transcoding has happened.
@@ -106,6 +109,8 @@ void NodeParrot::consume(const Message& msg) {
                     );
                 }
             );
+
+            s.adaptorOut.reset();
             s.adaptorOut.setCodec(payload.codec);
             // This handles frames that need to go out (i.e. playback)
             s.adaptorOut.setSink([this](const Message& msg) {
@@ -214,10 +219,34 @@ void NodeParrot::_consumeAudioInSession(Session& s, const Message& msg) {
 }
 
 void NodeParrot::audioRateTick() {
+
+    // Ask all of the input adaptors to produce
+    _sessions.visitIf(
+        // Visitor
+        [this](Session& s) {
+            s.adaptorIn.audioRateTick();
+            return true;
+        },
+        // Predicate
+        [](const Session& s) { return s.active; }
+    );
+
+    // Let the sessions process
     _sessions.visitIf(
         // Visitor
         [this](Session& s) {
             s.audioRateTick(this->_log, this->_clock, *this);
+            return true;
+        },
+        // Predicate
+        [](const Session& s) { return s.active; }
+    );
+
+    // Ask all of the output adaptors to produce
+    _sessions.visitIf(
+        // Visitor
+        [this](Session& s) {
+            s.adaptorOut.audioRateTick();
             return true;
         },
         // Predicate
@@ -351,12 +380,6 @@ void NodeParrot::Session::audioRateTick(Log& log, Clock& clock, NodeParrot& node
             // TODO
             state = State::WAITING_FOR_RECORD;
             stateStartTime = clock.time();
-
-            //state = State::ACTIVE;
-            //toneActive = true;
-            //toneOmega = 2.0f * 3.14159f * 440.0f / (float)AUDIO_RATE;
-            //tonePhi = 0;
-            //toneLevel = 0.5;
         } else {
             adaptorOut.consume(node._makeMessage(playQueue.front(), lineId, callId));
             playQueue.pop();

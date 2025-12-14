@@ -26,81 +26,84 @@ class Log;
 
 /**
  * This abstract interface defines the output side of the Sequencing
- * Buffer. Whenever the SequencingBuffer is ready to play the next
- * frame (or request an interpolation) it will do so by calling the
- * appropriate method on this interface.
+ * Buffer. Whenever the SequencingBuffer is ready to emit a frame (or 
+ * request an interpolation) it will do so by calling the appropriate 
+ * method on this interface.
  */
 template <class T> class SequencingBufferSink {
 public:
 
     /**
      * Called to play a signalling frame.
-     * @param localTime The local clock (ms, relative to the start of the call) 
-     * that the signal should be processed. This is provided for reference 
-     * purposes and normally would be ignored - just process the signal
-     * immeditately on this method call.
+     * 
+     * @param localMs The local clock that the signal applies to. This is provided 
+     * for reference purposes and normally would be ignored - just process the signal
+     * immediately on this method call.
      */
-    virtual void playSignal(const T& frame,  uint32_t localTime) = 0;
+    virtual void playSignal(const T& frame,  uint32_t localMs) = 0;
 
     /**
      * Called to play a voice frame.
+     * 
      * @param frame The voice content
-     * @param localTime The local clock (ms, relative to the start of the call) 
-     * that the voice frame should be played. This is provided for reference 
-     * purposes and normally would be ignored - just process the signal
-     * immeditately on this method call.
+     * @param localMs The local clock that the voice frame applies to. This is 
+     * provided for reference purposes and normally would be ignored - just process 
+     * the frame immediately on this method call.
      */
-    virtual void playVoice(const T& frame, uint32_t localTime) = 0;
+    virtual void playVoice(const T& frame, uint32_t localMs) = 0;
 
     /**
      * Called when voice interpolation is needed. 
-     * @param localTime Same as for playVoice().
-     * @param duration The duration of the interpolation needed in milliseconds.
+     * @param localMs Same as for playVoice().
+     * @param durationMs The duration of the interpolation needed in milliseconds.
      */
-    virtual void interpolateVoice(uint32_t localTime, uint32_t duration) = 0;
+    virtual void interpolateVoice(uint32_t localMs, uint32_t durationMs) = 0;
+};
+
+/**
+ * This is a C++ "concept" which will be used to place some requirements
+ * on the types that can be used in the SequencingBuffer template below.
+ * Basically, the objects that are controlled by the sequencing buffer
+ * must support three methods.
+ */        
+template <typename T>
+concept HasFrameTimes = requires (const T b) {
+    {b.isVoice()} -> std::same_as<bool>; 
+    {b.getOrigMs()} -> std::same_as<uint32_t>; 
+    {b.getRxMs()} -> std::same_as<uint32_t>; 
 };
 
 /**
  * An abstract interface of a SequencingBuffer, often called a "jitter buffer."
  * This interface defines the way that an application interacts with the buffer.
  */
-template<class T> class SequencingBuffer {
+template<HasFrameTimes T> class SequencingBuffer {
 public:
 
     /**
      * Clears all state and returns statistical parameters to initial condition.
-     * This woudl typically be called at the beginging of a call.
+     * This would typically be called at the beginning of a call.
      */
     virtual void reset() = 0;
 
     /**
-     * Called when a full voice frame is received and ready to be processed.
-     * @param remoteTime Is the time that the remote side (peer) provides to indicate
-     * when it produced the frame. This is measured in milliseconds elapsed since the 
-     * start of the call FROM THE REMOTE PEER'S PERSPECTIVE.
-     * @param localTIme This is the time the frame was received in milliseconds 
-     * elapsed since the start of the call from the local (our) perspective.
+     * Called when a frame is received.
+     * 
      * @return true if the message was consumed, false if it was ignored and can be 
      * discarded (i.e. all full)
      */
-    virtual bool consumeVoice(Log& log, const T& payload, uint32_t remoteTime, uint32_t localTime) = 0;
-
-    /**
-     * Called when a full signal frame is received.
-     * See consumeVoice()
-     */
-    virtual bool consumeSignal(Log& log, const T& payload, uint32_t remoteTime, uint32_t localTime) = 0;
+    virtual bool consume(Log& log, const T& payload) = 0;
 
     /**
      * Should be called periodically (precisely on the audio tick interval) to ask the 
-     * buffer to produce any outgoing frames that are due at the specified localTime.
+     * buffer to produce any outgoing frames that are due at the specified localMs.
      * On each call we would expect (a) zero or more signalling frames and (b) EITHER 
-     * one voice frame or one interolation request.
+     * one voice frame or one interpolation request.
      * 
-     * @param localTime Milliseconds elpased from the start of the call.
+     * @param localMs 
      * @param sink Where the frames should be sent.
      */
-    virtual void playOut(Log& log, uint32_t localTime, SequencingBufferSink<T>* sink) = 0;
+    virtual void playOut(Log& log, uint32_t localMs, SequencingBufferSink<T>* sink) = 0;
 
     /**
      * @returns true if a talkspurt is actively being played.

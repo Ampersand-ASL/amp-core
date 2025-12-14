@@ -48,17 +48,22 @@ public:
     static const unsigned MAX_SIZE = 160 * 6 * 2;
 
     Message();
-    Message(Type type, unsigned format, unsigned size, const uint8_t* content,
-        uint64_t originUs = 0);
+    Message(Type type, unsigned format, unsigned size, const uint8_t* body,
+        uint64_t origUs, uint64_t rxUs);
     Message(const Message& other);
     Message& operator=(const Message& other);
 
     Type getType() const { return _type; }
+    bool isVoice() const { return _type == Type::AUDIO; }
     unsigned getFormat() const { return _format; }
+
     unsigned size() const { return _size; }
-    const uint8_t* raw() const { return _body; }
-    uint64_t getOriginUs() const { return _originUs; }
-    void setOriginUs(uint64_t us) { _originUs = us; }
+    const uint8_t* body() const { return _body; }
+
+    uint64_t getOrigUs() const { return _origUs; }
+    //void setOrigUs(uint64_t us) { _originUs = us; }
+    uint64_t getRxUs() const { return 0; }
+
 
     void setSource(unsigned busId, unsigned callId) { _sourceBusId = busId; _sourceCallId = callId; }
     void setDest(unsigned busId, unsigned callId){ _destBusId = busId; _destCallId = callId; }
@@ -71,11 +76,12 @@ public:
     
 private:
 
-    Type _type = Type::NONE;
-    unsigned _format = 0;
-    unsigned _size = 0;
+    const Type _type;
+    const unsigned _format;
+    const unsigned _size;
     uint8_t _body[MAX_SIZE];
-    uint64_t _originUs = 0;
+    const uint64_t _origUs;
+    const uint64_t _rxUs;
     // Routing stuff
     unsigned _sourceBusId = 0, _sourceCallId = 0;
     unsigned _destBusId = 0, _destCallId = 0;

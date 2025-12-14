@@ -19,6 +19,7 @@
 #include <functional>
 
 #include "amp/Resampler.h"
+#include "amp/SequencingBufferStd.h"
 
 #include "IAX2Util.h"
 #include "MessageConsumer.h"
@@ -30,7 +31,11 @@
 namespace kc1fsz {
 
 /**
- * Transcodes encoded data to SLIN_48K for internal processing.
+ * A chain of functionality that needs to be handled on an input to a conference:
+ * 
+ * 1. De-jitter, identification of interpolation needs.
+ * 2. PLC (if possible)
+ * 3. Transcodes/resamples to SLIN_48K for internal processing.
  */
 class AdaptorIn : public MessageConsumer {
 public:
@@ -41,11 +46,12 @@ public:
     static const unsigned BLOCK_PERIOD_MS = 20;
 
     void setCodec(CODECType codecType);
-
+    void setStartTime(uint32_t t) { _startTime = t; }
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
     
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
+        _startTime = 0;
         _sink = nullptr;
         _transcoder0a.reset(); 
         _transcoder0b.reset(); 
@@ -54,12 +60,20 @@ public:
         _resampler.reset(); 
     }
 
+    virtual void audioRateTick() { }
+
     virtual void consume(const Message& frame);
 
 private:
 
-    CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
     std::function<void(const Message& msg)> _sink = nullptr;
+
+    amp::SequencingBufferStd<Message> jitBuf;
+
+    // This is the input CODEC of the user
+    CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
+    // In ms
+    uint32_t _startTime = 0;
     Transcoder_G711_ULAW _transcoder0a;
     Transcoder_SLIN _transcoder0b;
     Transcoder_SLIN_16K _transcoder0c;

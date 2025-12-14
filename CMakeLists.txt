@@ -244,9 +244,8 @@ target_include_directories(manager-test PRIVATE amp-server/sw/include)
 # ----- seq-test ----------------------------------------------------
 
 add_executable(seq-test
-  src/tests/seq-test-1.cpp
+  src/tests/seq-test-2.cpp
   src/tests/TestUtil.cpp
-  src/Message.cpp
   kc1fsz-tools-cpp/src/Common.cpp
 )
 

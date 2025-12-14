@@ -56,6 +56,7 @@ public:
     }
 
     virtual void consume(const Message& frame);
+    virtual void audioRateTick() { }
 
 private:
 
