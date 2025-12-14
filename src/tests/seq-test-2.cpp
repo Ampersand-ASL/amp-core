@@ -56,7 +56,7 @@ void test_1() {
     // was used properly.
     {
         cout << endl;
-        cout << "===== Test 0 ==========================================" << endl;
+        cout << "===== Test 0a ==========================================" << endl;
         cout << endl;
 
         std::vector<TestFrame> outs;
@@ -89,6 +89,51 @@ void test_1() {
                 else if (t == 180) {
                     assert(outs.size() == 1);
                     assert(outs.front().origMs == 60);
+                    outs.clear();
+                }
+            }
+        );
+        assert(sink.voiceCount == 3);
+        assert(sink.interpolateCount == 0);
+    }
+
+    // Just like the previous test, but showing that the remote timer could be ahead 
+    // of the local one (doesn't matter)
+    {
+        cout << endl;
+        cout << "===== Test 0b ==========================================" << endl;
+        cout << endl;
+
+        std::vector<TestFrame> outs;
+        TestSink2 sink(outs);
+        SequencingBufferStd<TestFrame> jb;
+        jb.setInitialMargin(20);
+        jb.lockDelay();
+        std::vector<TestFrame> ins;
+        ins.push_back({ .origMs = 920, .rxMs = 120, .voice=true, .id=1 });
+        ins.push_back({ .origMs = 940, .rxMs = 140, .voice=true, .id=2 });
+        ins.push_back({ .origMs = 960, .rxMs = 160, .voice=true, .id=3 });
+
+        play(log, 20, 200, ins,jb, &sink, false, 
+            [&](uint32_t t) {
+                // Since the initial margin is 20 and the first packet arrives at 120,
+                // we're not going to see any output until 140
+                if (t < 140) {
+                    assert(outs.empty());
+                }
+                else if (t == 140) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 920);
+                    outs.clear();
+                }
+                else if (t == 160) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 940);
+                    outs.clear();
+                }
+                else if (t == 180) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 960);
                     outs.clear();
                 }
             }
