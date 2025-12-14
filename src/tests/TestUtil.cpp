@@ -1,28 +1,26 @@
-
-#include "IAX2Util.h"
+//#include "IAX2Util.h"
 #include "tests/TestUtil.h"
 
 namespace kc1fsz {
 
 // A utility for playing a series of frames into a buffer
-void play(Log& log, unsigned gapT, unsigned lastT, std::vector<TestInput>& ins, 
-    SequencingBuffer<int>& jb, SequencingBufferSink<int>* sink, bool displayTick) {
+void play(Log& log, unsigned gapT, unsigned lastT, std::vector<TestFrame>& ins, 
+    SequencingBuffer<TestFrame>& jb, SequencingBufferSink<TestFrame>* sink, bool displayTick,
+    std::function<void(unsigned tickMs)> checkCb) {
     for (unsigned t = 0; t < lastT; t += gapT) {
         // Feed in as much as possible that is before the current time t
         while (!ins.empty()) {
-            const TestInput& in = ins.front();
-            if (in.rxTime > t) 
+            const TestFrame& in = ins.front();
+            if (in.getRxMs() > t) 
                 break;
-            if (in.type == Type::VOICE) {
-                jb.consumeVoice(log, in.token, in.remoteTime, in.rxTime);
-            } else if (in.type == Type::SIGNAL) {
-                jb.consumeSignal(log, in.token, in.remoteTime, in.rxTime);
-            }
+            jb.consume(log, in);
             ins.erase(ins.begin());
         }
         if (displayTick)
             cout << "----- Tick t=" << t << " ------------------------------------" << endl;
         jb.playOut(log, t, sink);
+        if (checkCb) 
+            checkCb(t);
     }
 }
 

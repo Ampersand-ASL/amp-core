@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.13)
 project(ampersand C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
-add_compile_options(-fstack-protector-all -Wall -Wpedantic -ggdb -rdynamic -O0)
+add_compile_options(-fstack-protector-all -Wall -Wpedantic -g)
 
 # Set the default install prefix (e.g., /usr/local on Linux)
 #set(CMAKE_INSTALL_PREFIX "/tmp")
@@ -249,11 +249,11 @@ add_executable(seq-test
   kc1fsz-tools-cpp/src/Common.cpp
 )
 
-add_compile_options(-fstack-protector-all -Wall -Wpedantic -g)
 target_include_directories(seq-test PRIVATE src)
 target_include_directories(seq-test PRIVATE include)
 target_include_directories(seq-test PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(seq-test PRIVATE amp-server/sw/include)
+#target_link_options(seq-test PRIVATE -mconsole)
 
 # ----- retx-test ----------------------------------------------------
 

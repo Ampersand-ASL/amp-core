@@ -82,7 +82,7 @@ public:
         _interpolatedVoiceFrameCount = 0;
         // Tracking
         _lastPlayedLocal = 0;
-        _lastPlayedOrigin = 0;
+        _lastPlayedOrigMs = 0;
         _originCursor = 0;
         _inTalkspurt = false;
         _talkSpurtCount = 0;
@@ -105,8 +105,8 @@ public:
     
     void debug() const {
         cout << "SequencingBufferStd Debug:" << endl;
-        _buffer.visitAll([](const Slot& slot) {
-            cout << " rt=" << slot.remoteTime << ", seq=" << slot.seq << endl;
+        _buffer.visitAll([](const T& frame) {
+            cout << " rt=" << frame.getOrigMs() << endl;
             return true;
         });
     }
@@ -247,9 +247,9 @@ public:
                             (int32_t)localMs - (int32_t)_idealDelay, _voiceTickSize);
 
                         if (idealOriginCursor < _originCursor)
-                            _originCursor = std::max(idealOriginCursor, (int32_t)_lastPlayedOrigin);
+                            _originCursor = std::max(idealOriginCursor, (int32_t)_lastPlayedOrigMs);
                         else if (idealOriginCursor > _originCursor)
-                            _originCursor = std::min(idealOriginCursor, (int32_t)slot.remoteTime);
+                            _originCursor = std::min(idealOriginCursor, (int32_t)frame.getOrigMs());
 
                         if (_originCursor > oldOriginCursor)
                             log.info("Start TS, moving cursor forward %u -> %u", 
@@ -264,7 +264,7 @@ public:
                     _inTalkspurt = true;
                     _talkspurtFrameCount = 0;
                     _talkspurtFirstOrigin = frame.getOrigMs();
-                    _lastPlayedOrigin = 0;
+                    _lastPlayedOrigMs = 0;
                     _lastPlayedLocal = 0;
                 }
 
@@ -290,11 +290,11 @@ public:
                 // If we got the frame we are waiting for then play it
                 else if ((int32_t)frame.getOrigMs() == _originCursor) {
                     
-                    sink->playVoice(slot.payload, localMs);
+                    sink->playVoice(frame, localMs);
 
                     voiceFramePlayed = true;
                     _lastPlayedLocal = localMs;
-                    _lastPlayedOrigin = frame.getOrigMs();
+                    _lastPlayedOrigMs = frame.getOrigMs();
                     _voicePlayoutCount++;
 
                     bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
@@ -408,7 +408,7 @@ private:
     // A 64-entry buffer provides room to track 1 second of audio
     // plus some extra for control frames that may be interspersed.
     const static unsigned MAX_BUFFER_SIZE = 64;
-    Slot _slotSpace[MAX_BUFFER_SIZE];
+    T _slotSpace[MAX_BUFFER_SIZE];
     unsigned _ptrSpace[MAX_BUFFER_SIZE];
     fixedsortedlist<T> _buffer;
 
@@ -416,7 +416,7 @@ private:
     // origin time to be played.
     int32_t _originCursor = 0;
     uint32_t _talkspurtFirstOrigin = 0;
-    uint32_t _lastPlayedOrigin = 0;
+    uint32_t _lastPlayedOrigMs = 0;
     // Used for detecting the end of a talkspurt
     uint32_t _lastPlayedLocal = 0;
 

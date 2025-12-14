@@ -12,16 +12,18 @@ namespace kc1fsz {
 
 class Log;
 
-enum Type { UNKNOWN, SIGNAL, VOICE, VOICE_INTERPOLATE };
-
-struct TestInput {
-    uint32_t rxMs = 0;
-    uint32_t origMs = 0;
-    Type type = Type::UNKNOWN;
-    int token = 0;
+struct TestFrame {
+    uint32_t origMs;
+    uint32_t rxMs;
+    bool voice = true;
+    unsigned id = 0;
+    uint32_t getOrigMs() const { return origMs; }
+    uint32_t getRxMs() const { return rxMs; }
+    bool isVoice() const { return voice; }
 };
 
-void play(Log& log, unsigned gapMs, unsigned lastMs, std::vector<TestInput>& ins,
-    SequencingBuffer<int>& jb, SequencingBufferSink<int>* sink, 
-    bool displayTick = true);
+void play(Log& log, unsigned gapMs, unsigned lastMs, std::vector<TestFrame>& ins,
+    SequencingBuffer<TestFrame>& jb, SequencingBufferSink<TestFrame>* sink, 
+    bool displayTick = true, 
+    std::function<void(unsigned tickMs)> checkCb = nullptr);
 }
