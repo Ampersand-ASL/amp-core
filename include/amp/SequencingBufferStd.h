@@ -274,7 +274,7 @@ public:
                     // Is it OK to slow down for this one?
                     if (_originCursor - (int32_t)frame.getOrigMs() <= _midTsAdjustMax) {
                         log.info("Mid TS, adjusting (%d < %d)", frame.getOrigMs(), _originCursor);
-                        // NOTE: It has already been establishe that slot.remoteTime is larger
+                        // NOTE: It has already been established that slot.remoteTime is larger
                         // that _lastPlayedOrigin so there is no risk in moving back to this
                         // point in the stream.
                         _originCursor = frame.getOrigMs();

@@ -338,7 +338,7 @@ void test_1() {
                     assert(outs.front().origMs == 40);
                     outs.clear();
                 }
-                // 2 interpolations 
+                // 2 interpolations while waiting for recovery
                 else if (t == 200 || t == 220) {
                     assert(outs.size() == 1);
                     assert(outs.front().origMs == 0);
@@ -362,8 +362,8 @@ void test_1() {
                 }
             }
         );
-        //assert(sink.voiceCount == 3);
-        //assert(sink.interpolateCount == 4);
+        assert(sink.voiceCount == 5);
+        assert(sink.interpolateCount == 2);
     }
 }
 
