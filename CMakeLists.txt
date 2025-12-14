@@ -253,7 +253,6 @@ target_include_directories(seq-test PRIVATE src)
 target_include_directories(seq-test PRIVATE include)
 target_include_directories(seq-test PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(seq-test PRIVATE amp-server/sw/include)
-#target_link_options(seq-test PRIVATE -mconsole)
 
 # ----- retx-test ----------------------------------------------------
 

@@ -214,7 +214,7 @@ public:
 
                 // Old voice frames (out of order or repeats) are discarded immediately
                 if (frame.getOrigMs() <= _lastPlayedOrigMs) {
-                    log.info("Discarded OOO frame (%d <= %d)", frame.getOrigMs(), _lastPlayedOrigMs);
+                    log.info("Discarded OOS frame (%d <= %d)", frame.getOrigMs(), _lastPlayedOrigMs);
                     _lateVoiceFrameCount++;
                     _buffer.pop();
                     // NOTICE: We're in a loop so we get another shot at it,
@@ -331,7 +331,7 @@ public:
             // If no voice was generated on this tick (for whatever reason)
             // then request an interpolation.
             if (!voiceFramePlayed) {
-                sink->interpolateVoice(localMs, _voiceTickSize);
+                sink->interpolateVoice(_originCursor, localMs, _voiceTickSize);
                 _interpolatedVoiceFrameCount++;
                 log.info("Interpolated %u", _originCursor);
             }

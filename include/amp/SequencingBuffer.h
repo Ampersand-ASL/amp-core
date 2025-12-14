@@ -54,10 +54,15 @@ public:
 
     /**
      * Called when voice interpolation is needed. 
+     * 
+     * @param origMs The start of the spot in the origin timeline
+     * that is missing and therefore needs to be interpolated.
      * @param localMs Same as for playVoice().
-     * @param durationMs The duration of the interpolation needed in milliseconds.
+     * @param durationMs The duration of the interpolation needed 
+     * in milliseconds. This flexibility is provided in case 
+     * the stream is being slowed down/sped up.
      */
-    virtual void interpolateVoice(uint32_t localMs, uint32_t durationMs) = 0;
+    virtual void interpolateVoice(uint32_t origMs, uint32_t localMs, uint32_t durationMs) = 0;
 };
 
 /**

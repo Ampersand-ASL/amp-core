@@ -27,19 +27,19 @@ public:
 
     virtual void playSignal(const TestFrame& payload, uint32_t localMs) {
         _outs.push_back(payload);
-        cout << "Release signal: t=" << localMs << " payload=" << payload.id << endl;
+        cout << "Release signal: t=" << localMs << " origMs=" << payload.getOrigMs() << endl;
         signalCount++;
     };
 
     virtual void playVoice(const TestFrame& payload, uint32_t localMs) {
         _outs.push_back(payload);
-        cout << "Release voice: t=" << localMs << " payload=" << payload.id << endl;
+        cout << "Release voice: t=" << localMs << " origMs=" << payload.getOrigMs() << endl;
         voiceCount++;
     };
 
-    virtual void interpolateVoice(uint32_t localMs, uint32_t durationMs) {
+    virtual void interpolateVoice(uint32_t origMs, uint32_t localMs, uint32_t durationMs) {
         _outs.push_back({ .origMs=0, .rxMs=localMs, .voice=true });
-        cout << "Interpolate voice: t=" << localMs << endl;
+        cout << "Interpolate voice: t=" << localMs << " origMs=" << origMs << endl;
         interpolateCount++;
     };
 
@@ -192,7 +192,6 @@ void test_1() {
     // PATHOLOGY #2 - A lost frame.
     //
     // The second frame disappears completely and will need to be interpolated.
-    //
     {
         cout << endl;
         cout << "===== Test 2 ==========================================" << endl;
@@ -257,7 +256,6 @@ void test_1() {
     }
 
     // PATHOLOGY #3 - Frames out of sequence
-    //
     {
         cout << endl;
         cout << "===== Test 3 ==========================================" << endl;
@@ -299,6 +297,73 @@ void test_1() {
         );
         assert(sink.voiceCount == 3);
         assert(sink.interpolateCount == 4);
+    }
+
+    // PATHOLOGY #4 - Halt and then a flood to catch up.
+    // We should re-synchronize on the beginning of the flood so that nothing
+    // is lost.
+    {
+        cout << endl;
+        cout << "===== Test 4 ==========================================" << endl;
+        cout << endl;
+
+        std::vector<TestFrame> outs;
+        TestSink2 sink(outs);
+        SequencingBufferStd<TestFrame> jb;
+        jb.setInitialMargin(40);
+        jb.lockDelay();
+        std::vector<TestFrame> ins;
+        ins.push_back({ .origMs = 20, .rxMs = 120, .voice=true });
+        ins.push_back({ .origMs = 40, .rxMs = 140, .voice=true });
+        // Starting here there is a 100ms gap with nothing received,
+        // and then a flood of 5 frames at 240 to resume.
+        ins.push_back({ .origMs = 60, .rxMs = 240, .voice=true });
+        ins.push_back({ .origMs = 80, .rxMs = 240, .voice=true });
+        ins.push_back({ .origMs = 100, .rxMs = 240, .voice=true });
+
+        play(log, 20, 300, ins, jb, &sink, true, 
+            [&](uint32_t t) {
+                // Since the initial margin is 40 and the first packet arrives at 120,
+                // we're not going to see any output until 160
+                if (t < 160) {
+                    assert(outs.empty());
+                }
+                else if (t == 160) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 20);
+                    outs.clear();
+                }
+                else if (t == 180) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 40);
+                    outs.clear();
+                }
+                // 2 interpolations 
+                else if (t == 200 || t == 220) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 0);
+                    outs.clear();
+                }
+                // Re-synchronize delay and pick up as quickly as possible
+                else if (t == 240) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 60);
+                    outs.clear();
+                }
+                else if (t == 260) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 80);
+                    outs.clear();
+                }
+                else if (t == 280) {
+                    assert(outs.size() == 1);
+                    assert(outs.front().origMs == 100);
+                    outs.clear();
+                }
+            }
+        );
+        //assert(sink.voiceCount == 3);
+        //assert(sink.interpolateCount == 4);
     }
 }
 
