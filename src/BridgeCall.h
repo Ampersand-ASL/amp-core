@@ -16,6 +16,9 @@
  */
 #pragma once
 
+#include <queue>
+
+#include "PCM16Frame.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
 #include "Message.h"
@@ -38,6 +41,7 @@ public:
     static const unsigned BLOCK_SIZE_8K = 160;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
+    static const unsigned SESSION_TIMEOUT_MS = 120 * 1000;
 
     BridgeCall();
 
@@ -85,15 +89,58 @@ private:
     Clock* _clock;
     MessageConsumer* _sink;
 
+    enum Mode {
+        NORMAL,
+        PARROT,
+        TONE
+    };
+
+    _mode = Mode::PARROT;
+
     bool _active = false;
     unsigned _lineId = 0;
     unsigned _callId = 0;
-    bool _bypassAdaptor = false;
+    uint32_t _startMs;
+
     // IMPORTANT: All of the signaling has been handled ahead of this point
     // so _stageIn will either be silence or audio.
     Message _stageIn;
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
+
+    // ----- Tone Related -----------------------------------------------------
+
+    void _toneAudioRateTick();
+
+    bool _toneActive = false;
+    float _toneOmega;
+    float _tonePhi;
+    float _toneLevel;
+
+    // ----- Parrot Related ---------------------------------------------------
+
+    void _consumeParrotAudio(const Message& msg);
+    void _parrotAudioRateTick();
+    void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
+    void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
+    Message _makeMessage(const PCM16Frame& frame, unsigned destBusId, unsigned destCallId) const;
+
+    // The audio waiting to be sent to the caller in PCM16 48K format.
+    std::queue<PCM16Frame> _playQueue;
+
+    enum ParrotState {
+        NONE,
+        ACTIVE,
+        CONNECTED,
+        PLAYING_PROMPT_GREETING,
+        WAITING_FOR_RECORD,
+        RECORDING,
+        PAUSE_AFTER_RECORD,
+        PLAYING,
+        TIMEDOUT
+    };
+
+    ParrotState _parrotState = ParrotState::NONE;
 };
 
     }
