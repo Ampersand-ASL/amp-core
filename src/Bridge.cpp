@@ -14,10 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <iostream>
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
 
 #include "Bridge.h"
+
+using namespace std;
 
 namespace kc1fsz {
     namespace amp {
@@ -103,33 +106,46 @@ void Bridge::consume(const Message& msg) {
 
 void Bridge::audioRateTick() {
 
-    // Tick each call so that we have an input frame for each, keep 
-    // track of how many calls there are.
-    unsigned mixCount = 0;
+    // Tick each call so that we have an input frame for each.
     _calls.visitIf(
         // Visitor
-        [&mixCount](BridgeCall& call) { 
+        [](BridgeCall& call) { 
             // Tick the call to get it to produce an audio frame
             call.audioRateTick();
-            // Was a frame created?  If so, it will go into the final mix.
-            if (call.hasInputAudio())
-                mixCount++;
             return true;
         },
         // Predicate
         [](const BridgeCall& s) { return s.isActive(); }
     );
 
-    // Figure out the scaling factor, which depends on how many calls
-    // are contributing audio. Keep in mind that calls don't contribute
-    // audio to themselves, hence the - 1
-    float mixScale = (mixCount <= 1) ? 0 : 1.0f / ((float)mixCount - 1.0f);
-
     // Perform mixing and create an output for each active call
     _calls.visitIf(
         // Visitor
-        [this, mixScale](BridgeCall& call) { 
+        [this](BridgeCall& call) { 
 
+            // Figure out how many calls we are mixing. Keep in mind that calls don't contribute
+            // audio to themselves.
+            unsigned mixCount = 0;
+            this->_calls.visitIf(
+                // Visitor
+                [&mixCount](const BridgeCall& innerCall) { 
+                    mixCount++;
+                    return true;
+                },
+                // Predicate
+                [call](const BridgeCall& innerCall) { 
+                    return innerCall.isActive() && 
+                        innerCall.hasInputAudio() &&
+                        // NOTE: A call will not contribute audio to itself!
+                        !innerCall.equals(call);
+                }
+            );
+
+            // Figure out the scaling factor, which depends on how many calls
+            // are contributing audio. 
+            float mixScale = (mixCount == 0) ? 0 : 1.0f / (float)mixCount;
+
+            // Now do the actual mixing
             int16_t mixedFrame[BLOCK_SIZE_48K];
             memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
 

@@ -74,7 +74,7 @@ public:
     }
 
     bool belongsTo(const Message& msg) const {
-        return _active && msg.getDestBusId() == _lineId && msg.getDestCallId() == _callId;
+        return _active && msg.getSourceBusId() == _lineId && msg.getSourceCallId() == _callId;
     }
 
     void consume(const Message& frame);
@@ -93,6 +93,7 @@ private:
     unsigned _callId = 0;
     uint32_t _startMs = 0;
     CODECType _codec = CODECType::IAX2_CODEC_UNKNOWN;
+    bool _bypassAdaptor = true;
     // IMPORTANT: All of the signaling has been handled ahead of this point
     // so _stageIn will either be silence or audio.
     Message _stageIn;
