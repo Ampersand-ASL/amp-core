@@ -301,3 +301,20 @@ target_include_directories(hello-usb PRIVATE src)
 target_include_directories(hello-usb PRIVATE include)
 target_include_directories(hello-usb PRIVATE kc1fsz-tools-cpp/include)
 target_link_libraries(hello-usb -lusb-1.0)
+
+# ----- bridge-test ----------------------------------------------------
+
+add_executable(bridge-test
+  src/Message.cpp
+  src/Bridge.cpp
+  src/BridgeCall.cpp
+  src/tests/bridge-test-1.cpp
+  src/tests/TestUtil.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+)
+
+target_include_directories(bridge-test PRIVATE src)
+target_include_directories(bridge-test PRIVATE include)
+target_include_directories(bridge-test PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(bridge-test PRIVATE amp-server/sw/include)
