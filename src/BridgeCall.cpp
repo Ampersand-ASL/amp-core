@@ -149,28 +149,28 @@ void BridgeCall::_consumeParrotAudio(const Message& msg) {
     bool vad = rms > 0.005;
 
     if (vad)
-        s.lastAudioTime = _clock.time();
+        _lastAudioMs = _clock->time();
 
-    if (s.state == State::WAITING_FOR_RECORD)  {
+    if (_parrotState == ParrotState::WAITING_FOR_RECORD)  {
         if (vad) {
-            _log.info("Record start");
-            s.state = State::RECORDING;
-            s.playQueue = std::queue<PCM16Frame>(); 
-            s.playQueueDepth = 0;
+            _log->info("Record start");
+            _parrotState = ParrotState::RECORDING;
+            _playQueue = std::queue<PCM16Frame>(); 
+            _playQueueDepth = 0;
 
             // Load up the pre-playback audio
-            _loadAudioFile("../media/playback-8k.pcm", s.playQueue);
-            _loadSilence(25, s.playQueue);
+            _loadAudioFile("../media/playback-8k.pcm", _playQueue);
+            _loadSilence(25, _playQueue);
 
-            s.playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-            s.playQueueDepth++;
+            _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
+            _playQueueDepth++;
         }
     } 
-    else if (s.state == State::RECORDING) {
+    else if (_parrotState == ParrotState::RECORDING) {
         // Limit the amount of sound
-        if (s.playQueueDepth < 1500) {
-            s.playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-            s.playQueueDepth++;
+        if (_playQueueDepth < 1500) {
+            _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
+            _playQueueDepth++;
         }
     } 
 }
@@ -180,54 +180,54 @@ void BridgeCall::_parrotAudioRateTick() {
     // General timeout
     if (_clock->isPast(_startMs + SESSION_TIMEOUT_MS)) {
         _log->info("Timing out call %u/%d", _lineId, _callId);
-        _state = State::TIMEDOUT;
+        _parrotState = ParrotState::TIMEDOUT;
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
             0, 0, 0, _clock->timeUs());
         msg.setDest(_lineId, _callId);
         _bridgeOut.consume(msg);
         reset();
     }
-    else if (_state == State::CONNECTED) {
+    else if (_parrotState == ParrotState::CONNECTED) {
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
-        if (_clock->isPast(_stateStartMs + 2000)) {
+        if (_clock->isPast(_parrotStateStartMs + 2000)) {
             // Load the greeting into the play queue
-            _loadAudioFile("../media/greeting-8k.pcm", playQueue);
+            _loadAudioFile("../media/greeting-8k.pcm", _playQueue);
             // Trigger the greeting playback
-            _state = State::PLAYING_PROMPT_GREETING;
+            _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
             _log->info("Greeting start");
         }
     }
-    else if (_state == State::PLAYING_PROMPT_GREETING) {
+    else if (_parrotState == ParrotState::PLAYING_PROMPT_GREETING) {
         if (_playQueue.empty()) {
             _log->info("Greeting end");
-            _state = State::WAITING_FOR_RECORD;
-            _stateStartMs = _clock->time();
+            _parrotState = ParrotState::WAITING_FOR_RECORD;
+            _parrotStateStartMs = _clock->time();
         } else {
-            _bridgeOut.consume(_makeMessage(playQueue.front(), _lineId, _callId));
+            _bridgeOut.consume(_makeMessage(_playQueue.front(), _lineId, _callId));
             _playQueue.pop();
         }
     }
-    else if (_state == State::RECORDING) {
+    else if (_parrotState == ParrotState::RECORDING) {
         if (_clock->isPast(_lastAudioMs + 5000)) {
             _log->info("Record end (Long silence)");
-            _state = State::PAUSE_AFTER_RECORD;
-            _stateStartMs = _clock->time();
+            _parrotState = ParrotState::PAUSE_AFTER_RECORD;
+            _parrotStateStartMs = _clock->time();
         }
     } 
-    else if (_state == State::PAUSE_AFTER_RECORD) {
-        if (_clock->isPast(_stateStartMs + 750)) {
+    else if (_parrotState == ParrotState::PAUSE_AFTER_RECORD) {
+        if (_clock->isPast(_parrotStateStartMs + 750)) {
             _log->info("Playback prompt");
-            _state = State::PLAYING;
-            _stateStartMs = _clock->time();
+            _parrotState = ParrotState::PLAYING;
+            _parrotStateStartMs = _clock->time();
         }
     }
-    else if (_state == State::PLAYING) {
+    else if (_parrotState == ParrotState::PLAYING) {
         if (_playQueue.empty()) {
             _log->info("Play end");
             // TODO
-            _state = State::WAITING_FOR_RECORD;
-            _stateStartMs = _clock->time();
+            _parrotState = ParrotState::WAITING_FOR_RECORD;
+            _parrotStateStartMs = _clock->time();
         } else {
             _bridgeOut.consume(_makeMessage(_playQueue.front(), _lineId, _callId));
             _playQueue.pop();

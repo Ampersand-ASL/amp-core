@@ -95,12 +95,14 @@ private:
         TONE
     };
 
-    _mode = Mode::PARROT;
+    Mode _mode = Mode::PARROT;
 
     bool _active = false;
     unsigned _lineId = 0;
     unsigned _callId = 0;
     uint32_t _startMs;
+    uint32_t _lastAudioMs = 0;
+
 
     // IMPORTANT: All of the signaling has been handled ahead of this point
     // so _stageIn will either be silence or audio.
@@ -121,13 +123,14 @@ private:
 
     void _consumeParrotAudio(const Message& msg);
     void _parrotAudioRateTick();
-    
+
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     Message _makeMessage(const PCM16Frame& frame, unsigned destBusId, unsigned destCallId) const;
 
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
+    unsigned _playQueueDepth = 0;
 
     enum ParrotState {
         NONE,
@@ -142,6 +145,8 @@ private:
     };
 
     ParrotState _parrotState = ParrotState::NONE;
+    uint32_t _parrotStateStartMs = 0;
+
 };
 
     }
