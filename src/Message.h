@@ -49,7 +49,7 @@ public:
 
     Message();
     Message(Type type, unsigned format, unsigned size, const uint8_t* body,
-        uint64_t origMs, uint64_t rxUs);
+        uint32_t origMs, uint64_t rxUs);
     Message(const Message& other);
     Message& operator=(const Message& other);
 
@@ -60,8 +60,9 @@ public:
     unsigned size() const { return _size; }
     const uint8_t* body() const { return _body; }
 
-    uint64_t getOrigMs() const { return _origMs; }
-    uint64_t getRxUs() const { return 0; }
+    uint32_t getOrigMs() const { return _origMs; }
+    uint64_t getRxUs() const { return _rxUs; }
+    uint32_t getRxMs() const { return _rxUs / 1000; }
 
     void setSource(unsigned busId, unsigned callId) { _sourceBusId = busId; _sourceCallId = callId; }
     void setDest(unsigned busId, unsigned callId){ _destBusId = busId; _destCallId = callId; }
