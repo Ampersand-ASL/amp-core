@@ -121,6 +121,7 @@ private:
 
     void _consumeParrotAudio(const Message& msg);
     void _parrotAudioRateTick();
+    
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     Message _makeMessage(const PCM16Frame& frame, unsigned destBusId, unsigned destCallId) const;

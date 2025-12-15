@@ -29,10 +29,13 @@ namespace kc1fsz {
 
 BridgeCall::BridgeCall() {
     // The last stage of the BridgeIn pipeline drops the message 
-    // into the input staging area.
+    // into (a) the input staging area in NORMAL mode or (b) the 
+    // parrot system in PARROT mode.
     _bridgeIn.setSink([this](const Message& msg) {
-
-        this->_stageIn = msg;
+        if (_mode == Mode::NORMAL)
+            this->_stageIn = msg;
+        else if (_mode == Mode::PARROT)
+            _consumeParrotAudio(msg);
     });
     // The last stage of the BridgeOut pipeline passes the message
     // to the sink message bus.
@@ -60,19 +63,16 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 }
 
 void BridgeCall::consume(const Message& frame) {
-    _bridgeIn.consume(frame);
+    _bridgeIn.consume(frame);       
 }
 
 void BridgeCall::audioRateTick() {
     if (_mode == Mode::NORMAL) {
         _bridgeIn.audioRateTick();
-    }
-    else if (_mode == Mode::TONE) {
-    }
-    else if (_mode == Mode::PARROT) {
+    } else if (_mode == Mode::TONE) {
+        _toneAudioRateTick();
+    } else if (_mode == Mode::PARROT) {
         _parrotAudioRateTick();
-    }
-    else {
     }
 }
 
@@ -86,6 +86,9 @@ void BridgeCall::contributeInputAudio(int16_t* pcmBlock, unsigned blockSize, flo
     }
 }
 
+/**
+ * Takes 48K PCM and passes it into the BridgeOut pipeline for transcoding, etc.
+ */
 void BridgeCall::setOutputAudio(const int16_t* source, unsigned blockSize) {
     // Make a message with the new audio
     assert(blockSize == BLOCK_SIZE_48K);
@@ -97,11 +100,7 @@ void BridgeCall::setOutputAudio(const int16_t* source, unsigned blockSize) {
         BLOCK_SIZE_48K * 2, encoded, 0, 0);
     audioOut.setSource(10, 1);
     audioOut.setDest(_lineId, _callId);
-    if (_bypassAdaptor) {
-        _sink->consume(audioOut);
-    } else {
-        _bridgeOut.consume(audioOut);
-    }
+    _bridgeOut.consume(audioOut);
 }
 
 // ===== Tone Mode Related ====================================================
@@ -111,12 +110,12 @@ void BridgeCall::_toneAudioRateTick() {
         // Make a tone at 48K
         int16_t data[BLOCK_SIZE_48K];
         for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-            data[i] = (toneLevel * cos(tonePhi)) * 32767.0f;
-            tonePhi += toneOmega;
-            tonePhi = fmod(tonePhi, 2.0f * 3.14159f);
+            data[i] = (_toneLevel * cos(_tonePhi)) * 32767.0f;
+            _tonePhi += _toneOmega;
+            _tonePhi = fmod(_tonePhi, 2.0f * 3.14159f);
         }
-        PCM16Frame f(data, 160 * 6);
-        _bridgeOut.consume(_makeMessage(f, _lineId, _callId));
+        // Pass into the output pipeline for transcoding, etc.
+        _bridgeOut.consume(_makeMessage(PCM16Frame(data, 160 * 6), _lineId, _callId));
     }
 }
 
