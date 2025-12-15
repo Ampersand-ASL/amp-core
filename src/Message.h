@@ -75,12 +75,12 @@ public:
     
 private:
 
-    const Type _type;
-    const unsigned _format;
-    const unsigned _size;
+    Type _type;
+    unsigned _format;
+    unsigned _size;
     uint8_t _body[MAX_SIZE];
-    const uint32_t _origMs;
-    const uint64_t _rxUs;
+    uint32_t _origMs;
+    uint64_t _rxUs;
     // Routing stuff
     unsigned _sourceBusId = 0, _sourceCallId = 0;
     unsigned _destBusId = 0, _destCallId = 0;

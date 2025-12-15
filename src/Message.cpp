@@ -24,15 +24,15 @@ Message::Message()
 :   _type(Type::NONE),
     _format(0),
     _size(0),
-    _origUs(0),
+    _origMs(0),
     _rxUs(0) { }
 
 Message::Message(Type type, unsigned format, unsigned size, const uint8_t* content,
-    uint64_t origUs, uint64_t rxUs) 
+    uint32_t origMs, uint64_t rxUs) 
 :   _type(type),
     _format(format),
     _size(size),
-    _origUs(origUs),
+    _origMs(origMs),
     _rxUs(rxUs) {  
     assert(size <= MAX_SIZE);
     if (size)
@@ -43,7 +43,7 @@ Message::Message(const Message& other)
 :   _type(other._type),
     _format(other._format),
     _size(other._size),
-    _origUs(other._origUs),
+    _origMs(other._origMs),
     _rxUs(other._rxUs) {
     assert(other._size <= MAX_SIZE);
     if (other._size)
@@ -52,6 +52,22 @@ Message::Message(const Message& other)
     _sourceCallId = other._sourceCallId;
     _destBusId = other._destBusId;
     _destCallId = other._destCallId;
+}
+
+Message& Message::operator=(const Message& other) {
+    _type = other._type;
+    _format = other._format;
+    _size = other._size;
+    _origMs = other._origMs;
+    _rxUs = other._rxUs;
+    assert(other._size <= MAX_SIZE);
+    if (other._size)
+        memcpy(_body, other._body, other._size);
+    _sourceBusId = other._sourceBusId;
+    _sourceCallId = other._sourceCallId;
+    _destBusId = other._destBusId;
+    _destCallId = other._destCallId;
+    return *this;
 }
 
 }

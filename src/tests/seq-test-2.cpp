@@ -48,6 +48,29 @@ private:
     vector<TestFrame>& _outs;
 };
 
+class TestSink3 : public SequencingBufferSink<Message> {
+public:
+
+    unsigned signalCount = 0;
+    unsigned voiceCount = 0;
+    unsigned interpolateCount = 0;
+
+    virtual void playSignal(const Message& payload, uint32_t localMs) {
+        cout << "Release signal: t=" << localMs << " origMs=" << payload.getOrigMs() << endl;
+        signalCount++;
+    };
+
+    virtual void playVoice(const Message& payload, uint32_t localMs) {
+        cout << "Release voice: t=" << localMs << " origMs=" << payload.getOrigMs() << endl;
+        voiceCount++;
+    };
+
+    virtual void interpolateVoice(uint32_t origMs, uint32_t localMs, uint32_t durationMs) {
+        cout << "Interpolate voice: t=" << localMs << " origMs=" << origMs << endl;
+        interpolateCount++;
+    };
+};
+
 void test_1() {
 
     Log log;
@@ -395,6 +418,38 @@ void test_1() {
     }
 }
 
+void test_2() {
+
+    Log log;
+
+    // A very straight-forward example, demonstrates that the initial margin
+    // was used properly.
+    {
+        cout << endl;
+        cout << "===== Test 0a ==========================================" << endl;
+        cout << endl;
+
+        TestSink3 sink;
+        SequencingBufferStd<Message> jb;
+        jb.setInitialMargin(20);
+        jb.lockDelay();
+
+        jb.playOut(log, 80, &sink);
+        jb.playOut(log, 100, &sink);
+        jb.consume(log, Message(Message::Type::AUDIO, 0, 0, 0, 20, 120000));
+        jb.playOut(log, 120, &sink);
+        jb.consume(log, Message(Message::Type::AUDIO, 0, 0, 0, 40, 140000));
+        jb.playOut(log, 140, &sink);
+        jb.consume(log, Message(Message::Type::AUDIO, 0, 0, 0, 60, 160000));
+        jb.playOut(log, 160, &sink);
+        jb.playOut(log, 180, &sink);
+        jb.playOut(log, 200, &sink);
+        assert(sink.voiceCount == 3);
+        assert(sink.interpolateCount == 1);
+    }
+}
+
 int main(int, const char**) {
     test_1();
+    test_2();
 }
