@@ -187,9 +187,7 @@ public:
     }
 
     /**
-     * @param localMs The local time, but must be on _voiceTickSize
-     * boundaries. For example, if tick=20ms we'd expect to see localTime : 100, 120, 140,
-     * 160, 180, 200, 220, 240, ...
+     * @param localMs The local time.
      */
     virtual void playOut(Log& log, uint32_t localMs, SequencingBufferSink<T>* sink) {     
 
@@ -229,6 +227,7 @@ public:
                     if (_voicePlayoutCount == 0) {
                         _originCursor = roundToTick(frame.getOrigMs() - _initialMargin,
                             _voiceTickSize);
+                        log.info("Start of call cursor: %d", _originCursor);
                     } 
                     // After the call is up and running we use the adaptive algorithm to track
                     // the delay between arrival and playback.

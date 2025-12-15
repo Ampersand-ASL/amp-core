@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <iostream>
+
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
 
@@ -39,8 +40,21 @@ void Bridge::setSink(MessageConsumer* sink) {
         _callSpace[i].setSink(sink);
 }
 
-void Bridge::consume(const Message& msg) {
+unsigned Bridge::getCallCount() const {
+    unsigned result = 0;
+    _calls.visitIf(
+        // Visitor
+        [&result](const BridgeCall& call) { 
+            result++;
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+    return result;
+}
 
+void Bridge::consume(const Message& msg) {
     if (msg.getType() == Message::SIGNAL && 
         msg.getFormat() == Message::SignalType::CALL_START) {
         
@@ -119,27 +133,21 @@ void Bridge::audioRateTick() {
     );
 
     // Perform mixing and create an output for each active call
-    _calls.visitIf(
-        // Visitor
-        [this](BridgeCall& call) { 
+    for (unsigned i = 0; i < MAX_CALLS; i++) {
+        
+        if (!_calls[i].isActive())
+            continue;
 
-            // Figure out how many calls we are mixing. Keep in mind that calls don't contribute
-            // audio to themselves.
-            unsigned mixCount = 0;
-            this->_calls.visitIf(
-                // Visitor
-                [&mixCount](const BridgeCall& innerCall) { 
-                    mixCount++;
-                    return true;
-                },
-                // Predicate
-                [call](const BridgeCall& innerCall) { 
-                    return innerCall.isActive() && 
-                        innerCall.hasInputAudio() &&
-                        // NOTE: A call will not contribute audio to itself!
-                        !innerCall.equals(call);
-                }
-            );
+        // Figure out how many calls we are mixing. Keep in mind that calls don't contribute
+        // audio to themselves.
+        unsigned mixCount = 0;
+        for (unsigned j = 0; j < MAX_CALLS; j++) {
+            if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
+                continue;
+            mixCount++;
+        }
+
+        if (mixCount > 0) {
 
             // Figure out the scaling factor, which depends on how many calls
             // are contributing audio. 
@@ -148,29 +156,16 @@ void Bridge::audioRateTick() {
             // Now do the actual mixing
             int16_t mixedFrame[BLOCK_SIZE_48K];
             memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
+            for (unsigned j = 0; j < MAX_CALLS; j++) {
+                if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
+                    continue;
+                _calls[j].contributeInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale);
+            }
 
-            this->_calls.visitIf(
-                // Visitor
-                [&mixedFrame, mixScale](const BridgeCall& innerCall) { 
-                    innerCall.contributeInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale);
-                    return true;
-                },
-                // Predicate
-                [call](const BridgeCall& innerCall) { 
-                    return innerCall.isActive() && 
-                        innerCall.hasInputAudio() &&
-                        // NOTE: A call will not contribute audio to itself!
-                        !innerCall.equals(call);
-                }
-            );
-
-            call.setOutputAudio(mixedFrame, BLOCK_SIZE_48K);
-
-            return true;
-        },
-        // Predicate
-        [](const BridgeCall& s) { return s.isActive(); }
-    );
+            // Output the result
+            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K);
+        }
+    }
 }
 
     }

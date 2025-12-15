@@ -45,6 +45,7 @@ public:
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
+    // (This is 1920 bytes)
     static const unsigned MAX_SIZE = 160 * 6 * 2;
 
     Message();

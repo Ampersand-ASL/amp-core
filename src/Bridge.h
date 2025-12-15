@@ -41,6 +41,7 @@ public:
     Bridge(Log& log, Clock& clock);
 
     void setSink(MessageConsumer* sink);
+    unsigned getCallCount() const;
 
     // ----- MessageConsumer --------------------------------------------------
 
@@ -58,8 +59,8 @@ private:
     Log& _log;
     Clock& _clock;
     MessageConsumer* _sink = 0;
-
-    static const unsigned MAX_CALLS = 16;
+    
+    static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
 };

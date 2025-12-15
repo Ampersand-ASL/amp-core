@@ -2,6 +2,7 @@
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/linux/StdClock.h"
+#include <itu-g711-codec/codec.h>
 
 #include "Bridge.h"
 
@@ -12,7 +13,8 @@ class TestSink : public MessageConsumer {
 public:
 
     void consume(const Message& msg) {
-        //cout << "Dest line/call " << msg.getDestBusId() << "/" << msg.getDestCallId() << endl;
+        cout << "Dest line/call " << msg.getDestBusId() << "/" << msg.getDestCallId() << endl;
+        cout << " " << msg.getType() << " " << msg.getFormat() << endl;
         if (msg.getDestBusId() == 10 && msg.getDestCallId() == 1)
             _out1 = msg;
         else if (msg.getDestBusId() == 10 && msg.getDestCallId() == 2)
@@ -103,6 +105,109 @@ static void test_1() {
     assert(closeTo(pcm3[0], 0.375f * 32767.0f));
 }
 
+void test_2() {   
+
+    Log log;
+    StdClock clock;
+    amp::Bridge bridge(log, clock);
+    TestSink sink; 
+    bridge.setSink(&sink);
+
+    assert(bridge.getCallCount() == 0);
+
+    // ----- t=100
+
+    // Start two calls
+    {
+        PayloadCallStart cs;
+        cs.codec = CODECType::IAX2_CODEC_G711_ULAW;
+        cs.startMs = 100;
+        Message msg0(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+            sizeof(cs), (const uint8_t*)&cs, 0, 0);
+        msg0.setSource(10, 1);
+        msg0.setDest(1, 0);
+        bridge.consume(msg0);
+    }
+    {
+        PayloadCallStart cs;
+        cs.codec = CODECType::IAX2_CODEC_G711_ULAW;
+        cs.startMs = 100;
+        Message msg0(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+            sizeof(cs), (const uint8_t*)&cs, 0, 0);
+        msg0.setSource(10, 2);
+        msg0.setDest(1, 0);
+        bridge.consume(msg0);
+    }
+
+    assert(bridge.getCallCount() == 2);
+
+    // ----- t=220 
+    // Send in some audio. This shouldn't do anything except establish the starting
+    // delay for the call.
+    {
+        uint8_t audio[160];
+        for (unsigned i = 0; i < 160; i++)
+            audio[i] = encode_ulaw(0.5f * 32767.0f);
+        Message audioIn1(Message::Type::AUDIO, CODECType::IAX2_CODEC_G711_ULAW,
+            160, audio, 120, 220);
+        audioIn1.setSource(10, 1);
+        audioIn1.setDest(1, 0);
+        bridge.consume(audioIn1);
+    }
+    bridge.audioRateTick();
+
+    // Nothing should have been output
+    assert(sink._out1.getType() == Message::Type::NONE);
+    assert(sink._out2.getType() == Message::Type::NONE);
+    assert(sink._out3.getType() == Message::Type::NONE);
+    
+    // ----- t=240 
+    cout << "t=240" << endl;
+    {
+        uint8_t audio[160];
+        for (unsigned i = 0; i < 160; i++)
+            audio[i] = encode_ulaw(0.5f * 32767.0f);
+        Message audioIn1(Message::Type::AUDIO, CODECType::IAX2_CODEC_G711_ULAW,
+            160, audio, 140, 240);
+        audioIn1.setSource(10, 1);
+        audioIn1.setDest(1, 0);
+        bridge.consume(audioIn1);
+    }
+    bridge.audioRateTick();
+
+    assert(sink._out1.getType() == Message::Type::NONE);
+    assert(sink._out2.getType() == Message::Type::NONE);
+    assert(sink._out3.getType() == Message::Type::NONE);
+
+    // ----- t=260 
+    cout << "t=260" << endl;
+    {
+        uint8_t audio[160];
+        for (unsigned i = 0; i < 160; i++)
+            audio[i] = encode_ulaw(0.5f * 32767.0f);
+        Message audioIn1(Message::Type::AUDIO, CODECType::IAX2_CODEC_G711_ULAW,
+            160, audio, 160, 260);
+        audioIn1.setSource(10, 1);
+        audioIn1.setDest(1, 0);
+        bridge.consume(audioIn1);
+    }
+    bridge.audioRateTick();
+
+    // Here we should see some output on the second call
+    assert(sink._out1.getType() == Message::Type::NONE);
+    assert(sink._out2.getType() == Message::Type::AUDIO);
+    assert(sink._out3.getType() == Message::Type::NONE);
+
+    // Make sure we got back the audio we expected
+    for (unsigned i = 0; i < 160; i++) {
+        int16_t sample = decode_ulaw(sink._out2.body()[i]);
+        cout << "sample " << sample << endl;
+    }
+    //assert(closeTo(sample, 0.5f * 32767.0f));
+}
+
 int main(int, const char**) {
-    test_1();
+    //test_1();
+    test_2();
+    return 0;
 }

@@ -16,10 +16,11 @@
  */
 #pragma once
 
-//#include "IAX2Util.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
 #include "Message.h"
+#include "BridgeIn.h"
+#include "BridgeOut.h"
 
 namespace kc1fsz {
 
@@ -33,33 +34,29 @@ class Bridge;
 class BridgeCall {
 public:
 
+    static const unsigned AUDIO_RATE = 48000;
+    static const unsigned BLOCK_SIZE_8K = 160;
+    static const unsigned BLOCK_SIZE_48K = 160 * 6;
+    static const unsigned BLOCK_PERIOD_MS = 20;
+
+    BridgeCall();
+
     /**
      * One-time initialization. Connects the call to the outside world.
      */
     void init(Log* log, Clock* clock) {
         _log = log;
         _clock = clock;
+        _bridgeIn.init(_log, _clock);
     }
 
     void setSink(MessageConsumer* sink) {
         _sink = sink;
     }
 
-    void reset() {
-        _active = false;
-        _lineId = 0;  
-        _callId = 0; 
-        _startMs = 0; 
-        _codec = CODECType::IAX2_CODEC_UNKNOWN;
-    }
+    void reset();
 
-    void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec) {
-        _active = true;
-        _lineId = lineId;  
-        _callId = callId; 
-        _startMs = startMs; 
-        _codec = codec;
-    }
+    void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec);
 
     bool isActive() const { 
         return _active; 
@@ -91,12 +88,12 @@ private:
     bool _active = false;
     unsigned _lineId = 0;
     unsigned _callId = 0;
-    uint32_t _startMs = 0;
-    CODECType _codec = CODECType::IAX2_CODEC_UNKNOWN;
-    bool _bypassAdaptor = true;
+    bool _bypassAdaptor = false;
     // IMPORTANT: All of the signaling has been handled ahead of this point
     // so _stageIn will either be silence or audio.
     Message _stageIn;
+    BridgeIn _bridgeIn;
+    BridgeOut _bridgeOut;
 };
 
     }

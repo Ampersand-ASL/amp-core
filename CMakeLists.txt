@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.13)
 project(ampersand C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
-add_compile_options(-fstack-protector-all -Wall -Wpedantic -g)
+add_compile_options(-fstack-protector-all -Wall -Wpedantic -g -fstack-usage -Wstack-usage=8192)
 
 # Set the default install prefix (e.g., /usr/local on Linux)
 #set(CMAKE_INSTALL_PREFIX "/tmp")
@@ -37,8 +37,8 @@ add_executable(main-local-parrot
   src/Transcoder_SLIN_48K.cpp
   src/Transcoder_SLIN.cpp
   src/Transcoder_SLIN_16K.cpp
-  src/AdaptorIn.cpp
-  src/AdaptorOut.cpp
+  src/BridgeIn.cpp
+  src/BridgeOut.cpp
   src/IAX2Util.cpp
   src/Resampler.cpp
   kc1fsz-tools-cpp/src/Common.cpp
@@ -116,8 +116,8 @@ add_executable(unit-test
   src/Resampler.cpp
   #src/Transcoder_G711_ULAW.cpp
   #src/NodeParrot.cpp
-  #src/AdaptorIn.cpp
-  #src/AdaptorOut.cpp
+  #src/BridgeIn.cpp
+  #src/BridgeOut.cpp
   #src/Transcoder_G711_ULAW.cpp
   #src/Transcoder_SLIN_48K.cpp
   kc1fsz-tools-cpp/src/Common.cpp
@@ -305,16 +305,32 @@ target_link_libraries(hello-usb -lusb-1.0)
 # ----- bridge-test ----------------------------------------------------
 
 add_executable(bridge-test
+  src/tests/bridge-test-1.cpp
+  src/tests/TestUtil.cpp
   src/Message.cpp
   src/Bridge.cpp
   src/BridgeCall.cpp
-  src/tests/bridge-test-1.cpp
-  src/tests/TestUtil.cpp
+  src/BridgeIn.cpp
+  src/BridgeOut.cpp
+  src/Transcoder_G711_ULAW.cpp
+  src/Transcoder_SLIN_48K.cpp
+  src/Transcoder_SLIN.cpp
+  src/Transcoder_SLIN_16K.cpp
+  src/IAX2Util.cpp
+  src/Resampler.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  itu-g711-codec/src/codec.cpp
+  itu-g711-codec/src/Plc.cpp
+  cmsis-dsp-mock/src/main.cpp
 )
 
 target_include_directories(bridge-test PRIVATE src)
 target_include_directories(bridge-test PRIVATE include)
 target_include_directories(bridge-test PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(bridge-test PRIVATE amp-server/sw/include)
+target_include_directories(bridge-test PRIVATE cmsis-dsp-mock/include)
+target_include_directories(bridge-test PRIVATE itu-g711-codec/src)
+# This program has a large stack size because of the jitter buffer
+target_link_options(bridge-test PRIVATE -Wl,--stack,4096000)
+
