@@ -365,6 +365,34 @@ void test_1() {
         assert(sink.voiceCount == 5);
         assert(sink.interpolateCount == 2);
     }
+
+    // PATHOLOGY #5 - Duplicate frame
+    {
+        cout << endl;
+        cout << "===== Test 5 ==========================================" << endl;
+        cout << endl;
+
+        std::vector<TestFrame> outs;
+        TestSink2 sink(outs);
+        SequencingBufferStd<TestFrame> jb;
+        jb.setInitialMargin(20);
+        jb.lockDelay();
+        std::vector<TestFrame> ins;
+        ins.push_back({ .origMs = 20, .rxMs = 40, .voice=true });
+        // Duplicate, will be discarded
+        ins.push_back({ .origMs = 20, .rxMs = 60, .voice=true });
+        ins.push_back({ .origMs = 40, .rxMs = 80, .voice=true });
+        ins.push_back({ .origMs = 60, .rxMs = 100, .voice=true });
+        ins.push_back({ .origMs = 80, .rxMs = 120, .voice=true });
+        ins.push_back({ .origMs = 100, .rxMs = 140, .voice=true });
+
+        play(log, 20, 300, ins, jb, &sink, true, 
+            [&](uint32_t t) {
+            }
+        );
+        assert(sink.voiceCount == 5);
+        assert(sink.interpolateCount == 4);
+    }
 }
 
 int main(int, const char**) {

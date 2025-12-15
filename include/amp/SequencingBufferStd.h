@@ -398,7 +398,7 @@ private:
     const uint32_t _voiceTickSize = 20;
     // This is the most the playback cursor can be adjusted to pick up a 
     // late frame inside of a talkspurt
-    const int32_t _midTsAdjustMax = 40;
+    const int32_t _midTsAdjustMax = 500;
     // Constants for Ramjee Algorithm 1
     const float _alpha = 0.998002f;
     const float _beta = 5.0f;
