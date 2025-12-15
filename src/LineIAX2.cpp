@@ -921,9 +921,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         PayloadCallStart payload;
         payload.codec = call.codec;
 
+        // NOTE: origMs=0 here, can't go into the jitter buffer like this!
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-            sizeof(payload), (const uint8_t*)&payload,
-            _clock.timeUs());
+            sizeof(payload), (const uint8_t*)&payload, 0, rxStampUs);
         msg.setSource(_busId, call.localCallId);
         // Bypass the jitter buffer to avoid messing up any of the delay 
         // calculations.
@@ -957,12 +957,12 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         _log.info("Call %u got UNKEY", call.localCallId);
 
         // Make a signal Message and queue it into the jitter buffer.
-        Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0);
+        Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
+            0, 0, frame.getTimeStamp(), rxStampUs);
         unkeyMsg.setSource(_busId, call.localCallId);
         // #### TODO: MAKE SURE THERE IS NO WAY THAT THIS CAN BE DROPPED 
         // #### IN THE JITTER BUFFER.
-        call.jitBuf.consumeSignal(_log, unkeyMsg, 
-            frame.getTimeStamp(), call.localElapsedMs(_clock));
+        call.jitBuf.consume(_log, unkeyMsg); 
     }
     // LAGRQ
     // 6.7.4.  LAGRQ Lag Request Message
@@ -1049,7 +1049,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
                 // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
                 // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
                 voiceMsg = Message(Message::Type::AUDIO, call.codec,
-                    vfs, frame.buf(), rxStampUs);
+                    vfs, frame.buf(), frame.getTimeStamp(), rxStampUs);
                 goodVoice = true;
             } else {
                 _log.info("Voice frame size error");
@@ -1060,8 +1060,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         if (goodVoice) {
             voiceMsg.setSource(_busId, call.localCallId);
-            bool queued = call.jitBuf.consumeVoice(_log, voiceMsg, 
-                frame.getTimeStamp(), call.localElapsedMs(_clock));
+            bool queued = call.jitBuf.consume(_log, voiceMsg);
             if (!queued)
                 _log.error("Failed to queue voice");
         }
@@ -1148,6 +1147,14 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
 
             call.lastFrameRxMs = line->_clock.time();
 
+            // Get the short time from the frame and convert it into a 
+            // full time. IMPORTANT: There is an assumption here that 
+            // the remote time and local time are fairly close to each 
+            // other in order for this conversion to work.
+            uint16_t lowRemoteTime = unpack_uint16_be(buf + 2);
+            uint32_t remoteTime = call.jitBuf.extendTime(lowRemoteTime,
+                call.localElapsedMs(line->_clock));
+
             // Make a voice message from the network frame content and pass it
             // to the consumers.
             Message voiceMsg;
@@ -1155,7 +1162,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             if (vfs > 0) {
                 if (bufLen <= 4 + vfs) {
                     voiceMsg = Message(Message::Type::AUDIO, call.codec,
-                        vfs, buf + 4, rxStampUs);
+                        vfs, buf + 4, remoteTime, rxStampUs);
                 } else {
                     log.error("Voice frame size error");
                     return;
@@ -1167,16 +1174,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
 
             voiceMsg.setSource(line->_busId, call.localCallId);
 
-            // Get the short time from the frame and convert it into a 
-            // full time. IMPORTANT: There is an assumption here that 
-            // the remote time and local time are fairly close to each 
-            // other in order for this conversion to work.
-            uint16_t lowRemoteTime = unpack_uint16_be(buf + 2);
-            uint32_t remoteTime = call.jitBuf.extendTime(lowRemoteTime,
-                call.localElapsedMs(line->_clock));
-            
-            bool queued = call.jitBuf.consumeVoice(log, voiceMsg, 
-                remoteTime, call.localElapsedMs(line->_clock));
+            bool queued = call.jitBuf.consume(log, voiceMsg);
             if (!queued)
                 log.error("Failed to queue voice");
         },
@@ -1458,9 +1456,9 @@ bool LineIAX2::_progressCall(Call& call) {
             PayloadCallStart payload;
             payload.codec = call.codec;
 
+            // NOTE: origMs=0, can't go into the JB like this!
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-                sizeof(payload), (const uint8_t*)&payload,
-                _clock.timeUs());
+                sizeof(payload), (const uint8_t*)&payload, 0, _clock.timeUs());
             msg.setSource(_busId, call.localCallId);
             // Bypass the jitter buffer to avoid messing up any of the delay 
             // calculations.
@@ -1493,8 +1491,9 @@ bool LineIAX2::_progressCall(Call& call) {
     // Doesn't matter whether we called or was called for these tasks.
 
     if (call.state == Call::State::STATE_TERMINATE_WAITING) {
+        // NOTE: origMs=0, can't go into the jitter buffer like this!
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-            0, 0, _clock.timeUs());
+            0, 0, 0, _clock.timeUs());
         msg.setSource(_busId, call.localCallId);
         // Bypass the jitter buffer to avoid messing up any of the delay calculations.
         _bus.consume(msg);
@@ -1586,7 +1585,7 @@ void LineIAX2::consume(const Message& msg) {
                     voiceFrame.setHeader(call.localCallId, call.remoteCallId, 
                         elapsed, 
                         call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_VOICE, call.codec);
-                    voiceFrame.setBody(msg.raw(), msg.size());
+                    voiceFrame.setBody(msg.body(), msg.size());
                     line->_sendFrameToPeer(voiceFrame, call);
                 }
                 // If no wrap then we can safely use a mini-frame
@@ -1599,7 +1598,7 @@ void LineIAX2::consume(const Message& msg) {
                     pack_uint16_be((0x7fff & call.localCallId), miniFrame);
                     // Send only the lower 16 bits of the timestamp per the spec
                     pack_uint16_be(0xffff & elapsed, miniFrame + 2);
-                    memcpy(miniFrame + 4, msg.raw(), msg.size());
+                    memcpy(miniFrame + 4, msg.body(), msg.size());
                     line->_sendFrameToPeer(miniFrame, msg.size() + 4, 
                         (const sockaddr&)call.peerAddr);              
                 }
@@ -1921,8 +1920,8 @@ uint32_t LineIAX2::Call::dispenseElapsedMs(Clock& clock, bool voiceAlignment) {
 
 uint32_t LineIAX2::Call::dispenseElapsedUsingMessageOrigin(const Message& msg,
     bool voiceAlignment) {
-    uint32_t msgOriginMs = msg.getOriginUs() / 1000;
-    return dispenseElapsedFrom(msgOriginMs - localStartMs, voiceAlignment);
+    uint32_t msgCreateMs = msg.getRxUs() / 1000;
+    return dispenseElapsedFrom(msgCreateMs - localStartMs, voiceAlignment);
 }
 
 uint32_t LineIAX2::Call::dispenseElapsedFrom(uint32_t ts, bool voiceAlignment) {
@@ -1970,7 +1969,7 @@ class JBOutAdaptor : public amp::SequencingBufferSink<Message> {
 public:
 
     JBOutAdaptor(Log& log, MessageConsumer& bus, unsigned busId, unsigned callId) 
-    :   _log(log),
+    :   //_log(log),
         _bus(bus),
         _busId(busId),
         _callId(callId) {        
@@ -1984,15 +1983,15 @@ public:
         _bus.consume(payload);
     }
 
-    virtual void interpolateVoice(uint32_t localTime, uint32_t duration) {
-        Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, 0);
+    virtual void interpolateVoice(uint32_t origMs, uint32_t localTime, uint32_t duration) {
+        Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, origMs, localTime * 1000);
         msg.setSource(_busId, _callId);
         _bus.consume(msg);
     }
 
 private:
 
-    Log& _log;
+    //Log& _log;
     MessageConsumer& _bus;
     unsigned _busId, _callId;
 };
@@ -2105,13 +2104,12 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
 }
 
 void LineIAX2::Call::logStats(Log& log) {
-    log.info("Call %4d JBOF %4d JBMAX %4d JBDROP %4d JBINT %4d DEL %4d", 
+    log.info("Call %4d JBOF %4d JBMAX %4d JBDROP %4d JBINT %4d", 
         localCallId,
         jitBuf.getOverflowCount(),
         jitBuf.getMaxBufferDepth(),
         jitBuf.getLateVoiceFrameCount(),
-        jitBuf.getInterpolatedVoiceFrameCount(),
-        jitBuf.getDelay());
+        jitBuf.getInterpolatedVoiceFrameCount());
 }
 
 }

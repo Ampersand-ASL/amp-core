@@ -53,7 +53,7 @@ void AdaptorIn::consume(const Message& frame) {
             // MAKE SURE THIS IS LARGE ENOUGH!
             int16_t pcm[BLOCK_SIZE_8K * 2];
             if (frame.getType() == Message::Type::AUDIO) {
-                t0->decode(frame.raw(), frame.size(), pcm, codecBlockSize(_codecType));
+                t0->decode(frame.body(), frame.size(), pcm, codecBlockSize(_codecType));
             } else {
                 t0->decodeGap(pcm, codecBlockSize(_codecType));
             }
@@ -66,7 +66,7 @@ void AdaptorIn::consume(const Message& frame) {
             uint8_t slin48k[BLOCK_SIZE_48K * 2];
             _transcoder1.encode(pcm48k, BLOCK_SIZE_48K, slin48k, BLOCK_SIZE_48K * 2);
             Message outFrame(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
-                BLOCK_SIZE_48K * 2, slin48k, frame.getOriginUs());
+                BLOCK_SIZE_48K * 2, slin48k, frame.getOrigMs(), frame.getRxUs());
             outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
             outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 

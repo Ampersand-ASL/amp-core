@@ -57,7 +57,7 @@ void AdaptorOut::consume(const Message& frame) {
 
             // Make PCM data
             int16_t pcm48k[BLOCK_SIZE_48K];
-            _transcoder0.decode(frame.raw(), frame.size(), pcm48k, BLOCK_SIZE_48K);
+            _transcoder0.decode(frame.body(), frame.size(), pcm48k, BLOCK_SIZE_48K);
 
             // Resample PCM data 
             // NOTE: MAKE THIS LARGE ENOUGH
@@ -69,7 +69,7 @@ void AdaptorOut::consume(const Message& frame) {
             t1->encode(pcm_low, blockSize, code, codeSize);
             
             Message outFrame(Message::Type::AUDIO, _codecType,
-                codeSize, code, frame.getOriginUs());
+                codeSize, code, frame.getOrigMs(), frame.getRxUs());
             outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
             outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 

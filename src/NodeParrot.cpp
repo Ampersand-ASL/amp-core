@@ -37,7 +37,7 @@ using namespace std;
 
 namespace kc1fsz {
 
-static const unsigned MAX_SESSIONS = 32;
+//static const unsigned MAX_SESSIONS = 32;
 
 NodeParrot::NodeParrot(Log& log, Clock& clock, MessageConsumer& bus)
 :   _log(log),
@@ -67,14 +67,14 @@ void NodeParrot::consume(const Message& msg) {
             _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
             // #### TODO: NEED TO TEST THIS AFTER RACE CONDITION IS RESOLVED
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
-                _clock.timeUs());
+                0, _clock.timeUs());
             msg.setDest(msg.getSourceBusId(), msg.getSourceCallId());
             _bus.consume(msg);
         }
         else {                
             PayloadCallStart payload;
             assert(msg.size() == sizeof(payload));
-            memcpy(&payload, msg.raw(), sizeof(payload));
+            memcpy(&payload, msg.body(), sizeof(payload));
 
             _log.info("Call started %d codec %X", msg.getSourceCallId(), payload.codec);
 
@@ -82,7 +82,7 @@ void NodeParrot::consume(const Message& msg) {
             s.active = true;
             s.lineId = msg.getSourceBusId();
             s.callId = msg.getSourceCallId();
-            s.callStartTime = msg.getOriginUs() / 1000;
+            s.callStartTime = msg.getRxUs() / 1000;
             s.state = State::CONNECTED;
             s.stateStartTime = _clock.time();
 
@@ -181,7 +181,7 @@ void NodeParrot::_consumeAudioInSession(Session& s, const Message& msg) {
     // Convert back to native PCM16
     int16_t pcm48k[BLOCK_SIZE_48K];
     Transcoder_SLIN_48K transcoder;
-    transcoder.decode(msg.raw(), BLOCK_SIZE_48K * 2, pcm48k, BLOCK_SIZE_48K);                
+    transcoder.decode(msg.body(), BLOCK_SIZE_48K * 2, pcm48k, BLOCK_SIZE_48K);                
 
     // Compute the power in the frame
     float pcm48k_2[BLOCK_SIZE_48K];
@@ -223,7 +223,7 @@ void NodeParrot::audioRateTick() {
     // Ask all of the input adaptors to produce
     _sessions.visitIf(
         // Visitor
-        [this](Session& s) {
+        [](Session& s) {
             s.adaptorIn.audioRateTick();
             return true;
         },
@@ -245,7 +245,7 @@ void NodeParrot::audioRateTick() {
     // Ask all of the output adaptors to produce
     _sessions.visitIf(
         // Visitor
-        [this](Session& s) {
+        [](Session& s) {
             s.adaptorOut.audioRateTick();
             return true;
         },
@@ -310,8 +310,7 @@ Message NodeParrot::_makeMessage(const PCM16Frame& frame,
     Transcoder_SLIN_48K transcoder;
     transcoder.encode(frame.data(), frame.size(), pcm48k, BLOCK_SIZE_48K * 2);
     Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K, 
-        BLOCK_SIZE_48K * 2, pcm48k, _clock.timeUs());
-    msg.setOriginUs(_clock.timeUs());
+        BLOCK_SIZE_48K * 2, pcm48k, 0, _clock.timeUs());
     msg.setSource(0, 0);
     msg.setDest(destBusId, destCallId);
     return msg;
@@ -333,8 +332,8 @@ void NodeParrot::Session::audioRateTick(Log& log, Clock& clock, NodeParrot& node
     if (clock.isPast(callStartTime + SESSION_TIMEOUT_MS)) {
         log.info("Timing out call %u", callId);
         state = State::TIMEDOUT;
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
-            clock.timeUs());
+        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+            0, 0, 0, clock.timeUs());
         msg.setDest(lineId, callId);
         adaptorOut.consume(msg);
         reset();
