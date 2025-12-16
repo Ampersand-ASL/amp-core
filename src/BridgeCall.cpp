@@ -95,7 +95,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeOut.setCodec(codec);
 
     // #### TODO: TEMPORARY
-    _mode = Mode::PARROT;
+    //_mode = Mode::PARROT;
 
     if (_mode == Mode::PARROT) {
         _parrotState = ParrotState::CONNECTED;

@@ -1558,7 +1558,7 @@ void LineIAX2::consume(const Message& msg) {
                 // we don't sent out two voice frames with the same timestamp.
                 //
                 uint32_t elapsed = call.dispenseElapsedUsingMessageOrigin(msg, true);
-                line->_log.info("Send e %u", elapsed);
+                //line->_log.info("Send e %u", elapsed);
                 // The wrap case is identified by looking at the top 16 bits of the 
                 // last voice frame we transmitted.
                 bool hasWrapped = call.lastVoiceFrameElapsedMs == 0 || 
