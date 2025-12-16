@@ -221,7 +221,7 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
             _playQueueDepth = 0;
 
             // Load up the pre-playback audio
-            _loadAudioFile("../media/playback-8k.pcm", _playQueue);
+            _loadAudioFile("playback-8k.pcm", _playQueue);
             _loadSilence(25, _playQueue);
 
             _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
@@ -269,8 +269,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
         if (_clock->isPast(_parrotStateStartMs + 2000)) {
-            // Load the greeting into the play queue
-            _loadAudioFile("../media/greeting-8k.pcm", _playQueue);
+            // Load the greeting into the play queue           
+            _loadAudioFile("greeting-8k.pcm", _playQueue);
             // Trigger the greeting playback
             _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
             _log->info("Greeting start");
@@ -315,9 +315,15 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
 void BridgeCall::_loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const {    
     
-    ifstream aud(fn, std::ios::binary);
+    string fullPath("../media");
+    if (getenv("AMP_MEDIA_DIR"))
+        fullPath = getenv("AMP_MEDIA_DIR");
+    fullPath += "/";
+    fullPath += fn;
+
+    ifstream aud(fullPath, std::ios::binary);
     if (!aud.is_open()) {
-        _log->info("Failed to open %s", fn);
+        _log->info("Failed to open %s", fullPath.c_str());
         return;
     }
 

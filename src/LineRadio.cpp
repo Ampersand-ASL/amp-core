@@ -55,6 +55,30 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
 }
 
+void LineRadio::open() {    
+    // Generate the same kind of call start message that would
+    // come from the IAX2Line after a new connection.
+    PayloadCallStart payload;
+    payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
+    payload.bypassJitterBuffer = true;
+    payload.startMs = _clock.time();
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
+}
+
+void LineRadio::close() {
+    // Generate the same kind of call start message that would
+    // come from the IAX2Line after a new connection.
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
+        0, 0, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
+}
+
 static float dbVfs(int16_t v) {
     float fv = (float)v / 32767.0;
     if (fv == 0)

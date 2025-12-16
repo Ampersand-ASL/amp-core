@@ -193,13 +193,18 @@ int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
     }
 
     _captureStartMs = _clock.time();
-    _captureSkewMs = 0;
     _captureCount = 0;
+
+    // Call up to the base for signaling
+    LineRadio::open();
 
     return 0;
 }
 
 void LineUsb::close() {
+
+    close();
+
     if (_playH)
         snd_pcm_close(_playH);
     _playH = 0;
@@ -526,8 +531,6 @@ void LineUsb::_playIfPossible() {
                 _underrunCount++;
                 // We expect an underrun at the very beginning of a talkspurt
                 // so there is a flag to supress the message
-                //if (!_firstPlayOfTalkspurt)
-                //    _log.error("ALSA write underrun (state %d) (i %d)", pcmState, i);
                 snd_pcm_recover(_playH, rc, 1); 
             } else if (rc == -11) {
                 _log.info("Write full");

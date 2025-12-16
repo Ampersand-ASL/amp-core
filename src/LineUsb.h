@@ -60,7 +60,7 @@ private:
     void _playIfPossible();
 
     uint32_t _captureStartMs = 0;
-    int32_t _captureSkewMs = 0;
+    //int32_t _captureSkewMs = 0;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
     int _hidFd = 0;

@@ -41,6 +41,9 @@ public:
         unsigned destBusId, unsigned destCallId);
     void resetStatistics();
 
+    virtual void open();
+    virtual void close();
+
     // ----- Runnable ---------------------------------------------------------
 
     virtual void oneSecTick();
