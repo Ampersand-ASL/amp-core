@@ -55,6 +55,7 @@ public:
     BridgeIn();
 
     void init(Log* log, Clock* clock) { _log = log; _clock = clock; }
+
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
 
     void setCodec(CODECType codecType);
@@ -66,7 +67,6 @@ public:
         _bypassJitterBuffer = false;
         _bypassedFrames = std::queue<Message>();
         _startTime = 0;
-        _sink = nullptr;
         _jitBuf.reset();
         _transcoder0a.reset(); 
         _transcoder0c.reset(); 

@@ -161,8 +161,9 @@ void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize,
  * Takes 48K PCM and passes it into the BridgeOut pipeline for transcoding, etc.
  */
 void BridgeCall::setOutputAudio(const int16_t* pcm48k, unsigned blockSize, uint32_t tickMs) {
-    if (_mode == Mode::NORMAL)
+    if (_mode == Mode::NORMAL) {
         _bridgeOut.consume(_makeMessage(PCM16Frame(pcm48k, blockSize), tickMs, _lineId, _callId));
+    }
 }
 
 // ===== Tone Mode Related ====================================================

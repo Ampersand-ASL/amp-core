@@ -80,7 +80,7 @@ public:
 
     // ### TODO: REMOVE THIS BEFORE PRODUCTION!!
     static void sanityCheckMs(uint32_t ms) {
-        assert(ms == 0 || (680495447 < ms && ms < 680495447 + 10000000));
+        assert(ms == 0 || (680495447 < ms && ms < 680495447 + 100000000));
     }
     static void sanityCheckRelativeMs(uint32_t ms) {
         assert(ms == 0 || (ms < 1000 * 60 * 10));

@@ -187,5 +187,8 @@ void Bridge::audioRateTick(uint32_t tickMs) {
     }
 }
 
+void Bridge::oneSecTick() {
+}
+
     }
 }

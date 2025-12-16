@@ -41,12 +41,12 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    void setCodec(CODECType codecType);
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
+
+    void setCodec(CODECType codecType);
 
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
-        _sink = nullptr;
         _transcoder0.reset(); 
         _transcoder1a.reset(); 
         _transcoder1c.reset(); 

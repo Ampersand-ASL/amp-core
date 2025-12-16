@@ -1586,6 +1586,7 @@ void LineIAX2::consume(const Message& msg) {
                     line->_sendFrameToPeer(miniFrame, msg.size() + 4, 
                         (const sockaddr&)call.peerAddr);              
                 }
+
                 call.lastVoiceFrameElapsedMs = elapsed;
                 call.vox = true;
             }
