@@ -17,6 +17,7 @@
 #pragma once
 
 #include <functional>
+#include <queue>
 
 #include "itu-g711-plc/Plc.h"
 
@@ -64,7 +65,7 @@ public:
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
         _bypassJitterBuffer = false;
-        _bypassedFrameCount = 0;
+        _bypassedFrames = std::queue<Message>();
         _startTime = 0;
         _sink = nullptr;
         _jitBuf.reset();
@@ -100,11 +101,9 @@ private:
     // issues on the input side of the Bridge.
     amp::SequencingBufferStd<Message> _jitBuf;
 
-    // If the jitter buffer is bypassed here is where the last message
-    // consumed gets parked waiting for the tick.
-    // #### TODO: DETERMINE IF THIS NEEDS TO BE A QUEUE?
-    Message _bypassedFrame;
-    unsigned _bypassedFrameCount = 0;
+    // If the jitter buffer is bypassed here is where the frames are queued.
+    // ### TODO: PUT A MODE ON THE JB TO SUPPORT BYPASS.
+    std::queue<Message> _bypassedFrames;
 
     Transcoder_G711_ULAW _transcoder0a;
     Transcoder_SLIN_16K _transcoder0c;

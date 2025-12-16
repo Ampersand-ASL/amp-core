@@ -49,8 +49,7 @@ void BridgeIn::consume(const Message& frame) {
 
     // The first stop is the jitter buffer, unless it's been bypassed
     if (_bypassJitterBuffer) {
-        _bypassedFrame = frame;
-        _bypassedFrameCount++;
+        _bypassedFrames.push(frame);
     } else {
         _jitBuf.consume(*_log, frame);
     }
@@ -92,9 +91,10 @@ private:
  */
 void BridgeIn::audioRateTick() {
     if (_bypassJitterBuffer) {
-        if (_bypassedFrameCount > 0)
-            _handleJitBufOut(_bypassedFrame);
-        _bypassedFrameCount = 0;
+        if (!_bypassedFrames.empty()) {
+            _handleJitBufOut(_bypassedFrames.front());
+            _bypassedFrames.pop();
+        }
     } else {
         JBOutAdaptor adaptor([this](const Message& msg) { this->_handleJitBufOut(msg); });
         _jitBuf.playOut(*_log, _clock->time(), &adaptor);
