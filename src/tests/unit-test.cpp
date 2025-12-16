@@ -111,8 +111,8 @@ static void clockTest1() {
 
 static void frameTest1() {
     
-    Message frame0(Message::Type::AUDIO, 1, 2, (uint8_t*)"1");
-    Message frame1(Message::Type::TEXT, 1, 2, (uint8_t*)"1");
+    Message frame0(Message::Type::AUDIO, 1, 2, (uint8_t*)"1", 0, 0);
+    Message frame1(Message::Type::TEXT, 1, 2, (uint8_t*)"1", 0, 0);
 
     Message flSpace[4];
     fixedqueue<Message> fl(flSpace, 4);

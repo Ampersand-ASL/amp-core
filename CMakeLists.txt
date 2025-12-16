@@ -32,7 +32,6 @@ add_executable(main-local-parrot
   src/Line.cpp
   src/LineUsb.cpp
   src/MessageBus.cpp
-  src/NodeParrot.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
   src/Transcoder_SLIN.cpp
@@ -129,7 +128,7 @@ add_executable(unit-test
   itu-g711-codec/src/codec.cpp
   itu-g711-codec/src/Plc.cpp
   cmsis-dsp-mock/src/main.cpp
-  alsa-mock/src/asoundlib.c
+  #alsa-mock/src/asoundlib.c
 )
 
 target_include_directories(unit-test PRIVATE src)

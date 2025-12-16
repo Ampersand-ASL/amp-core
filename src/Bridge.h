@@ -42,6 +42,7 @@ public:
 
     void setSink(MessageConsumer* sink);
     unsigned getCallCount() const;
+    void reset();
 
     // ----- MessageConsumer --------------------------------------------------
 

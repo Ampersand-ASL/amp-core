@@ -34,6 +34,10 @@ Bridge::Bridge(Log& log, Clock& clock)
         _callSpace[i].init(&log, &clock);
 }
 
+void Bridge::reset() {
+    _calls.visitAll(RESET_VISITOR);
+}
+
 void Bridge::setSink(MessageConsumer* sink) {
     _sink = sink;
     for (unsigned i = 0; i < MAX_CALLS; i++) 
