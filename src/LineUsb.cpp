@@ -196,14 +196,14 @@ int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
     _captureCount = 0;
 
     // Call up to the base for signaling
-    LineRadio::open();
+    _open();
 
     return 0;
 }
 
 void LineUsb::close() {
 
-    close();
+    _close();
 
     if (_playH)
         snd_pcm_close(_playH);

@@ -55,7 +55,7 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
 }
 
-void LineRadio::open() {    
+void LineRadio::_open() {    
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
     PayloadCallStart payload;
@@ -69,7 +69,7 @@ void LineRadio::open() {
     _captureConsumer.consume(msg);
 }
 
-void LineRadio::close() {
+void LineRadio::_close() {
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 

@@ -41,9 +41,6 @@ public:
         unsigned destBusId, unsigned destCallId);
     void resetStatistics();
 
-    virtual void open();
-    virtual void close();
-
     // ----- Runnable ---------------------------------------------------------
 
     virtual void oneSecTick();
@@ -61,6 +58,9 @@ protected:
     void _playEnd();
 
     void _setCosStatus(bool cos);
+
+    void _open();
+    void _close();
 
     Log& _log;
     Clock& _clock;
