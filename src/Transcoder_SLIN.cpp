@@ -36,20 +36,6 @@ bool Transcoder_SLIN::decode(const uint8_t* source, unsigned sourceLen,
         pcm8k_1[i] = unpack_int16_le(p);
         p += 2;
     }
-
-    // Pass audio through the PLC mechanism
-    _plc.goodFrame(pcm8k_1, destPCM, BLOCK_SIZE_8K / 2);
-    _plc.goodFrame(pcm8k_1 + BLOCK_SIZE_8K / 2, destPCM + BLOCK_SIZE_8K / 2, 
-        BLOCK_SIZE_8K / 2);
-
-    return true;
-}
-
-bool Transcoder_SLIN::decodeGap(int16_t* destPCM, unsigned destLen) {
-    assert(destLen == BLOCK_SIZE_8K);
-    // Ask PLC to fill in the missing frame (in two 10ms sections).  
-    _plc.badFrame(destPCM, BLOCK_SIZE_8K / 2);
-    _plc.badFrame(destPCM + BLOCK_SIZE_8K / 2, BLOCK_SIZE_8K / 2);
     return true;
 }
 

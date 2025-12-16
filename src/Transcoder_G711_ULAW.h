@@ -20,7 +20,6 @@
 // platfom that we are building for.
 #include <arm_math.h>
 
-#include "itu-g711-plc/Plc.h"
 #include "Transcoder.h"
 
 namespace kc1fsz {
@@ -35,16 +34,10 @@ public:
 
     Transcoder_G711_ULAW();
 
-    virtual void reset() { _plc.reset(); };
     virtual bool decode(const uint8_t* source, unsigned sourceLen, 
         int16_t* dest, unsigned destLen);
-    virtual bool decodeGap(int16_t* destPCM, unsigned destLen);
     virtual bool encode(const int16_t* source, unsigned sourceLen, 
         uint8_t* dest, unsigned destLen);
-
-private:
-
-    Plc _plc;
 };
 
 }

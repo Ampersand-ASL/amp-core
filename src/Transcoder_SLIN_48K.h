@@ -33,7 +33,6 @@ public:
 
     virtual bool decode(const uint8_t* source, unsigned sourceLen, 
         int16_t* dest, unsigned destLen);
-    virtual bool decodeGap(int16_t* destPCM, unsigned destLen);
     virtual bool encode(const int16_t* source, unsigned sourceLen, 
         uint8_t* dest, unsigned destLen);
 };

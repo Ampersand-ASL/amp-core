@@ -18,6 +18,8 @@
 
 #include <functional>
 
+#include "itu-g711-plc/Plc.h"
+
 #include "amp/Resampler.h"
 #include "amp/SequencingBufferStd.h"
 
@@ -63,8 +65,8 @@ public:
         _startTime = 0;
         _sink = nullptr;
         _transcoder0a.reset(); 
-        _transcoder0b.reset(); 
         _transcoder0c.reset(); 
+        _transcoder0d.reset(); 
         _transcoder1.reset(); 
         _resampler.reset(); 
     }
@@ -84,19 +86,31 @@ private:
     Log* _log; 
     Clock* _clock;
     std::function<void(const Message& msg)> _sink = nullptr;
-
-    amp::SequencingBufferStd<Message> _jitBuf;
-
     // This is the input CODEC of the user
     CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
     // In ms
     uint32_t _startTime = 0;
-    Transcoder_G711_ULAW _transcoder0a;
-    Transcoder_SLIN _transcoder0b;
-    Transcoder_SLIN_16K _transcoder0c;
-    Transcoder_SLIN_48K _transcoder1;
-    amp::Resampler _resampler;
 
+    // This is the Jitter Buffer used to address timing/sequencing
+    // issues on the input side of the Bridge.
+    amp::SequencingBufferStd<Message> _jitBuf;
+
+    Transcoder_G711_ULAW _transcoder0a;
+    Transcoder_SLIN_16K _transcoder0c;
+    Transcoder_SLIN_48K _transcoder0d;
+
+    // This is used to satisfy interpolation requests from
+    // the Jitter Buffer.
+    //
+    // NOTE: At the moment this only supports 8K sample rates
+    Plc _plc;
+
+    // This is used to convert up to 48K
+    amp::Resampler _resampler;    
+    
+    // This is used at the end to convert to the "bus format"
+    // that is passed around internally.
+    Transcoder_SLIN_48K _transcoder1;
 };
 
     }

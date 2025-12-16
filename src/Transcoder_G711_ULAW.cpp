@@ -28,7 +28,6 @@ using namespace std;
 namespace kc1fsz {
 
 Transcoder_G711_ULAW::Transcoder_G711_ULAW() {
-    _plc.setSampleRate(8000);
 }
 
 bool Transcoder_G711_ULAW::decode(const uint8_t* source, unsigned sourceLen, 
@@ -41,22 +40,7 @@ bool Transcoder_G711_ULAW::decode(const uint8_t* source, unsigned sourceLen,
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++)
         pcm8k_1[i] = decode_ulaw(source[i]);
 
-    // Pass audio through the PLC mechanism
-    _plc.goodFrame(pcm8k_1, destPCM, BLOCK_SIZE_8K / 2);
-    _plc.goodFrame(pcm8k_1 + BLOCK_SIZE_8K / 2, destPCM + BLOCK_SIZE_8K / 2, 
-        BLOCK_SIZE_8K / 2);
-
-    return true;
-}
-
-bool Transcoder_G711_ULAW::decodeGap(int16_t* destPCM, unsigned destLen) {
-
-    assert(destLen == BLOCK_SIZE_8K);
-
-    // Ask PLC to fill in the missing frame (in two 10ms sections).  
-    _plc.badFrame(destPCM, BLOCK_SIZE_8K / 2);
-    _plc.badFrame(destPCM + BLOCK_SIZE_8K / 2, BLOCK_SIZE_8K / 2);
-    return true;
+        return true;
 }
 
 bool Transcoder_G711_ULAW::encode(const int16_t* sourcePCM, unsigned sourceLen, 

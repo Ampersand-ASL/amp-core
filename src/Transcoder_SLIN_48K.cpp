@@ -34,14 +34,6 @@ bool Transcoder_SLIN_48K::decode(const uint8_t* source, unsigned sourceLen,
     return true;
 }
 
-bool Transcoder_SLIN_48K::decodeGap(int16_t* dest, unsigned destLen) {
-    if (destLen != BLOCK_SIZE_48K)
-        return false;
-    for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
-        dest[i] = 0;
-    return true;
-}
-
 bool Transcoder_SLIN_48K::encode(const int16_t* source, unsigned sourceLen, 
     uint8_t* dest, unsigned destLen) {
     if (sourceLen != BLOCK_SIZE_48K)

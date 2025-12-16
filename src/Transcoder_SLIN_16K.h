@@ -32,16 +32,10 @@ public:
     static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    virtual void reset() { /*_plc.reset();*/ };
     virtual bool decode(const uint8_t* source, unsigned sourceLen, 
         int16_t* dest, unsigned destLen);
-    virtual bool decodeGap(int16_t* destPCM, unsigned destLen);
     virtual bool encode(const int16_t* source, unsigned sourceLen, 
         uint8_t* dest, unsigned destLen);
-
-private:
-
-    //Plc _plc;        
 };
 
 }

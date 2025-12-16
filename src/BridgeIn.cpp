@@ -37,6 +37,8 @@ void BridgeIn::setCodec(CODECType codecType) {
     if (rate == 0)
         assert(false);
     _resampler.setRates(rate, 48000);
+    if (rate == 8000)
+        _plc.setSampleRate(8000);
 }
 
 void BridgeIn::consume(const Message& frame) {    
@@ -99,54 +101,81 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
     if (frame.getType() == Message::Type::AUDIO ||
         frame.getType() == Message::Type::AUDIO_INTERPOLATE) {
     
-        if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
-            _codecType == CODECType::IAX2_CODEC_SLIN ||
-            _codecType == CODECType::IAX2_CODEC_SLIN_16K) { 
-            
-            Transcoder* t0 = 0;
-            if (_codecType == CODECType::IAX2_CODEC_G711_ULAW)
-                t0 = &_transcoder0a;
-            else if (_codecType == CODECType::IAX2_CODEC_SLIN) 
-                t0 = &_transcoder0b;
-            else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K) 
-                t0 = &_transcoder0c;
+        int16_t pcm48k[BLOCK_SIZE_48K];
 
-            // Make PCM data
-            // MAKE SURE THIS IS LARGE ENOUGH!
-            int16_t pcm[BLOCK_SIZE_8K * 2];
+        if (_codecType == CODECType::IAX2_CODEC_G711_ULAW) {
+
+            int16_t pcm2[BLOCK_SIZE_8K];
+
             if (frame.getType() == Message::Type::AUDIO) {
-                t0->decode(frame.body(), frame.size(), pcm, codecBlockSize(_codecType));
+                int16_t pcm1[BLOCK_SIZE_8K];
+                // Transcode
+                _transcoder0a.decode(frame.body(), frame.size(), 
+                    pcm1, codecBlockSize(_codecType));            
+                // Pass audio through the PLC mechanism
+                _plc.goodFrame(pcm1, pcm2, BLOCK_SIZE_8K / 2);
+                _plc.goodFrame(pcm1 + BLOCK_SIZE_8K / 2, pcm2 + BLOCK_SIZE_8K / 2, 
+                    BLOCK_SIZE_8K / 2);
             } else {
-                t0->decodeGap(pcm, codecBlockSize(_codecType));
+                // Ask PLC to fill in the missing frame (in two 10ms sections).  
+                _plc.badFrame(pcm2, BLOCK_SIZE_8K / 2);
+                _plc.badFrame(pcm2 + BLOCK_SIZE_8K / 2, BLOCK_SIZE_8K / 2);
             }
 
             // Resample PCM data up to 48K
-            int16_t pcm48k[BLOCK_SIZE_48K];
-            _resampler.resample(pcm, codecBlockSize(_codecType), pcm48k, BLOCK_SIZE_48K);
-            
-            // Transcode to SLIN_48K
-            uint8_t slin48k[BLOCK_SIZE_48K * 2];
-            _transcoder1.encode(pcm48k, BLOCK_SIZE_48K, slin48k, BLOCK_SIZE_48K * 2);
-            Message outFrame(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
-                BLOCK_SIZE_48K * 2, slin48k, frame.getOrigMs(), frame.getRxUs());
-            outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
-            outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
+            _resampler.resample(pcm2, codecBlockSize(_codecType), 
+                pcm48k, BLOCK_SIZE_48K);
+        }
+        else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K) {
 
-            if (_sink)
-                _sink(outFrame);
-        }
-        else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {                
-            // No support for interpolation
+            int16_t pcm2[BLOCK_SIZE_8K * 2];
+
             if (frame.getType() == Message::Type::AUDIO) {
-                // No conversion needed
-                if (_sink)
-                    _sink(frame);
-            } else
-                assert(false);
+                // Transcode
+                _transcoder0c.decode(frame.body(), frame.size(), 
+                    pcm2, codecBlockSize(_codecType));            
+            } else {
+                // There is no PLC at the moment, so we just
+                // create a frame of silence
+                for (unsigned i = 0; i < BLOCK_SIZE_8K * 2; i++)
+                    pcm2[i] = 0;
+            }
+
+            // Resample PCM data up to 48K
+            _resampler.resample(pcm2, codecBlockSize(_codecType), 
+                pcm48k, BLOCK_SIZE_48K);
         }
-        else {
-            assert(false);
+        else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
+
+            int16_t pcm2[BLOCK_SIZE_48K];
+
+            if (frame.getType() == Message::Type::AUDIO) {
+                // Transcode
+                _transcoder0d.decode(frame.body(), frame.size(), 
+                    pcm2, codecBlockSize(_codecType));            
+            } else {
+                // There is no PLC at the moment, so we just
+                // create a frame of silence
+                for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
+                    pcm2[i] = 0;
+            }
+
+            // Resample PCM data up to 48K
+            _resampler.resample(pcm2, codecBlockSize(_codecType), 
+                pcm48k, BLOCK_SIZE_48K);
         }
+
+        // Transcode to SLIN_48K
+        uint8_t slin48k[BLOCK_SIZE_48K * 2];
+        _transcoder1.encode(pcm48k, BLOCK_SIZE_48K, slin48k, BLOCK_SIZE_48K * 2);
+        
+        Message outFrame(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
+            BLOCK_SIZE_48K * 2, slin48k, frame.getOrigMs(), frame.getRxUs());
+        outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
+        outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
+
+        if (_sink)
+            _sink(outFrame);
     }
     // Non-audio messages are key passed right through, transcoding
     // not relevant here.

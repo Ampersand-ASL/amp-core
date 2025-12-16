@@ -31,12 +31,6 @@ public:
         int16_t* destPCM, unsigned destLen) = 0;
 
     /**
-     * Called when the source code is missing a frame. Will generally 
-     * invoke the relevant PLC function. DOES NOT RE-SAMPLE.
-     */
-    virtual bool decodeGap(int16_t* destPCM, unsigned destLen) = 0;
-
-    /**
      * Converts from PCM in the "natural" rate of the code to the target 
      * code. DOES NOT RE-SAMPLE.
      */
