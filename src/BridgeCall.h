@@ -122,6 +122,8 @@ private:
     // ----- Parrot Related ---------------------------------------------------
 
     void _consumeParrotAudio(const Message& msg);
+    void _consumeParrotSignal(const Message& msg);
+
     void _parrotAudioRateTick();
 
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;

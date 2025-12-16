@@ -32,10 +32,16 @@ BridgeCall::BridgeCall() {
     // into (a) the input staging area in NORMAL mode or (b) the 
     // parrot system in PARROT mode.
     _bridgeIn.setSink([this](const Message& msg) {
-        if (_mode == Mode::NORMAL)
+        if (_mode == Mode::NORMAL) {
             this->_stageIn = msg;
-        else if (_mode == Mode::PARROT)
-            _consumeParrotAudio(msg);
+        } else if (_mode == Mode::PARROT) {
+            if (msg.getType() == Message::Type::AUDIO)
+                _consumeParrotAudio(msg);
+            else if (msg.getType() == Message::Type::SIGNAL)
+                _consumeParrotSignal(msg);
+            else 
+                assert(false);
+        }
     });
     // The last stage of the BridgeOut pipeline passes the message
     // to the sink message bus.
@@ -48,18 +54,26 @@ void BridgeCall::reset() {
     _active = false;
     _lineId = 0;  
     _callId = 0; 
+    _startMs = 0;
+    _lastAudioMs = 0;
     _bridgeIn.reset();
     _bridgeOut.reset();
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec) {
+
     _active = true;
     _lineId = lineId;  
     _callId = callId; 
     _startMs = startMs;
+    _lastAudioMs = 0;
     _bridgeIn.setCodec(codec);
     _bridgeIn.setStartTime(startMs);
     _bridgeOut.setCodec(codec);
+
+    if (_mode == Mode::PARROT) {
+        _parrotState = ParrotState::CONNECTED;
+    }
 }
 
 void BridgeCall::consume(const Message& frame) {
@@ -147,6 +161,7 @@ void BridgeCall::_consumeParrotAudio(const Message& msg) {
     arm_rms_f32(pcm48k_2, BLOCK_SIZE_48K, &rms);
 
     bool vad = rms > 0.005;
+    _log->info("RMS %f", rms);
 
     if (vad)
         _lastAudioMs = _clock->time();
@@ -174,8 +189,24 @@ void BridgeCall::_consumeParrotAudio(const Message& msg) {
         }
     } 
 }
+/**
+ * This function is called when a signal is received from the input
+ * adaptor.
+ */
+void BridgeCall::_consumeParrotSignal(const Message& msg) { 
+    if (msg.getType() == Message::SIGNAL &&
+        msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
+        if (_parrotState == ParrotState::RECORDING) {
+            _log->info("Record end (UNKEY)");
+            _parrotState = ParrotState::PAUSE_AFTER_RECORD;
+            _parrotStateStartMs = _clock->time();
+        }
+    }
+}
 
 void BridgeCall::_parrotAudioRateTick() {
+
+    _bridgeIn.audioRateTick();
 
     // General timeout
     if (_clock->isPast(_startMs + SESSION_TIMEOUT_MS)) {
@@ -217,7 +248,7 @@ void BridgeCall::_parrotAudioRateTick() {
     } 
     else if (_parrotState == ParrotState::PAUSE_AFTER_RECORD) {
         if (_clock->isPast(_parrotStateStartMs + 750)) {
-            _log->info("Playback prompt");
+            _log->info("Playback start");
             _parrotState = ParrotState::PLAYING;
             _parrotStateStartMs = _clock->time();
         }

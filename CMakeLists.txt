@@ -332,5 +332,5 @@ target_include_directories(bridge-test PRIVATE amp-server/sw/include)
 target_include_directories(bridge-test PRIVATE cmsis-dsp-mock/include)
 target_include_directories(bridge-test PRIVATE itu-g711-codec/src)
 # This program has a large stack size because of the jitter buffer
-target_link_options(bridge-test PRIVATE -Wl,--stack,4096000)
+#target_link_options(bridge-test PRIVATE -Wl,--stack,4096000)
 

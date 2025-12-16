@@ -84,8 +84,8 @@ void Bridge::consume(const Message& msg) {
             _log.info("Call started %d CODEC %X", msg.getSourceCallId(), payload.codec);
 
             BridgeCall& call = _calls.at(newIndex);
-            call.setup(msg.getSourceBusId(), msg.getSourceCallId(), msg.getRxUs() / 1000,
-                payload.codec);
+            call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
+                payload.startMs, payload.codec);
         }
     }
     else if (msg.getType() == Message::SIGNAL && 

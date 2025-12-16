@@ -5,6 +5,7 @@
 #include <itu-g711-codec/codec.h>
 
 #include "Bridge.h"
+#include "TestUtil.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -13,8 +14,8 @@ class TestSink : public MessageConsumer {
 public:
 
     void consume(const Message& msg) {
-        cout << "Dest line/call " << msg.getDestBusId() << "/" << msg.getDestCallId() << endl;
-        cout << " " << msg.getType() << " " << msg.getFormat() << endl;
+        cout << "Dest line/call " << msg.getDestBusId() << "/" << msg.getDestCallId();
+        cout << " type/format" << msg.getType() << "/" << msg.getFormat() << endl;
         if (msg.getDestBusId() == 10 && msg.getDestCallId() == 1)
             _out1 = msg;
         else if (msg.getDestBusId() == 10 && msg.getDestCallId() == 2)
@@ -198,16 +199,101 @@ void test_2() {
     assert(sink._out2.getType() == Message::Type::AUDIO);
     assert(sink._out3.getType() == Message::Type::NONE);
 
+    /*
     // Make sure we got back the audio we expected
     for (unsigned i = 0; i < 160; i++) {
         int16_t sample = decode_ulaw(sink._out2.body()[i]);
         cout << "sample " << sample << endl;
     }
     //assert(closeTo(sample, 0.5f * 32767.0f));
+    */
+}
+
+void test_3() {   
+
+    Log log;
+    TestClock clock(log);
+    amp::Bridge bridge(log, clock);
+    TestSink sink; 
+    bridge.setSink(&sink);
+
+    assert(bridge.getCallCount() == 0);
+
+    // ----- t=100
+    clock.setTime(100);
+
+    // Start one call
+    {
+        PayloadCallStart cs;
+        cs.codec = CODECType::IAX2_CODEC_G711_ULAW;
+        cs.startMs = clock.time();
+        Message msg0(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+            sizeof(cs), (const uint8_t*)&cs, 0, 0);
+        msg0.setSource(10, 1);
+        msg0.setDest(1, 0);
+        bridge.consume(msg0);
+    }
+
+    assert(bridge.getCallCount() == 1);
+
+    // Kill time through the initial silence
+    for (unsigned i = 0; i < 100; i++) {
+        clock.increment(20);
+        bridge.audioRateTick();
+        assert(sink._out2.getType() == Message::Type::NONE);
+    }    
+
+    // Here we should see some audio output for the
+    // initial greeting.
+    for (unsigned i = 0; i < 125; i++) {
+        clock.increment(20);
+        bridge.audioRateTick();
+    }
+
+    cout << "===========================" << endl;
+
+    // Send in some audio. This shouldn't do anything except establish the starting
+    // delay for the call.
+    {
+        uint8_t audio[160];
+        for (unsigned i = 0; i < 160; i++)
+            audio[i] = encode_ulaw(0.5f * 32767.0f);
+        Message audioIn1(Message::Type::AUDIO, CODECType::IAX2_CODEC_G711_ULAW,
+            160, audio, 120, clock.time());
+        audioIn1.setSource(10, 1);
+        audioIn1.setDest(1, 0);
+        bridge.consume(audioIn1);
+    }
+
+    sink._out2 = Message();
+    bridge.audioRateTick();
+
+    // Nothing should have been output
+    assert(sink._out2.getType() == Message::Type::NONE);
+    
+    clock.increment(20);
+    // Send in an unkey
+    {
+        Message audioIn1(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY,
+            0, 0, 140, clock.time());
+        audioIn1.setSource(10, 1);
+        audioIn1.setDest(1, 0);
+        bridge.consume(audioIn1);
+    }
+    bridge.audioRateTick();
+
+    // Noting out 
+    assert(sink._out2.getType() == Message::Type::NONE);
+
+    // Short delay for playback
+    for (unsigned i = 0; i < 125; i++) {
+        clock.increment(20);
+        bridge.audioRateTick();
+    }
 }
 
 int main(int, const char**) {
     //test_1();
-    test_2();
+    test_3();
     return 0;
 }

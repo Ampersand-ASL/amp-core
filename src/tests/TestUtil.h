@@ -12,6 +12,26 @@ namespace kc1fsz {
 
 class Log;
 
+class TestClock : public Clock {
+public:
+
+    TestClock(Log& log) : _log(log) { }
+
+    uint32_t time() const { return _timeMs; }
+
+    void setTime(uint32_t ms) { 
+        _timeMs = ms;
+        _log.info("----- Time %u -----", _timeMs); 
+    }
+
+    void increment(uint32_t ms) {
+        setTime(time() + ms);
+    }
+
+    Log& _log;
+    uint32_t _timeMs = 0;
+};
+
 struct TestFrame {
     uint32_t origMs;
     uint32_t rxMs;
