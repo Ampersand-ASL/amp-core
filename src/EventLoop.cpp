@@ -97,14 +97,13 @@ void EventLoop::run(Log& log, Clock& clock,
         for (unsigned i = 0; i < task1Count; i++)
             tasks1[i]->run();
 
-        // This timer has highest priority since the audio tick
-        // rate is time-critical
-        if (timer20ms.poll()) {
+        // This timer has highest priority since the audio tick rate is time-critical
+        uint64_t intervalUs = 0;
+        if (timer20ms.poll(&intervalUs)) {
             if (timer20ms.getLateUs() > maxLateUs)
                 maxLateUs = timer20ms.getLateUs();
             for (unsigned i = 0; i < taskCount; i++)
-                tasks[i]->audioRateTick();
-            
+                tasks[i]->audioRateTick(intervalUs / 1000);
         }  
 
         for (unsigned i = 0; i < taskCount; i++)

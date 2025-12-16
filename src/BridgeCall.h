@@ -82,9 +82,22 @@ public:
     }
 
     void consume(const Message& frame);
-    void audioRateTick();
-    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale);    
-    void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize);  
+    void audioRateTick(uint32_t tickMs);
+
+    /**
+     * This extracts the call's contribution (if any) to the audio frame for the designated
+     * tick interval.
+     * 
+     * @param tickMs The start of the time interval for which this frame is applicable.
+     */
+    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale, uint32_t tickMs);    
+
+    /**
+     * This provides the call with the mixed audio frame for the designated tick interval.
+     * 
+     * @param tickMs The start of the time interval for which this frame is applicable.
+     */
+    void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
 
 private:
 
@@ -109,7 +122,7 @@ private:
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
 
-    Message _makeMessage(const PCM16Frame& frame, 
+    Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
         unsigned destLineId, unsigned destCallId) const;
 
     // ----- Normal Mode Related ----------------------------------------------
@@ -124,7 +137,7 @@ private:
 
     // ----- Tone Mode Related ------------------------------------------------
 
-    void _toneAudioRateTick();
+    void _toneAudioRateTick(uint32_t tickMs);
 
     bool _toneActive = false;
     float _toneOmega;
@@ -136,7 +149,7 @@ private:
     void _processParrotAudio(const Message& msg);
     void _processParrotSignal(const Message& msg);
 
-    void _parrotAudioRateTick();
+    void _parrotAudioRateTick(uint32_t tickMs);
 
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;

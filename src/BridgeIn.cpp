@@ -43,6 +43,12 @@ void BridgeIn::setCodec(CODECType codecType) {
 
 void BridgeIn::consume(const Message& frame) {    
 
+    if (!(frame.getType() == Message::Type::AUDIO ||
+           (frame.getType() == Message::Type::SIGNAL && 
+            frame.getFormat() == Message::SignalType::RADIO_UNKEY))) {
+        cout << frame.getType() << "/" << frame.getFormat() << endl;
+    }
+
     assert(frame.getType() == Message::Type::AUDIO ||
            (frame.getType() == Message::Type::SIGNAL && 
             frame.getFormat() == Message::SignalType::RADIO_UNKEY));
@@ -65,18 +71,18 @@ public:
     :   _sink(sink) {        
     }
 
-    void playSignal(const Message& msg, uint32_t localTime) {   
+    void playSignal(const Message& msg, uint32_t) {   
         _sink(msg);
     }
 
-    void playVoice(const Message& msg, uint32_t localTime) {        
+    void playVoice(const Message& msg, uint32_t) {        
         _sink(msg);
     }
 
-    void interpolateVoice(uint32_t origMs, uint32_t localTime, uint32_t duration) {
+    void interpolateVoice(uint32_t origMs, uint32_t localMs, uint32_t) {
         // Need to make a message to represent the interpolate event
         // #### TODO: NOTE: The source/destination aren't filled in. Does this matter?
-        Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, origMs, localTime * 1000);
+        Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, origMs, localMs);
         _sink(msg);
     }
 
@@ -89,7 +95,7 @@ private:
  * Every tick we ask the Jitter Buffer to emit whatever it has into a temporary
  * adaptor that will handle forwarding.
  */
-void BridgeIn::audioRateTick() {
+void BridgeIn::audioRateTick(uint32_t tickMs) {
     if (_bypassJitterBuffer) {
         if (!_bypassedFrames.empty()) {
             _handleJitBufOut(_bypassedFrames.front());
@@ -183,7 +189,7 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         _transcoder1.encode(pcm48k, BLOCK_SIZE_48K, slin48k, BLOCK_SIZE_48K * 2);
         
         Message outFrame(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
-            BLOCK_SIZE_48K * 2, slin48k, frame.getOrigMs(), frame.getRxUs());
+            BLOCK_SIZE_48K * 2, slin48k, frame.getOrigMs(), frame.getRxMs());
         outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
         outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 

@@ -106,15 +106,29 @@ void BridgeCall::consume(const Message& frame) {
     _bridgeIn.consume(frame);       
 }
 
-void BridgeCall::audioRateTick() {
+void BridgeCall::audioRateTick(uint32_t tickMs) {
 
-    _bridgeIn.audioRateTick();
+    _bridgeIn.audioRateTick(tickMs);
 
     if (_mode == Mode::TONE) {
-        _toneAudioRateTick();
+        _toneAudioRateTick(tickMs);
     } else if (_mode == Mode::PARROT) {
-        _parrotAudioRateTick();
+        _parrotAudioRateTick(tickMs);
     }
+}
+
+Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
+    unsigned destLineId, unsigned destCallId) const {
+    // Convert the PCM16 data into LE mode as defined by the CODEC.
+    uint8_t pcm48k[BLOCK_SIZE_48K * 2];
+    Transcoder_SLIN_48K transcoder;
+    transcoder.encode(frame.data(), frame.size(), pcm48k, BLOCK_SIZE_48K * 2);
+    // #### TODO: DO TIMES MATTER HERE?
+    Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K, 
+        BLOCK_SIZE_48K * 2, pcm48k, 0, rxMs);
+    msg.setSource(LINE_ID, CALL_ID);
+    msg.setDest(destLineId, destCallId);
+    return msg;
 }
 
 // ===== Conference Mode Related ===============================================
@@ -130,7 +144,8 @@ void BridgeCall::_processNormalSignal(const Message& msg) {
  * The Bridge calls this function to collect this call's contribution to the 
  * conference audio. 
  */
-void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale) {
+void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize, 
+    float scale, uint32_t tickMs) {
     assert(_stageIn.getType() == Message::Type::AUDIO);
     assert(_stageIn.size() == BLOCK_SIZE_48K * 2);
     assert(_stageIn.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
@@ -145,14 +160,14 @@ void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float 
  * The bridge calls this function to set the final output audio for this call.
  * Takes 48K PCM and passes it into the BridgeOut pipeline for transcoding, etc.
  */
-void BridgeCall::setOutputAudio(const int16_t* pcm48k, unsigned blockSize) {
+void BridgeCall::setOutputAudio(const int16_t* pcm48k, unsigned blockSize, uint32_t tickMs) {
     if (_mode == Mode::NORMAL)
-        _bridgeOut.consume(_makeMessage(PCM16Frame(pcm48k, blockSize), _lineId, _callId));
+        _bridgeOut.consume(_makeMessage(PCM16Frame(pcm48k, blockSize), tickMs, _lineId, _callId));
 }
 
 // ===== Tone Mode Related ====================================================
 
-void BridgeCall::_toneAudioRateTick() {
+void BridgeCall::_toneAudioRateTick(uint32_t tickMs) {
     if (_toneActive) {
         // Make a tone at 48K
         int16_t data[BLOCK_SIZE_48K];
@@ -162,7 +177,7 @@ void BridgeCall::_toneAudioRateTick() {
             _tonePhi = fmod(_tonePhi, 2.0f * 3.14159f);
         }
         // Pass into the output pipeline for transcoding, etc.
-        _bridgeOut.consume(_makeMessage(PCM16Frame(data, BLOCK_SIZE_48K), _lineId, _callId));
+        _bridgeOut.consume(_makeMessage(PCM16Frame(data, BLOCK_SIZE_48K), tickMs, _lineId, _callId));
     }
 }
 
@@ -237,14 +252,14 @@ void BridgeCall::_processParrotSignal(const Message& msg) {
     }
 }
 
-void BridgeCall::_parrotAudioRateTick() {
+void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
     // General timeout
     if (_clock->isPast(_startMs + SESSION_TIMEOUT_MS)) {
         _log->info("Timing out call %u/%d", _lineId, _callId);
         _parrotState = ParrotState::TIMEDOUT;
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
-            0, 0, 0, _clock->timeUs());
+            0, 0, 0, tickMs * 1000);
         msg.setSource(LINE_ID, CALL_ID);
         msg.setDest(_lineId, _callId);
         _bridgeOut.consume(msg);
@@ -267,7 +282,7 @@ void BridgeCall::_parrotAudioRateTick() {
             _parrotState = ParrotState::WAITING_FOR_RECORD;
             _parrotStateStartMs = _clock->time();
         } else {
-            _bridgeOut.consume(_makeMessage(_playQueue.front(), _lineId, _callId));
+            _bridgeOut.consume(_makeMessage(_playQueue.front(), tickMs, _lineId, _callId));
             _playQueue.pop();
         }
     }
@@ -292,7 +307,7 @@ void BridgeCall::_parrotAudioRateTick() {
             _parrotState = ParrotState::WAITING_FOR_RECORD;
             _parrotStateStartMs = _clock->time();
         } else {
-            _bridgeOut.consume(_makeMessage(_playQueue.front(), _lineId, _callId));
+            _bridgeOut.consume(_makeMessage(_playQueue.front(), tickMs, _lineId, _callId));
             _playQueue.pop();
         }
     }
@@ -340,20 +355,5 @@ void BridgeCall::_loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) con
     for (unsigned i = 0; i < ticks; i++)
         queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
 }
-
-Message BridgeCall::_makeMessage(const PCM16Frame& frame, 
-    unsigned destLineId, unsigned destCallId) const {
-    // Convert the PCM16 data into LE mode as defined by the CODEC.
-    uint8_t pcm48k[BLOCK_SIZE_48K * 2];
-    Transcoder_SLIN_48K transcoder;
-    transcoder.encode(frame.data(), frame.size(), pcm48k, BLOCK_SIZE_48K * 2);
-    // #### TODO: DO TIMES MATTER HERE?
-    Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K, 
-        BLOCK_SIZE_48K * 2, pcm48k, 0, _clock->timeUs());
-    msg.setSource(LINE_ID, CALL_ID);
-    msg.setDest(destLineId, destCallId);
-    return msg;
-}
-
     }
 }

@@ -65,8 +65,9 @@ void BridgeOut::consume(const Message& frame) {
             uint8_t code[BLOCK_SIZE_8K * 4];
             t1->encode(pcm_low, blockSize, code, codeSize);
             
+            // Times are passed right through
             Message outFrame(Message::Type::AUDIO, _codecType,
-                codeSize, code, frame.getOrigMs(), frame.getRxUs());
+                codeSize, code, frame.getOrigMs(), frame.getRxMs());
             outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
             outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 

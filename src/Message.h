@@ -17,6 +17,9 @@
 #pragma once
 
 #include <cstdint>
+#include <cassert>
+#include <iostream>
+
 #include "IAX2Util.h"
 
 namespace kc1fsz {
@@ -50,7 +53,7 @@ public:
 
     Message();
     Message(Type type, unsigned format, unsigned size, const uint8_t* body,
-        uint32_t origMs, uint64_t rxUs);
+        uint32_t origMs, uint32_t rxMs);
     Message(const Message& other);
     Message& operator=(const Message& other);
 
@@ -62,8 +65,7 @@ public:
     const uint8_t* body() const { return _body; }
 
     uint32_t getOrigMs() const { return _origMs; }
-    uint64_t getRxUs() const { return _rxUs; }
-    uint32_t getRxMs() const { return _rxUs / 1000; }
+    uint32_t getRxMs() const { return _rxMs; }
 
     void setSource(unsigned busId, unsigned callId) { _sourceBusId = busId; _sourceCallId = callId; }
     void setDest(unsigned busId, unsigned callId){ _destBusId = busId; _destCallId = callId; }
@@ -75,7 +77,15 @@ public:
     static const unsigned BROADCAST = 0xffffffff;
 
     void clear();
-    
+
+    // ### TODO: REMOVE THIS BEFORE PRODUCTION!!
+    static void sanityCheckMs(uint32_t ms) {
+        assert(ms == 0 || (680495447 < ms && ms < 680495447 + 10000000));
+    }
+    static void sanityCheckRelativeMs(uint32_t ms) {
+        assert(ms == 0 || (ms < 1000 * 60 * 10));
+    }
+
 private:
 
     Type _type;
@@ -83,7 +93,7 @@ private:
     unsigned _size;
     uint8_t _body[MAX_SIZE];
     uint32_t _origMs;
-    uint64_t _rxUs;
+    uint32_t _rxMs;
     // Routing stuff
     unsigned _sourceBusId = 0, _sourceCallId = 0;
     unsigned _destBusId = 0, _destCallId = 0;

@@ -75,7 +75,7 @@ public:
         _resampler.reset(); 
     }
 
-    void audioRateTick();
+    void audioRateTick(uint32_t tickMs);
 
     /**
      * This is used when a message comes into the call, most likely

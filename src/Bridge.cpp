@@ -78,7 +78,7 @@ void Bridge::consume(const Message& msg) {
             _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
             // #### TODO: NEED TO TEST THIS AFTER RACE CONDITION IS RESOLVED
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
-                0, _clock.timeUs());
+                0, _clock.time());
             msg.setDest(msg.getSourceBusId(), msg.getSourceCallId());
             //_bus.consume(msg);
         }
@@ -136,14 +136,14 @@ void Bridge::consume(const Message& msg) {
  *    in the mix.
  * 3. Give each participant an output audio frame.
  */
-void Bridge::audioRateTick() {
+void Bridge::audioRateTick(uint32_t tickMs) {
 
     // Tick each call so that we have an input frame for each.
     _calls.visitIf(
         // Visitor
-        [](BridgeCall& call) { 
+        [tickMs](BridgeCall& call) { 
             // Tick the call to get it to produce an audio frame
-            call.audioRateTick();
+            call.audioRateTick(tickMs);
             return true;
         },
         // Predicate
@@ -177,11 +177,11 @@ void Bridge::audioRateTick() {
             for (unsigned j = 0; j < MAX_CALLS; j++) {
                 if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
                     continue;
-                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale);
+                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale, tickMs);
             }
 
             // Output the result
-            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K);
+            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K, tickMs);
         }
     }
 }
