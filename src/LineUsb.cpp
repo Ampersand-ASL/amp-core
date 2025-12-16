@@ -348,7 +348,7 @@ void LineUsb::_captureIfPossible() {
         // Do we have a full audio block available yet?
         if (_captureAccumulatorSize + samplesRead >= BLOCK_SIZE_48K) {
 
-            uin32_t nowMs = _clock.time();
+            uint32_t nowMs = _clock.time();
             uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
             _captureCount++;
            
@@ -468,7 +468,7 @@ void LineUsb::_play(const Message& msg) {
     // Convert the SLIN_48K LE into 16-bit PCM audio
     int16_t pcm48k_2[BLOCK_SIZE_48K];
     Transcoder_SLIN_48K transcoder;
-    transcoder.decode(msg.raw(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+    transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
 
     // Here is where statistical analysis and/or local recording can take 
     // place for diagnostic purposes.

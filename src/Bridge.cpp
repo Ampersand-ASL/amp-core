@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <iostream>
+#include <cstring> 
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
