@@ -24,7 +24,6 @@
 #include "MessageConsumer.h"
 #include "Transcoder_G711_ULAW.h"
 #include "Transcoder_SLIN_48K.h"
-#include "Transcoder_SLIN.h"
 #include "Transcoder_SLIN_16K.h"
 
 namespace kc1fsz {
@@ -50,7 +49,6 @@ public:
         _sink = nullptr;
         _transcoder0.reset(); 
         _transcoder1a.reset(); 
-        _transcoder1b.reset(); 
         _transcoder1c.reset(); 
         _resampler.reset(); 
     }
@@ -63,7 +61,6 @@ private:
     std::function<void(const Message& msg)> _sink = nullptr;
     Transcoder_SLIN_48K _transcoder0;
     Transcoder_G711_ULAW _transcoder1a;
-    Transcoder_SLIN _transcoder1b;
     Transcoder_SLIN_16K _transcoder1c;
     amp::Resampler _resampler;
 };

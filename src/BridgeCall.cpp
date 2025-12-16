@@ -95,7 +95,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeOut.setCodec(codec);
 
     // #### TODO: TEMPORARY
-    _mode = Mode::PARROT;
+    //_mode = Mode::PARROT;
 
     if (_mode == Mode::PARROT) {
         _parrotState = ParrotState::CONNECTED;
@@ -130,13 +130,15 @@ void BridgeCall::_processNormalSignal(const Message& msg) {
  * The Bridge calls this function to collect this call's contribution to the 
  * conference audio. 
  */
-void BridgeCall::contributeInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale) const {
+void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale) {
     assert(_stageIn.getType() == Message::Type::AUDIO);
     assert(_stageIn.size() == BLOCK_SIZE_48K * 2);
     assert(_stageIn.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
     const uint8_t* p = _stageIn.body();
     for (unsigned i = 0; i < blockSize; i++, p += 2)
         pcmBlock[i] += scale * (float)unpack_int16_le(p);
+    // Clear the staging area so that we don't contribute this frame again
+    _stageIn.clear();
 }
 
 /**

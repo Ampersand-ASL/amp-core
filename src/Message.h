@@ -73,6 +73,8 @@ public:
     unsigned getDestCallId() const { return _destCallId; }
 
     static const unsigned BROADCAST = 0xffffffff;
+
+    void clear();
     
 private:
 

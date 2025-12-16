@@ -70,4 +70,16 @@ Message& Message::operator=(const Message& other) {
     return *this;
 }
 
+void Message::clear() {
+    _type = Type::NONE;
+    _format = 0;
+    _size = 0;
+    _origMs = 0;
+    _rxUs = 0;
+    _sourceBusId = 0;
+    _sourceCallId = 0;
+    _destBusId = 0;
+    _destCallId = 0;
+}
+
 }

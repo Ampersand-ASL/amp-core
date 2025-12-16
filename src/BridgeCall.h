@@ -83,7 +83,7 @@ public:
 
     void consume(const Message& frame);
     void audioRateTick();
-    void contributeInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale) const;    
+    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale);    
     void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize);  
 
 private:
@@ -98,7 +98,7 @@ private:
         TONE
     };
 
-    Mode _mode = Mode::PARROT;
+    Mode _mode = Mode::NORMAL;
 
     bool _active = false;
     unsigned _lineId = 0;

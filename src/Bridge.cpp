@@ -125,6 +125,17 @@ void Bridge::consume(const Message& msg) {
     }
 }
 
+/**
+ * This function is the heart of the conference bridge. On every audio tick we 
+ * do the following:
+ * 
+ * 1. Ask each active (speaking) conference participant to prepare input audio 
+ *    frame to contribute to the final mix.
+ * 2. Prepare a mixed audio frame for each conference participant. This is 
+ *    customized because not all participants will want to hear their own audio
+ *    in the mix.
+ * 3. Give each participant an output audio frame.
+ */
 void Bridge::audioRateTick() {
 
     // Tick each call so that we have an input frame for each.
@@ -166,7 +177,7 @@ void Bridge::audioRateTick() {
             for (unsigned j = 0; j < MAX_CALLS; j++) {
                 if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
                     continue;
-                _calls[j].contributeInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale);
+                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale);
             }
 
             // Output the result

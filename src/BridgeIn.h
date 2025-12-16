@@ -28,7 +28,6 @@
 #include "MessageConsumer.h"
 #include "Transcoder_G711_ULAW.h"
 #include "Transcoder_SLIN_48K.h"
-#include "Transcoder_SLIN.h"
 #include "Transcoder_SLIN_16K.h"
 
 namespace kc1fsz {

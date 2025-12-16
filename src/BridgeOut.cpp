@@ -42,7 +42,6 @@ void BridgeOut::consume(const Message& frame) {
         assert(frame.size() == BLOCK_SIZE_48K * 2);
  
         if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
-            _codecType == CODECType::IAX2_CODEC_SLIN ||
             _codecType == CODECType::IAX2_CODEC_SLIN_16K) {             
             
             Transcoder* t1 = 0;
@@ -50,8 +49,6 @@ void BridgeOut::consume(const Message& frame) {
             unsigned blockSize = codecBlockSize(_codecType);
             if (_codecType == CODECType::IAX2_CODEC_G711_ULAW) 
                 t1 = &_transcoder1a;
-            else if (_codecType == CODECType::IAX2_CODEC_SLIN)
-                t1 = &_transcoder1b;
             else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K)
                 t1 = &_transcoder1c;
 
@@ -85,6 +82,9 @@ void BridgeOut::consume(const Message& frame) {
             }
             else
                 assert(false);
+        }
+        else {
+            assert(false);
         }
     }
     else if (frame.getType() == Message::Type::AUDIO_INTERPOLATE) {
