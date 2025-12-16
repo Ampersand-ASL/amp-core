@@ -57,6 +57,8 @@ protected:
     void _playStart();
     void _playEnd();
 
+    void _setCosStatus(bool cos);
+
     Log& _log;
     Clock& _clock;
     MessageConsumer& _captureConsumer;
@@ -67,6 +69,9 @@ protected:
     // This resampler is configured to go from 48K->8K ahead of the DTMF detection
     amp::Resampler _resampler;
     DTMFDetector2 _dtmfDetector;
+
+    bool _cosActive = false;
+    bool _ctcssActive = true;
 
     bool _record = false;
     std::fstream _playFile;

@@ -141,7 +141,7 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
 
     // Make an audio message and send it to the listeners for processing
     Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
-        BLOCK_SIZE_48K * 2, outBuffer, idealCaptureUs);
+        BLOCK_SIZE_48K * 2, outBuffer, 0, idealCaptureUs);
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
@@ -181,7 +181,8 @@ void LineRadio::_captureEnd() {
     }
 
     // Send the unkey message 
-    Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0);
+    Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 
+        0, _clock.timeUs());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
@@ -201,6 +202,25 @@ void LineRadio::_playEnd() {
     if (_record) {
         _log.info("Ended audio playing");
         _playFile.close();
+    }
+}
+
+void LineRadio::_setCosStatus(bool cosActive) {   
+    // Look for transitions
+    if (cosActive && !_cosActive) {
+        _log.info("COS active");
+        _cosActive = true;    
+    } else if (!cosActive && _cosActive) {
+
+        _log.info("COS inactive");
+        _cosActive = false;
+
+        // Generate an UNKEY signal on the negative transition
+        Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
+            0, 0, 0, _clock.timeUs());
+        msg.setSource(_busId, _callId);
+        msg.setDest(_destBusId, _destCallId);
+        _captureConsumer.consume(msg);
     }
 }
 

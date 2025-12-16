@@ -81,7 +81,8 @@ void BridgeCall::reset() {
     _parrotStateStartMs = 0;
 }
 
-void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec) {
+void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
+    bool bypassJitterBuffer) {
 
     _active = true;
     _lineId = lineId;  
@@ -89,6 +90,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _startMs = startMs;
     _lastAudioMs = 0;
     _bridgeIn.setCodec(codec);
+    _bridgeIn.setBypassJitterBuffer(bypassJitterBuffer);
     _bridgeIn.setStartTime(startMs);
     _bridgeOut.setCodec(codec);
 

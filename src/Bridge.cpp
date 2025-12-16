@@ -71,6 +71,8 @@ void Bridge::consume(const Message& msg) {
         );
         
         // Add new session for this call
+        // #### TODO: CONSIDER POSITIVE ACK ON ACCEPTED CALL AND ELIMINATE
+        // #### THE NACK CASE BELOW.
         int newIndex = _calls.firstIndex([](const BridgeCall& s) { return !s.isActive(); });
         if (newIndex == -1) {
             _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
@@ -85,11 +87,12 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call started %d CODEC %X", msg.getSourceCallId(), payload.codec);
+            _log.info("Call started %d CODEC %X, jbBypass %d", 
+                msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer);
 
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
-                payload.startMs, payload.codec);
+                payload.startMs, payload.codec, payload.bypassJitterBuffer);
         }
     }
     else if (msg.getType() == Message::SIGNAL && 

@@ -103,9 +103,6 @@ private:
     uint8_t _hidCOSActiveValue = 0x02;
 
     unsigned _hidPollCount = 0;
-    bool _cosActive = false;
-    // TODO
-    bool _ctcssActive = true;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 

@@ -42,11 +42,18 @@ void BridgeIn::setCodec(CODECType codecType) {
 }
 
 void BridgeIn::consume(const Message& frame) {    
+
     assert(frame.getType() == Message::Type::AUDIO ||
            (frame.getType() == Message::Type::SIGNAL && 
             frame.getFormat() == Message::SignalType::RADIO_UNKEY));
-    // The first stop is the jitter buffer
-    _jitBuf.consume(*_log, frame);
+
+    // The first stop is the jitter buffer, unless it's been bypassed
+    if (_bypassJitterBuffer) {
+        _bypassedFrame = frame;
+        _bypassedFrameCount++;
+    } else {
+        _jitBuf.consume(*_log, frame);
+    }
 }
 
 /** 
@@ -84,8 +91,14 @@ private:
  * adaptor that will handle forwarding.
  */
 void BridgeIn::audioRateTick() {
-    JBOutAdaptor adaptor([this](const Message& msg) { this->_handleJitBufOut(msg); });
-    _jitBuf.playOut(*_log, _clock->time(), &adaptor);
+    if (_bypassJitterBuffer) {
+        if (_bypassedFrameCount > 0)
+            _handleJitBufOut(_bypassedFrame);
+        _bypassedFrameCount = 0;
+    } else {
+        JBOutAdaptor adaptor([this](const Message& msg) { this->_handleJitBufOut(msg); });
+        _jitBuf.playOut(*_log, _clock->time(), &adaptor);
+    }
 }
 
 /**

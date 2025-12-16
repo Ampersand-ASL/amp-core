@@ -277,15 +277,8 @@ void LineUsb::_pollHidStatus() {
                 cosActive = true;
         }
 
-        // Look for transitions
-        if (cosActive && !_cosActive) {
-            _log.info("COS active");
-            _cosActive = true;    
-        } else if (!cosActive && _cosActive) {
-            _log.info("COS inactive");
-            _cosActive = false;
-        }
-
+        _setCosStatus(cosActive);
+        
         _hidPollCount++;
     }
 }

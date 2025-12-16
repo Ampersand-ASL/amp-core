@@ -59,11 +59,15 @@ public:
 
     void setCodec(CODECType codecType);
     void setStartTime(uint32_t ms) { _startTime = ms; }
+    void setBypassJitterBuffer(bool b) { _bypassJitterBuffer = b; }
     
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
+        _bypassJitterBuffer = false;
+        _bypassedFrameCount = 0;
         _startTime = 0;
         _sink = nullptr;
+        _jitBuf.reset();
         _transcoder0a.reset(); 
         _transcoder0c.reset(); 
         _transcoder0d.reset(); 
@@ -90,10 +94,17 @@ private:
     CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
     // In ms
     uint32_t _startTime = 0;
+    bool _bypassJitterBuffer = false;
 
     // This is the Jitter Buffer used to address timing/sequencing
     // issues on the input side of the Bridge.
     amp::SequencingBufferStd<Message> _jitBuf;
+
+    // If the jitter buffer is bypassed here is where the last message
+    // consumed gets parked waiting for the tick.
+    // #### TODO: DETERMINE IF THIS NEEDS TO BE A QUEUE?
+    Message _bypassedFrame;
+    unsigned _bypassedFrameCount = 0;
 
     Transcoder_G711_ULAW _transcoder0a;
     Transcoder_SLIN_16K _transcoder0c;

@@ -92,6 +92,7 @@ private:
  */
 struct PayloadCallStart {
     CODECType codec;
+    bool bypassJitterBuffer = false;
     uint32_t startMs;
 };
 

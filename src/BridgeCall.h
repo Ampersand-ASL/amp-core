@@ -62,7 +62,8 @@ public:
 
     void reset();
 
-    void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec);
+    void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
+        bool bypassJitterBuffer);
 
     bool isActive() const { 
         return _active; 
