@@ -38,7 +38,7 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    Bridge(Log& log, Clock& clock);
+    Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode);
 
     void setSink(MessageConsumer* sink);
     unsigned getCallCount() const;
@@ -60,6 +60,7 @@ private:
 
     Log& _log;
     Clock& _clock;
+    const BridgeCall::Mode _defaultMode;
     MessageConsumer* _sink = 0;
     
     static const unsigned MAX_CALLS = 8;

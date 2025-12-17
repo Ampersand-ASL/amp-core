@@ -14,7 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <sys/select.h>
 #include <iostream>
 
 #include "kc1fsz-tools/Log.h"
@@ -26,11 +25,13 @@ using namespace std;
 
 namespace kc1fsz {
 
-    static const char* AST_CURL_USER_AGENT = "asterisk-libcurl-agent/1.0";
+static const char* AST_CURL_USER_AGENT = "asterisk-libcurl-agent/1.0";
 
-StatsTask::StatsTask(Log& log, Clock& clock) 
+StatsTask::StatsTask(Log& log, Clock& clock, const char* version) 
 :   _log(log),
     _clock(clock),
+    _version(version),
+    _startTime(time(0)),
     // Interval recommended by Jason N8EI on 20-Nov-2025
     _intervalMs(180 * 1000),
     _lastAttemptMs(0) { 
@@ -53,11 +54,13 @@ void StatsTask::_doStats() {
     // Todo: Get uptime working
     char msg[256];
     snprintf(msg, 256, 
-        "%s?node=%s&time=%ld&seqno=%u&nodes=&apprptvers=0.0.0&apprptuptime=109&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
+        "%s?node=%s&time=%lld&seqno=%u&nodes=&apprptvers=%s&apprptuptime=%lld&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
         _url.c_str(),
         _nodeNumber.c_str(),
         time(0),
-        _seqCounter++);
+        _seqCounter++,
+        _version.c_str(),
+        time(0) - _startTime);
 
     _log.info("Stats URL: %s", msg);
     
@@ -80,8 +83,8 @@ void StatsTask::_doStats() {
     else {
         long http_code = 0;
         curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
-        printf("HTTP code %ld\n", http_code);
-        printf("GOT %s\n", _resultArea);
+        //printf("HTTP code %ld\n", http_code);
+        //printf("GOT %s\n", _resultArea);
         char* r0 = strstr(_resultArea, "ok");
         if (http_code == 200 && r0 != 0) {
             _log.info("Stats success");

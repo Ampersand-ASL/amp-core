@@ -951,7 +951,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
              frame.getSubclass() == ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY) {
         
-        _log.info("Call %u got UNKEY", call.localCallId);
+        _log.info("Call %u got UNKEY %u", call.localCallId, frame.getTimeStamp());
 
         Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
             0, 0, frame.getTimeStamp(), rxStampMs);
@@ -1530,7 +1530,7 @@ void LineIAX2::consume(const Message& msg) {
             if (msg.getType() == Message::Type::AUDIO) {
 
                 if (!codecSupported((CODECType)msg.getFormat())) {
-                    line->_log.error("Unsupproted CODEC");
+                    line->_log.error("Unsupported CODEC");
                     return;
                 }
 
@@ -1602,8 +1602,7 @@ void LineIAX2::consume(const Message& msg) {
         // Predicate (filters the calls)
         [msg](const Call& call) {
             return call.state == Call::State::STATE_UP &&
-                (msg.getDestCallId() == Message::BROADCAST || 
-                (int)msg.getDestCallId() == call.localCallId);
+                (int)msg.getDestCallId() == call.localCallId;
         }
     );
 }

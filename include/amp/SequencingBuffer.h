@@ -34,15 +34,6 @@ template <class T> class SequencingBufferSink {
 public:
 
     /**
-     * Called to play a signalling frame.
-     * 
-     * @param localMs The local clock that the signal applies to. This is provided 
-     * for reference purposes and normally would be ignored - just process the signal
-     * immediately on this method call.
-     */
-    virtual void playSignal(const T& frame,  uint32_t localMs) = 0;
-
-    /**
      * Called to play a voice frame.
      * 
      * @param frame The voice content
@@ -50,7 +41,7 @@ public:
      * provided for reference purposes and normally would be ignored - just process 
      * the frame immediately on this method call.
      */
-    virtual void playVoice(const T& frame, uint32_t localMs) = 0;
+    virtual void play(const T& frame, uint32_t localMs) = 0;
 
     /**
      * Called when voice interpolation is needed. 
@@ -62,7 +53,7 @@ public:
      * in milliseconds. This flexibility is provided in case 
      * the stream is being slowed down/sped up.
      */
-    virtual void interpolateVoice(uint32_t origMs, uint32_t localMs, uint32_t durationMs) = 0;
+    virtual void interpolate(uint32_t origMs, uint32_t localMs, uint32_t durationMs) = 0;
 };
 
 /**
@@ -73,7 +64,6 @@ public:
  */        
 template <typename T>
 concept HasFrameTimes = requires (const T b) {
-    {b.isVoice()} -> std::same_as<bool>; 
     {b.getOrigMs()} -> std::same_as<uint32_t>; 
     {b.getRxMs()} -> std::same_as<uint32_t>; 
 };

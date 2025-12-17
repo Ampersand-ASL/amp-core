@@ -35,15 +35,11 @@ BridgeCall::BridgeCall() {
         if (_mode == Mode::NORMAL) {
             if (msg.getType() == Message::Type::AUDIO)
                 _processNormalAudio(msg);
-            else if (msg.getType() == Message::Type::SIGNAL)
-                _processNormalSignal(msg);
             else 
                 assert(false);
         } else if (_mode == Mode::PARROT) {
             if (msg.getType() == Message::Type::AUDIO)
                 _processParrotAudio(msg);
-            else if (msg.getType() == Message::Type::SIGNAL)
-                _processParrotSignal(msg);
             else 
                 assert(false);
         } else if (_mode == Mode::TONE) {
@@ -67,6 +63,8 @@ void BridgeCall::reset() {
     _callId = 0; 
     _startMs = 0;
     _lastAudioMs = 0;
+    _echo = false;
+    
     _bridgeIn.reset();
     _bridgeOut.reset();
 
@@ -76,13 +74,15 @@ void BridgeCall::reset() {
     _toneLevel = 0;
 
     _playQueue = std::queue<PCM16Frame>();
+    _echoQueue = std::queue<PCM16Frame>();
     _playQueueDepth = 0;
     _parrotState = ParrotState::NONE;
     _parrotStateStartMs = 0;
+    _lastUnkeyProcessedMs = 0;
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-    bool bypassJitterBuffer) {
+    bool bypassJitterBuffer, bool echo, Mode initialMode) {
 
     _active = true;
     _lineId = lineId;  
@@ -94,8 +94,8 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeIn.setStartTime(startMs);
     _bridgeOut.setCodec(codec);
 
-    // #### TODO: TEMPORARY
-    //_mode = Mode::PARROT;
+    _echo = echo;
+    _mode = initialMode;
 
     if (_mode == Mode::PARROT) {
         _parrotState = ParrotState::CONNECTED;
@@ -135,9 +135,6 @@ Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
 
 void BridgeCall::_processNormalAudio(const Message& msg) {   
     _stageIn = msg;
-}
-
-void BridgeCall::_processNormalSignal(const Message& msg) {   
 }
 
 /**
@@ -230,27 +227,14 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
         }
     } 
     else if (_parrotState == ParrotState::RECORDING) {
-        // Limit the amount of sound
+        // Limit the amount of sound that can be captured
         if (_playQueueDepth < 1500) {
             _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
             _playQueueDepth++;
         }
+        if (_echo)
+            _echoQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
     } 
-}
-
-/**
- * This function is called when a signal is received from the input
- * adaptor.
- */
-void BridgeCall::_processParrotSignal(const Message& msg) { 
-    if (msg.getType() == Message::SIGNAL &&
-        msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
-        if (_parrotState == ParrotState::RECORDING) {
-            _log->info("Record end (UNKEY)");
-            _parrotState = ParrotState::PAUSE_AFTER_RECORD;
-            _parrotStateStartMs = _clock->time();
-        }
-    }
 }
 
 void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
@@ -292,6 +276,17 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _log->info("Record end (Long silence)");
             _parrotState = ParrotState::PAUSE_AFTER_RECORD;
             _parrotStateStartMs = _clock->time();
+        }
+        else if (_bridgeIn.getLastUnkeyMs() > _lastUnkeyProcessedMs &&
+                 _clock->isPast(_bridgeIn.getLastUnkeyMs() + 250)) {
+            _lastUnkeyProcessedMs = _bridgeIn.getLastUnkeyMs();
+            _log->info("Record end (UNKEY)");
+            _parrotState = ParrotState::PAUSE_AFTER_RECORD;
+            _parrotStateStartMs = _clock->time();
+        }
+        if (!_echoQueue.empty()) {
+            _bridgeOut.consume(_makeMessage(_echoQueue.front(), tickMs, _lineId, _callId));
+            _echoQueue.pop();
         }
     } 
     else if (_parrotState == ParrotState::PAUSE_AFTER_RECORD) {

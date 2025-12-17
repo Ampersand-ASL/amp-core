@@ -45,6 +45,12 @@ public:
     static const unsigned LINE_ID = 10;
     static const unsigned CALL_ID = 1;
 
+    enum Mode {
+        NORMAL,
+        PARROT,
+        TONE
+    };
+
     BridgeCall();
 
     /**
@@ -63,7 +69,7 @@ public:
     void reset();
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-        bool bypassJitterBuffer);
+        bool bypassJitterBuffer, bool echo, Mode initialMode);
 
     bool isActive() const { 
         return _active; 
@@ -81,7 +87,10 @@ public:
         return _active && msg.getSourceBusId() == _lineId && msg.getSourceCallId() == _callId;
     }
 
+    bool isEcho() const { return _echo; }
+
     void consume(const Message& frame);
+
     void audioRateTick(uint32_t tickMs);
 
     /**
@@ -105,12 +114,7 @@ private:
     Clock* _clock;
     MessageConsumer* _sink;
 
-    enum Mode {
-        NORMAL,
-        PARROT,
-        TONE
-    };
-
+    bool _echo = false;
     Mode _mode = Mode::NORMAL;
 
     bool _active = false;
@@ -128,7 +132,6 @@ private:
     // ----- Normal Mode Related ----------------------------------------------
 
     void _processNormalAudio(const Message& msg);
-    void _processNormalSignal(const Message& msg);
 
     // This is the call's contribution to the conference when in normal mode.
     // IMPORTANT: All of the signaling has been handled ahead of this point
@@ -147,8 +150,6 @@ private:
     // ----- Parrot Mode Related ----------------------------------------------
 
     void _processParrotAudio(const Message& msg);
-    void _processParrotSignal(const Message& msg);
-
     void _parrotAudioRateTick(uint32_t tickMs);
 
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
@@ -157,6 +158,8 @@ private:
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
     unsigned _playQueueDepth = 0;
+    // The audio received and waiting to be echoed
+    std::queue<PCM16Frame> _echoQueue;
 
     enum ParrotState {
         NONE,
@@ -172,6 +175,7 @@ private:
 
     ParrotState _parrotState = ParrotState::NONE;
     uint32_t _parrotStateStartMs = 0;
+    uint32_t _lastUnkeyProcessedMs = 0;
 };
 
     }

@@ -55,12 +55,13 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
 }
 
-void LineRadio::_open() {    
+void LineRadio::_open(bool echo) {    
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
     PayloadCallStart payload;
     payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
     payload.bypassJitterBuffer = true;
+    payload.echo = echo;
     payload.startMs = _clock.time();
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());

@@ -71,15 +71,13 @@ void BridgeOut::consume(const Message& frame) {
             outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
             outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 
-            if (_sink)
-                _sink(outFrame);
+            _sink(outFrame);
         }
         else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
             // No support for interpolation
             if (frame.getType() == Message::Type::AUDIO) {
                 // No conversion needed
-                if (_sink)
-                    _sink(frame);
+                _sink(frame);
             }
             else
                 assert(false);
@@ -88,15 +86,8 @@ void BridgeOut::consume(const Message& frame) {
             assert(false);
         }
     }
-    else if (frame.getType() == Message::Type::AUDIO_INTERPOLATE) {
-        // No support
-        assert(false);
-    } 
-    // Non-audio messages are key passed right through, transcoding
-    // not relevant here.
     else {
-        if (_sink)
-            _sink(frame);
+        assert(false);
     }
 }
 

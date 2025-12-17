@@ -27,9 +27,10 @@ using namespace std;
 namespace kc1fsz {
     namespace amp {
 
-Bridge::Bridge(Log& log, Clock& clock) 
+Bridge::Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode) 
 :   _log(log),
     _clock(clock),
+    _defaultMode(defaultMode),
     _calls(_callSpace, MAX_CALLS) { 
     for (unsigned i = 0; i < MAX_CALLS; i++) 
         _callSpace[i].init(&log, &clock);
@@ -88,12 +89,14 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call started %d CODEC %X, jbBypass %d", 
-                msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer);
+            _log.info("Call started %d CODEC %X, jbBypass %d, echo %d", 
+                msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer,
+                payload.echo);
 
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
-                payload.startMs, payload.codec, payload.bypassJitterBuffer);
+                payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
+                _defaultMode);
         }
     }
     else if (msg.getType() == Message::SIGNAL && 
@@ -157,11 +160,12 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         if (!_calls[i].isActive())
             continue;
 
-        // Figure out how many calls we are mixing. Keep in mind that calls don't contribute
-        // audio to themselves.
+        // Figure out how many calls we are mixing. Keep in mind that calls only contribute
+        // audio to themselves if echo mode is enabled for that call.
         unsigned mixCount = 0;
         for (unsigned j = 0; j < MAX_CALLS; j++) {
-            if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
+            if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || 
+                (!_calls[i].isEcho() && i == j))
                 continue;
             mixCount++;
         }
@@ -176,7 +180,8 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             int16_t mixedFrame[BLOCK_SIZE_48K];
             memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
             for (unsigned j = 0; j < MAX_CALLS; j++) {
-                if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
+                if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || 
+                    (!_calls[i].isEcho() && i == j))
                     continue;
                 _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale, tickMs);
             }

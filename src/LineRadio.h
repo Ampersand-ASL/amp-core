@@ -59,7 +59,7 @@ protected:
 
     void _setCosStatus(bool cos);
 
-    void _open();
+    void _open(bool echo = false);
     void _close();
 
     Log& _log;

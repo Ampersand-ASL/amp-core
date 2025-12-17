@@ -43,21 +43,24 @@ void BridgeIn::setCodec(CODECType codecType) {
 
 void BridgeIn::consume(const Message& frame) {    
 
-    if (!(frame.getType() == Message::Type::AUDIO ||
-           (frame.getType() == Message::Type::SIGNAL && 
-            frame.getFormat() == Message::SignalType::RADIO_UNKEY))) {
-        cout << frame.getType() << "/" << frame.getFormat() << endl;
+    if (frame.getType() == Message::Type::AUDIO) {
+        // The first stop is the jitter buffer, unless it's been bypassed
+        if (_bypassJitterBuffer) {
+            _bypassedFrames.push(frame);
+        } else {
+            _jitBuf.consume(*_log, frame);
+        }
     }
-
-    assert(frame.getType() == Message::Type::AUDIO ||
-           (frame.getType() == Message::Type::SIGNAL && 
-            frame.getFormat() == Message::SignalType::RADIO_UNKEY));
-
-    // The first stop is the jitter buffer, unless it's been bypassed
-    if (_bypassJitterBuffer) {
-        _bypassedFrames.push(frame);
-    } else {
-        _jitBuf.consume(*_log, frame);
+    else if (frame.getType() == Message::Type::SIGNAL) {
+        if (frame.getFormat() == Message::SignalType::RADIO_UNKEY) {
+            _lastUnkeyMs = _clock->time();
+        }
+        else {
+            assert(false);
+        }
+    }
+    else {
+        assert(false);
     }
 }
 
@@ -68,18 +71,13 @@ class JBOutAdaptor : public amp::SequencingBufferSink<Message> {
 public:
 
     JBOutAdaptor(std::function<void(const Message& msg)> sink) 
-    :   _sink(sink) {        
-    }
+    :   _sink(sink) { }
 
-    void playSignal(const Message& msg, uint32_t) {   
+    void play(const Message& msg, uint32_t) {   
         _sink(msg);
     }
 
-    void playVoice(const Message& msg, uint32_t) {        
-        _sink(msg);
-    }
-
-    void interpolateVoice(uint32_t origMs, uint32_t localMs, uint32_t) {
+    void interpolate(uint32_t origMs, uint32_t localMs, uint32_t) {
         // Need to make a message to represent the interpolate event
         // #### TODO: NOTE: The source/destination aren't filled in. Does this matter?
         Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, origMs, localMs);
@@ -110,7 +108,7 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
 /**
  * This function handles everything in the input flow *after* the jitter buffer. We will 
  * get a frame every tick and it will be either (a) normal voice (b) an interpolation 
- * request (c) an unkey signal.
+ * request.
  * 
  * At this stage in the flow the frame is still encoded as it was received, so this
  * function will take care of PLC, transcoding, resampling, etc.
@@ -193,14 +191,10 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
         outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 
-        if (_sink)
-            _sink(outFrame);
+        _sink(outFrame);
     }
-    // Non-audio messages are key passed right through, transcoding
-    // not relevant here.
     else {
-        if (_sink)
-            _sink(frame);
+        assert(false);
     }
 }
 

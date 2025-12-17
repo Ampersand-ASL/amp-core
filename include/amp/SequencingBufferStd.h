@@ -96,19 +96,27 @@ public:
         _vi_1 = 0;
         _idealDelay = 0;
         _worstMargin = 0;    
-        _totalMargin = 0;    
-    }
+        _totalMargin = 0;   
+        _lastPlayoutTime = 0;
+        _startMs = 0;
+        _newestOrigMs = 0;
+     }
 
     bool empty() const { return _buffer.empty(); }
     unsigned size() const { return _buffer.size(); }
     unsigned maxSize() const { return MAX_BUFFER_SIZE; }
+    void setStartMs(uint32_t ms) { _startMs = ms; }
     
     void debug() const {
-        cout << "SequencingBufferStd Debug:" << endl;
-        _buffer.visitAll([](const T& frame) {
-            cout << " rt=" << frame.getOrigMs() << endl;
-            return true;
-        });
+        if (!empty()) {
+            printf("----- SequencingBufferStd --------------------\n");
+            printf("lastplayout %d, cursor %d, idealdelay %f\n", _lastPlayoutTime, _originCursor, _idealDelay);
+            _buffer.visitAll([this](const T& frame) {
+                printf("  orig=%6d rx=%6d margin=%lld\n", frame.getOrigMs(), frame.getRxMs(),
+                (int64_t)_lastPlayoutTime - (int64_t)frame.getRxMs());
+                return true;
+            });
+        }
     }
 
     /**
@@ -144,16 +152,11 @@ public:
         }
     }
 
-    static int32_t roundUpToTick(int32_t v, int32_t tick) {
-        float a = ceilf((float)v / (float)tick);
-        return a * (float)tick;
-    }
-
     static int32_t roundToTick(int32_t v, int32_t tick) {
         float a = round((float)v / (float)tick);
         return a * (float)tick;
     }
-
+    
     // ----- Diagnostics -----------------------------------------------
 
     unsigned getLateVoiceFrameCount() const { return _lateVoiceFrameCount; }
@@ -168,20 +171,23 @@ public:
         // #### TODO: IF THIS IS A SIGNAL THAN CLEAR ROOM
         if (!_buffer.hasCapacity()) {
             _overflowCount++;
-            log.info("Sequencing Buffer overflow");
+            log.info("OF orig=%6d cursor=%6d", payload.getOrigMs(), _originCursor);
+            if (_overflowCount % 25 == 0) {
+                debug();
+            }
             return false;
         }
 
         _buffer.insert(payload);     
+        if (_newestOrigMs < payload.getOrigMs())
+            _newestOrigMs = payload.getOrigMs();
 
         // Use the frame information to keep the delay estimate up to date. We do 
         // this as early as possible (on consume) so that the estimate is as 
         // up-to-date as possible.
-        if (payload.isVoice()) {
-            bool startOfCall = _voiceConsumedCount == 0;
-            _voiceConsumedCount++;
-            _updateDelayTarget(log, startOfCall, payload.getRxMs(), payload.getOrigMs());
-        }
+        bool startOfCall = _voiceConsumedCount == 0;
+        _voiceConsumedCount++;
+        _updateDelayTarget(log, startOfCall, payload.getRxMs(), payload.getOrigMs());
 
         return true;
     }
@@ -191,6 +197,7 @@ public:
      */
     virtual void playOut(Log& log, uint32_t localMs, SequencingBufferSink<T>* sink) {     
 
+        _lastPlayoutTime = localMs;
         bool voiceFramePlayed = false;
 
         // For diagnostic purposes
@@ -204,135 +211,96 @@ public:
         // right time, and discard expired voice frames.
         while (!_buffer.empty()) {
 
-            // Signal frames are passed along immediately
-            if (!_buffer.first().isVoice())
-                sink->playSignal(_buffer.pop(), localMs);
+            const T& frame = _buffer.first();
+            const int32_t oldOriginCursor = _originCursor;
 
-            // Voice frame
-            else {
-                const T& frame = _buffer.first();
-                const int32_t oldOriginCursor = _originCursor;
+            // Old voice frames (out of order or repeats) are discarded immediately
+            if (frame.getOrigMs() <= _lastPlayedOrigMs) {
+                log.info("Discarded OOS frame (%d <= %d)", frame.getOrigMs(), _lastPlayedOrigMs);
+                _lateVoiceFrameCount++;
+                _buffer.pop();
+                // NOTICE: We're in a loop so we get another shot at it,
+                continue;
+            }
 
-                // Old voice frames (out of order or repeats) are discarded immediately
-                if (frame.getOrigMs() <= _lastPlayedOrigMs) {
-                    log.info("Discarded OOS frame (%d <= %d)", frame.getOrigMs(), _lastPlayedOrigMs);
+            // First frame of the talkpsurt? 
+            if (!_inTalkspurt) {
+                
+                _originCursor = roundToTick(frame.getOrigMs() - _initialMargin,
+                    _voiceTickSize);
+
+                if (_originCursor > oldOriginCursor)
+                    log.info("Start TS, moving forward %u->%u %u %d", 
+                        oldOriginCursor, _originCursor, frame.getOrigMs(), size());
+                else if (_originCursor < oldOriginCursor)
+                    log.info("Start TS, moving backward %u<-%u %u %d", 
+                        _originCursor, oldOriginCursor, frame.getOrigMs(), size());
+                else 
+                    log.info("Start TS, No movement %u %u %d", 
+                        _originCursor, frame.getOrigMs(), size());
+
+                _inTalkspurt = true;
+                _talkspurtFrameCount = 0;
+                _talkspurtFirstOrigin = frame.getOrigMs();
+                _lastPlayedOrigMs = 0;
+                _lastPlayedLocal = 0;
+            }
+
+            // If we get an expired frame then decide if we want to move the cursor back
+            // to pick it up.
+            if ((int32_t)frame.getOrigMs() < _originCursor) {
+
+                // If the next frame is within a reasonable range then move the cursor 
+                // back to pick up the frame.
+                if (frame.getOrigMs() > (_originCursor - _initialMargin)) {
+                    log.info("Mid TS, moved cursor back (%d < %d) size: %d", 
+                        frame.getOrigMs(), _originCursor, size());
+                    _originCursor = frame.getOrigMs();
+                }
+                // If the next frame is unreasonably early then discard it.
+                else {
+                    log.info("Mid TS, discarded frame (%d < %d) size: %d", 
+                        frame.getOrigMs(), _originCursor, size());
                     _lateVoiceFrameCount++;
                     _buffer.pop();
-                    // NOTICE: We're in a loop so we get another shot at it,
-                    continue;
                 }
+                // NOTICE: We're in a loop so we get another shot at it,
+            }
+            // If we got the frame we are waiting for then play it
+            else if ((int32_t)frame.getOrigMs() == _originCursor) {
+                
+                sink->play(frame, localMs);
 
-                // First frame of the talkpsurt? 
-                if (!_inTalkspurt) {
-                    
-                    // Set the starting delay for a new call uses a configured initial margin.
-                    // This will be refined as we gather statistic on the actual connection.
-                    if (_voicePlayoutCount == 0) {
-                        _originCursor = roundToTick(frame.getOrigMs() - _initialMargin,
-                            _voiceTickSize);
-                        log.info("Start of call cursor: %d", _originCursor);
-                    } 
-                    // After the call is up and running we use the adaptive algorithm to track
-                    // the delay between arrival and playback.
-                    else {
-                        // We only get to change the delay at the start of a talkspurt.
-                        // There are a few cases:
-                        // 1. The ideal delay wants us to slow down. In that case we shift
-                        //    the cursor backwards, being careful not to go back any further
-                        //    than the last frame played.
-                        //
-                        // 2. The ideal delay wants us to speed up. In that case we shift
-                        //    the cursor forward, being careful not to pass the next available
-                        //    frame in the buffer.
-                        // 
-                        if (idealOriginCursor < _originCursor)
-                            _originCursor = std::max(idealOriginCursor, (int32_t)_lastPlayedOrigMs);
-                        else if (idealOriginCursor > _originCursor)
-                            _originCursor = std::min(idealOriginCursor, (int32_t)frame.getOrigMs());
+                voiceFramePlayed = true;
+                _lastPlayedLocal = localMs;
+                _lastPlayedOrigMs = frame.getOrigMs();
+                _voicePlayoutCount++;
 
-                        if (_originCursor > oldOriginCursor)
-                            log.info("Start TS, moving cursor forward %u -> %u", 
-                                oldOriginCursor, _originCursor);
-                        else if (_originCursor < oldOriginCursor)
-                            log.info("Start TS, moving cursor backward %u <- %u", 
-                                _originCursor, oldOriginCursor);
-                        else 
-                            log.info("Start TS, No cursor movement");
-                    }
+                bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
 
-                    _inTalkspurt = true;
-                    _talkspurtFrameCount = 0;
-                    _talkspurtFirstOrigin = frame.getOrigMs();
-                    _lastPlayedOrigMs = 0;
-                    _lastPlayedLocal = 0;
-                }
-
-                // If we get an expired frame then either slow down a bit to pick it up
-                // or discard it and move on.
-                if ((int32_t)frame.getOrigMs() < _originCursor) {
-                    // Is it OK to slow down for this one?
-                    if (_originCursor - (int32_t)frame.getOrigMs() <= _midTsAdjustMax) {
-                        log.info("Mid TS, adjusting (%d < %d)", frame.getOrigMs(), _originCursor);
-                        // NOTE: It has already been established that slot.remoteTime is larger
-                        // that _lastPlayedOrigin so there is no risk in moving back to this
-                        // point in the stream.
-                        _originCursor = frame.getOrigMs();
-                    } 
-                    // Too late, move on
-                    else {
-                        log.info("Mid TS, discarded frame (%d < %d)", frame.getOrigMs(), _originCursor);
-                        _lateVoiceFrameCount++;
-                        _buffer.pop();
-                    }
-                    // NOTICE: We're in a loop so we get another shot at it,
-                }
-                // If we got the frame we are waiting for then play it
-                else if ((int32_t)frame.getOrigMs() == _originCursor) {
-                    
-                    sink->playVoice(frame, localMs);
-
-                    voiceFramePlayed = true;
-                    _lastPlayedLocal = localMs;
-                    _lastPlayedOrigMs = frame.getOrigMs();
-                    _voicePlayoutCount++;
-
-                    bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
-
-                    // Keep margin tracking up to date
-                    int32_t margin = (int32_t)localMs - (int32_t)frame.getRxMs();
-                    if (startOfSpurt) {
+                // Keep margin tracking up to date
+                int32_t margin = (int32_t)localMs - (int32_t)frame.getRxMs();
+                if (startOfSpurt) {
+                    _worstMargin = margin;
+                    _totalMargin = margin;
+                    _talkspurtFrameCount = 1;
+                } else {
+                    if (margin < _worstMargin) 
                         _worstMargin = margin;
-                        _totalMargin = margin;
-                        _talkspurtFrameCount = 1;
-                    } else {
-                        if (margin < _worstMargin) 
-                            _worstMargin = margin;
-                        _totalMargin += margin;
-                        _talkspurtFrameCount++;
-                    }
-
-                    _buffer.pop();
-
-                    // We can only play one frame per tick, so break out of the loop
-                    break;
+                    _totalMargin += margin;
+                    _talkspurtFrameCount++;
                 }
-                // Otherwise the next voice is in the future vis-a-vis the origin cursor.
-                else {
-                    // We know the next frame is newer than the origin cursor, but if 
-                    // it is older than the IDEAL origin cursor than move forward to play 
-                    // it now it up (i.e. there is a bubble in the sequencing buffer 
-                    // that we can quickly close).
-                    if ((int32_t)frame.getOrigMs() < idealOriginCursor) {
-                        log.info("Mid TS, closing gap (%d > %d)", _originCursor, frame.getOrigMs());
-                        _originCursor = frame.getOrigMs();
-                        // We're in a loop here, so the next frame will be reconsidered
-                        // the next time around.
-                    }
-                    else {
-                        break;
-                    }
-                }
-            }            
+
+                _buffer.pop();
+
+                // We can only play one frame per tick, so break out of the loop
+                break;
+            }
+            // Otherwise the next voice is in the future vis-a-vis the origin cursor,
+            // so an interpolation will happen to fill the gap.
+            else {
+                break;
+            }
         }
 
         // Things to check while the talkspurt is running
@@ -341,18 +309,21 @@ public:
             // If no voice was generated on this tick (for whatever reason)
             // then request an interpolation.
             if (!voiceFramePlayed) {
-                sink->interpolateVoice(_originCursor, localMs, _voiceTickSize);
+                sink->interpolate(_originCursor, localMs, _voiceTickSize);
                 _interpolatedVoiceFrameCount++;
-                log.info("Interpolated %u", _originCursor);
+                log.info("Interpolated %u, size %d", _originCursor, size());
             }
 
-            // Has the talkspurt has timed out yet?
-            if (localMs> _lastPlayedLocal + _talkspurtTimeoutInteval) {
+            // Has the talkspurt timed out yet?
+            if (localMs >= (_lastPlayedLocal + _talkspurtTimeoutInteval)) {
                 _inTalkspurt = false;
                 _talkSpurtCount++;
                 int32_t avgMargin = (_talkspurtFrameCount != 0) ? 
                     _totalMargin / _talkspurtFrameCount : 0;
-                log.info("End TS, avgM: %d, shortM: %d", avgMargin, _worstMargin); 
+                log.info("End TS, avgM: %d, shortM: %d, OC: %u, IC: %u, DC: %d, size: %d", 
+                    avgMargin, _worstMargin,
+                    _originCursor, idealOriginCursor, 
+                    (int32_t)_originCursor - (int32_t)idealOriginCursor, size()); 
             }
         }
 
@@ -422,10 +393,15 @@ private:
     unsigned _ptrSpace[MAX_BUFFER_SIZE];
     fixedsortedlist<T> _buffer;
 
+    uint32_t _startMs = 0;
+
     // This is the important variable. This always points to the next
     // origin time to be played.
     int32_t _originCursor = 0;
     uint32_t _talkspurtFirstOrigin = 0;
+    // The orig timestamp of the newest frame to be put into the buffer,
+    // used to prevent an overflow.
+    uint32_t _newestOrigMs = 0;
     uint32_t _lastPlayedOrigMs = 0;
     // Used for detecting the end of a talkspurt
     uint32_t _lastPlayedLocal = 0;
@@ -443,7 +419,7 @@ private:
     float _idealDelay = 0;
     // Starting estimate of margin
     // MUST BE A MULTIPLE OF _voiceTickSize
-    unsigned _initialMargin = _voiceTickSize * 3;
+    unsigned _initialMargin = _voiceTickSize * 4;
 
     // ----- Diagnostic/Metrics Stuff ----------------------------------------
 
@@ -454,6 +430,7 @@ private:
     unsigned _voiceConsumedCount = 0;
     int32_t _worstMargin = 0;
     int32_t _totalMargin = 0;
+    uint32_t _lastPlayoutTime = 0;
 
     // The number of talkspurts since reset. This is incremented at the end of 
     // each talkspurt. Importantly, it will be zero for the duration of the 
@@ -464,5 +441,3 @@ private:
 
     }
 }
-
-

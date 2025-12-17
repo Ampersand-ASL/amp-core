@@ -37,8 +37,6 @@ Message::Message(Type type, unsigned format, unsigned size, const uint8_t* conte
     assert(size <= MAX_SIZE);
     if (size)
         memcpy(_body, content, size);
-    sanityCheckRelativeMs(_origMs);
-    sanityCheckMs(_rxMs);
 }
 
 Message::Message(const Message& other)
@@ -54,8 +52,6 @@ Message::Message(const Message& other)
     _sourceCallId = other._sourceCallId;
     _destBusId = other._destBusId;
     _destCallId = other._destCallId;
-    sanityCheckRelativeMs(_origMs);
-    sanityCheckMs(_rxMs);
 }
 
 Message& Message::operator=(const Message& other) {
@@ -71,8 +67,6 @@ Message& Message::operator=(const Message& other) {
     _sourceCallId = other._sourceCallId;
     _destBusId = other._destBusId;
     _destCallId = other._destCallId;
-    sanityCheckRelativeMs(_origMs);
-    sanityCheckMs(_rxMs);
     return *this;
 }
 

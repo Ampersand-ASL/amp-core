@@ -59,8 +59,12 @@ public:
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
 
     void setCodec(CODECType codecType);
-    void setStartTime(uint32_t ms) { _startTime = ms; }
+    void setStartTime(uint32_t ms) { 
+        _startTime = ms; 
+        _jitBuf.setStartMs(ms);
+    }
     void setBypassJitterBuffer(bool b) { _bypassJitterBuffer = b; }
+    uint32_t getLastUnkeyMs() const { return _lastUnkeyMs; }
     
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
@@ -68,6 +72,7 @@ public:
         _bypassedFrames = std::queue<Message>();
         _startTime = 0;
         _jitBuf.reset();
+        _lastUnkeyMs = 0;
         _transcoder0a.reset(); 
         _transcoder0c.reset(); 
         _transcoder0d.reset(); 
@@ -99,6 +104,8 @@ private:
     // This is the Jitter Buffer used to address timing/sequencing
     // issues on the input side of the Bridge.
     amp::SequencingBufferStd<Message> _jitBuf;
+
+    uint32_t _lastUnkeyMs = 0;
 
     // If the jitter buffer is bypassed here is where the frames are queued.
     // ### TODO: PUT A MODE ON THE JB TO SUPPORT BYPASS.

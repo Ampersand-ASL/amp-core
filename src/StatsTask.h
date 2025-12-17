@@ -30,7 +30,7 @@ class Clock;
 class StatsTask : public Runnable2 {
 public:
 
-    StatsTask(Log& log, Clock& clock);
+    StatsTask(Log& log, Clock& clock, const char* version);
 
     void configure(const char* statsServerUrl, const char* nodeNumber);
 
@@ -52,6 +52,8 @@ private:
 
     Log& _log;
     Clock& _clock;
+    fixedstring _version;
+    const time_t _startTime;
     fixedstring _url;
     fixedstring _nodeNumber;
 
