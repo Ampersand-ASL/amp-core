@@ -54,7 +54,7 @@ void StatsTask::_doStats() {
     // Todo: Get uptime working
     char msg[256];
     snprintf(msg, 256, 
-        "%s?node=%s&time=%lld&seqno=%u&nodes=&apprptvers=%s&apprptuptime=%lld&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
+        "%s?node=%s&time=%ld&seqno=%u&nodes=&apprptvers=%s&apprptuptime=%ld&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
         _url.c_str(),
         _nodeNumber.c_str(),
         time(0),
