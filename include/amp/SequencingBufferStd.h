@@ -311,7 +311,7 @@ public:
             if (!voiceFramePlayed) {
                 sink->interpolate(_originCursor, localMs, _voiceTickSize);
                 _interpolatedVoiceFrameCount++;
-                log.info("Interpolated %u, size %d", _originCursor, size());
+                //log.info("Interpolated %u, size %d", _originCursor, size());
             }
 
             // Has the talkspurt timed out yet?
@@ -419,7 +419,7 @@ private:
     float _idealDelay = 0;
     // Starting estimate of margin
     // MUST BE A MULTIPLE OF _voiceTickSize
-    unsigned _initialMargin = _voiceTickSize * 4;
+    unsigned _initialMargin = _voiceTickSize * 5;
 
     // ----- Diagnostic/Metrics Stuff ----------------------------------------
 

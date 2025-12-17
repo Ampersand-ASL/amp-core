@@ -94,7 +94,7 @@ void RegisterTask::doRegister() {
         //printf("GOT %s\n", _resultArea);
         char* r0 = strstr(_resultArea, "successfully registered");
         if (http_code == 200 && r0 != 0) {
-            _log.info("Successfully registered %s", _nodeNumber.c_str());
+            //_log.info("Successfully registered %s", _nodeNumber.c_str());
             _lastGoodRegistrationMs = _clock.time();
         }
         else {

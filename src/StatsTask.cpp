@@ -62,7 +62,7 @@ void StatsTask::_doStats() {
         _version.c_str(),
         time(0) - _startTime);
 
-    _log.info("Stats URL: %s", msg);
+    //_log.info("Stats URL: %s", msg);
     
     _curl = curl_easy_init();
 
@@ -87,7 +87,7 @@ void StatsTask::_doStats() {
         //printf("GOT %s\n", _resultArea);
         char* r0 = strstr(_resultArea, "ok");
         if (http_code == 200 && r0 != 0) {
-            _log.info("Stats success");
+            //_log.info("Stats success");
             _lastSuccessMs = _clock.time();
         }
         else {
