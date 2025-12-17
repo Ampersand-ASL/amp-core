@@ -42,9 +42,6 @@ RegisterTask::RegisterTask(Log& log, Clock& clock)
     _nextRegisterMs(_clock.time() + 5 * 1000) { 
 }
 
-RegisterTask::~RegisterTask() {
-}
-
 void RegisterTask::configure(const char* regServerUrl, 
     const char* nodeNumber, const char* password, unsigned iaxPort) {
     _regServerUrl = regServerUrl;

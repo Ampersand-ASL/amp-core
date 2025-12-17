@@ -26,58 +26,14 @@ using namespace std;
 
 namespace kc1fsz {
 
+    static const char* AST_CURL_USER_AGENT = "asterisk-libcurl-agent/1.0";
+
 StatsTask::StatsTask(Log& log, Clock& clock) 
 :   _log(log),
     _clock(clock),
     // Interval recommended by Jason N8EI on 20-Nov-2025
     _intervalMs(180 * 1000),
     _lastAttemptMs(0) { 
-
-    _multiHandle = curl_multi_init();
-    _curl = curl_easy_init();
-
-    curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, _writeCallback);
-    curl_easy_setopt(_curl, CURLOPT_WRITEDATA, this);
-    curl_multi_add_handle(_multiHandle, _curl);
-
-    // cache the CA cert bundle in memory for a week 
-    curl_easy_setopt(_curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
-
-    //_headers = curl_slist_append(_headers, "Content-Type: application/json");
-    //curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, _headers);
-}
-
-StatsTask::~StatsTask() {
-    curl_multi_remove_handle(_multiHandle, _curl);
-    curl_slist_free_all(_headers);
-    curl_easy_cleanup(_curl);
-    curl_multi_cleanup(_multiHandle);
-}
-
-int StatsTask::getPolls(pollfd* fds, unsigned fdsCapacity) {
-
-    // Pull out the set of FDs used by curl
-    fd_set rdSet, wrSet, exSet;
-    int maxFd = 0;
-    curl_multi_fdset(_multiHandle, &rdSet, &wrSet, &exSet, &maxFd);
-
-    // Now scan the old fd_sets and allocate some pollfds.
-    unsigned pollfdUsed = 0;
-    for (int fd = 0; fd < maxFd; fd++) {
-        if (FD_ISSET(fd, &rdSet) || FD_ISSET(fd, &wrSet)) {
-            if (fdsCapacity == 0)
-                return -1;
-            fds[pollfdUsed].fd = fd;
-            fds[pollfdUsed].events = 0;
-            if (FD_ISSET(fd, &rdSet))
-                fds[pollfdUsed].events |= POLLIN;
-            if (FD_ISSET(fd, &wrSet))
-                fds[pollfdUsed].events |= POLLOUT;
-            pollfdUsed++;
-            fdsCapacity--;
-        }
-    }
-    return pollfdUsed;
 }
 
 void StatsTask::configure(const char* url, const char* nodeNumber) {
@@ -88,44 +44,12 @@ void StatsTask::configure(const char* url, const char* nodeNumber) {
 void StatsTask::tenSecTick() {
     if (_clock.isPast(_lastAttemptMs + _intervalMs)) {
         _lastAttemptMs = _clock.time();
-        _statsStart();
+        _doStats();
     }
 }
 
-bool StatsTask::run2() {  
+void StatsTask::_doStats() {  
     
-    const State originalState = _state;
-
-    if (_state == State::STATE_RUNNING) {
-        int still_running = 1;
-        CURLMcode mc = curl_multi_perform(_multiHandle, &still_running);
-        if (mc != CURLM_OK) {
-            _log.error("curl_multi_perform or curl_multi_wait failed: %s", 
-                curl_multi_strerror(mc));
-            _state = State::STATE_IDLE;
-        }
-        else if (still_running == 0) {
-            long http_code = 0;
-            curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
-            //printf("HTTP code %ld\n", http_code);
-            //printf("GOT %s\n", _resultArea);
-            char* r0 = strstr(_resultArea, "ok");
-            if (http_code == 200 && r0 != 0) {
-                _log.info("Stats success");
-                _lastSuccessMs = _clock.time();
-            }
-            else {
-                _log.info("Stats failed");
-            }
-            _state = State::STATE_IDLE;
-        }
-    }
-
-    return _state != originalState;
-}
-
-void StatsTask::_statsStart() {     
-
     // Todo: Get uptime working
     char msg[256];
     snprintf(msg, 256, 
@@ -136,10 +60,40 @@ void StatsTask::_statsStart() {
         _seqCounter++);
 
     _log.info("Stats URL: %s", msg);
+    
+    _curl = curl_easy_init();
 
+    curl_easy_setopt(_curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(_curl, CURLOPT_USERAGENT, AST_CURL_USER_AGENT);
+    curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, _writeCallback);
+    curl_easy_setopt(_curl, CURLOPT_WRITEDATA, this);
     curl_easy_setopt(_curl, CURLOPT_URL, msg);    
+    // cache the CA cert bundle in memory for a week 
+    curl_easy_setopt(_curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
+
     _resultAreaLen = 0;
-    _state = State::STATE_RUNNING;
+  
+    CURLcode res = curl_easy_perform(_curl);
+    if (res != CURLE_OK) {
+        _log.error("Registration failed (1) for %s", _nodeNumber.c_str());
+    }
+    else {
+        long http_code = 0;
+        curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
+        printf("HTTP code %ld\n", http_code);
+        printf("GOT %s\n", _resultArea);
+        char* r0 = strstr(_resultArea, "ok");
+        if (http_code == 200 && r0 != 0) {
+            _log.info("Stats success");
+            _lastSuccessMs = _clock.time();
+        }
+        else {
+            _log.info("Stats failed");
+        }
+    }
+
+    curl_easy_cleanup(_curl);
+    _curl = 0;
 }
 
 // Callback function to handle received data

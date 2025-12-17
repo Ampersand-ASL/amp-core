@@ -31,7 +31,6 @@ class RegisterTask : public Runnable2 {
 public:
 
     RegisterTask(Log& log, Clock& clock);
-    ~RegisterTask();
 
     void configure(const char* regServerUrl, const char* nodeNumber, const char* password, 
         unsigned iaxPort);
@@ -40,9 +39,9 @@ public:
 
     // ----- Runnable -------
 
+    // #### TODO: REMOVE
     int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
     bool run2() { return false; }
-    // #### TODO: REMOVE
     void audioRateTick(uint32_t tickTimeMs) { }
     void tenSecTick();
 

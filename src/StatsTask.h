@@ -31,28 +31,24 @@ class StatsTask : public Runnable2 {
 public:
 
     StatsTask(Log& log, Clock& clock);
-    ~StatsTask();
 
     void configure(const char* statsServerUrl, const char* nodeNumber);
 
     // ----- Runnable -----------------------------------------------------------
 
-    int getPolls(pollfd* fds, unsigned fdsCapacity);
-    bool run2();
-    void audioRateTick() { }
+    // #### TODO: REMOVE
+    int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
+    bool run2() { return false; }
+    void audioRateTick(uint32_t tickTimeMs) { }
+
     void tenSecTick();
 
 private:
 
+    void _doStats();
+
     static size_t _writeCallback(void* contents, size_t size, size_t nmemb, void* userp);
     void _writeCallback2(const char* contents, size_t size);
-
-    void _statsStart();
-
-    enum State {
-        STATE_IDLE,
-        STATE_RUNNING,
-    };
 
     Log& _log;
     Clock& _clock;
@@ -64,14 +60,11 @@ private:
     unsigned _resultAreaLen = 0;
     char _resultArea[RESULT_AREA_SIZE];
 
-    State _state = State::STATE_IDLE;
     uint32_t _intervalMs;
     uint32_t _lastAttemptMs = 0;
     uint32_t _lastSuccessMs = 0;
 
-    CURLM* _multiHandle = 0;
     CURL* _curl = 0;
-    curl_slist* _headers = 0;
     unsigned _seqCounter = 1;
 };
 

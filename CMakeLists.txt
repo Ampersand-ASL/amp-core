@@ -123,7 +123,6 @@ add_executable(unit-test
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/DTMFDetector2.cpp
   kc1fsz-tools-cpp/src/StdPollTimer.cpp
-  kc1fsz-tools-cpp/src/linux/LinuxPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
   itu-g711-codec/src/codec.cpp
   itu-g711-codec/src/Plc.cpp
@@ -155,7 +154,6 @@ add_executable(protocol-test
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/MicroDNS.cpp
-  kc1fsz-tools-cpp/src/linux/LinuxPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
   kc1fsz-tools-cpp/src/md5/md5c.c
   kc1fsz-tools-cpp/src/StdPollTimer.cpp
@@ -188,7 +186,6 @@ add_executable(register-test
   src/tests/register-test-1.cpp
   src/RegisterTask.cpp
   kc1fsz-tools-cpp/src/Common.cpp
-  kc1fsz-tools-cpp/src/linux/LinuxPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
 )
 
@@ -202,8 +199,9 @@ target_link_libraries(register-test -lcurl)
 add_executable(stats-test
   src/tests/stats-test-1.cpp
   src/StatsTask.cpp
+  src/EventLoop.cpp
   kc1fsz-tools-cpp/src/Common.cpp
-  kc1fsz-tools-cpp/src/linux/LinuxPollTimer.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
 )
 
@@ -218,7 +216,6 @@ add_executable(manager-test
   src/tests/manager-test-1.cpp
   src/ManagerTask.cpp
   kc1fsz-tools-cpp/src/Common.cpp
-  kc1fsz-tools-cpp/src/linux/LinuxPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
 )
 
