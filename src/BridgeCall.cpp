@@ -254,7 +254,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     else if (_parrotState == ParrotState::CONNECTED) {
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
-        if (_clock->isPast(_parrotStateStartMs + 2000)) {
+        if (_clock->isPast(_parrotStateStartMs + 1500)) {
             // Load the greeting into the play queue           
             _loadAudioFile("greeting-8k.pcm", _playQueue);
             // Trigger the greeting playback
