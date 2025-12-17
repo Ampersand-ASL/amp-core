@@ -920,6 +920,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         PayloadCallStart payload;
         payload.codec = call.codec;
+        payload.startMs = call.localStartMs;
 
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
@@ -1443,6 +1444,7 @@ bool LineIAX2::_progressCall(Call& call) {
 
             PayloadCallStart payload;
             payload.codec = call.codec;
+            payload.startMs = call.localStartMs;
 
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());

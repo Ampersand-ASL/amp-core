@@ -87,7 +87,8 @@ void BridgeOut::consume(const Message& frame) {
         }
     }
     else {
-        assert(false);
+        // Non-audio frames passed through
+        _sink(frame);
     }
 }
 
