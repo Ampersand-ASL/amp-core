@@ -99,6 +99,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 
     if (_mode == Mode::PARROT) {
         _parrotState = ParrotState::CONNECTED;
+        _parrotStateStartMs = _clock->time();
     }
 }
 
