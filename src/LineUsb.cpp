@@ -288,28 +288,6 @@ void LineUsb::_pollHidStatus() {
     }
 }
 
-void LineUsb::_checkTimeouts() {
-
-    // Detect transitions from audio to silence
-
-    if (_playing &&
-        _clock.isPast(_lastPlayedFrameMs + _playSilenceIntervalMs)) {
-        _playing = false;
-        _playEnd();
-    }
-
-    if (_capturing &&
-        _clock.isPast(_lastCapturedFrameMs + _captureSilenceIntervalMs)) {
-        _capturing = false;
-        _captureEnd();
-    }
-
-    // Tone inject
-    if (_toneActive && _clock.isPast(_toneStopMs)) {
-        _toneActive = false;
-    }
-}
-
 // ===== Capture Related =========================================================
 
 // On startup the capture card is in STATE_PREPARED
@@ -441,43 +419,30 @@ void LineUsb::_captureIfPossible() {
 // ===== Play Related =========================================================
 
 void LineUsb::consume(const Message& frame) {
-    if (frame.getType() == Message::Type::AUDIO)
-        _play(frame);
-}
-
-void LineUsb::_play(const Message& msg) {  
-
-    // Detect transitions from silence to playing
-    if (!_playing) {
-
-        _playing = true;
-        _firstPlayOfTalkspurt = true;
-        _playStart();
-
-        // When re-starting after a period of silence we "stuff a frame"
-        // of extra silence into the USB ALSA buffer to reduce the chances of 
-        // getting behind later due to suble timing differences.
-        if (PLAY_ACCUMULATOR_CAPACITY - _playAccumulatorSize >= BLOCK_SIZE_48K) {
-            // Move new audio block into the play accumulator 
-            memset(&(_playAccumulator[_playAccumulatorSize]), 0,
-                BLOCK_SIZE_48K * sizeof(int16_t));
-            _playAccumulatorSize += BLOCK_SIZE_48K;
+    
+    if (frame.getType() == Message::Type::AUDIO) {
+        // Detect transitions from silence to playing
+        if (!_playing) {
+            // When re-starting after a period of silence we "stuff a frame"
+            // of extra silence into the USB ALSA buffer to reduce the chances of 
+            // getting behind later due to subtle timing differences.
+            if (PLAY_ACCUMULATOR_CAPACITY - _playAccumulatorSize >= BLOCK_SIZE_48K) {
+                // Move new audio block into the play accumulator 
+                memset(&(_playAccumulator[_playAccumulatorSize]), 0,
+                    BLOCK_SIZE_48K * sizeof(int16_t));
+                _playAccumulatorSize += BLOCK_SIZE_48K;
+            }
         }
     }
 
-    _lastPlayedFrameMs = _clock.time();
+    // Then go through the normal consume process
+    LineRadio::consume(frame);
+}
 
-    assert(msg.size() == BLOCK_SIZE_48K * 2);
-    assert(msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
-
-    // Convert the SLIN_48K LE into 16-bit PCM audio
-    int16_t pcm48k_2[BLOCK_SIZE_48K];
-    Transcoder_SLIN_48K transcoder;
-    transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
-
-    // Here is where statistical analysis and/or local recording can take 
-    // place for diagnostic purposes.
-    _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+/**
+ * This will be called by the base class after all decoding has happened.
+ */
+void LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
     // Check to make sure we actually have room in the accumulator
     if (_playAccumulatorSize + BLOCK_SIZE_48K > PLAY_ACCUMULATOR_CAPACITY) {
@@ -553,8 +518,6 @@ void LineUsb::_playIfPossible() {
             break;
         }
     }
-
-    _firstPlayOfTalkspurt = false;
 }
 
 }

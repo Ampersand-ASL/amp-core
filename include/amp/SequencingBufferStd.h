@@ -113,7 +113,7 @@ public:
             printf("lastplayout %d, cursor %d, idealdelay %f\n", _lastPlayoutTime, _originCursor, _idealDelay);
             _buffer.visitAll([this](const T& frame) {
                 printf("  orig=%6d rx=%6d margin=%ld\n", frame.getOrigMs(), frame.getRxMs(),
-                (int64_t)_lastPlayoutTime - (int64_t)frame.getRxMs());
+                (long)((int64_t)_lastPlayoutTime - (int64_t)frame.getRxMs()));
                 return true;
             });
         }

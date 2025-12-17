@@ -55,29 +55,33 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
 }
 
-void LineRadio::_open(bool echo) {    
-    // Generate the same kind of call start message that would
-    // come from the IAX2Line after a new connection.
-    PayloadCallStart payload;
-    payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
-    payload.bypassJitterBuffer = true;
-    payload.echo = echo;
-    payload.startMs = _clock.time();
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
-    msg.setSource(_busId, _callId);
-    msg.setDest(_destBusId, _destCallId);
-    _captureConsumer.consume(msg);
-}
+ void LineRadio::consume(const Message& msg) {
 
-void LineRadio::_close() {
-    // Generate the same kind of call start message that would
-    // come from the IAX2Line after a new connection.
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-        0, 0, 0, _clock.time());
-    msg.setSource(_busId, _callId);
-    msg.setDest(_destBusId, _destCallId);
-    _captureConsumer.consume(msg);
+    if (msg.getType() == Message::Type::AUDIO) {
+
+        // Detect transitions from silence to playing
+        if (!_playing) {
+            _playStart();
+        }
+
+        assert(msg.size() == BLOCK_SIZE_48K * 2);
+        assert(msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
+
+        // Convert the SLIN_48K LE into 16-bit PCM audio
+        int16_t pcm48k_2[BLOCK_SIZE_48K];
+        Transcoder_SLIN_48K transcoder;
+        transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+
+        // Here is where statistical analysis and/or local recording can take 
+        // place for diagnostic purposes.
+        _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+
+        // Call down to do the actual play on the hardware
+        _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+
+        _lastPlayedFrameMs = _clock.time();
+        _playing = true;
+    }
 }
 
 static float dbVfs(int16_t v) {
@@ -106,6 +110,47 @@ void LineRadio::oneSecTick() {
         _captureGapTotal = 0;
         _captureGapCount = 0;
     }
+}
+
+void LineRadio::_checkTimeouts() {
+
+    // Detect transitions from audio to silence
+    if (_playing &&
+        _clock.isPast(_lastPlayedFrameMs + _playSilenceIntervalMs)) {
+        _playing = false;
+        _playEnd();
+    }
+
+    if (_capturing &&
+        _clock.isPast(_lastCapturedFrameMs + _captureSilenceIntervalMs)) {
+        _capturing = false;
+        _captureEnd();
+    }
+}
+
+void LineRadio::_open(bool echo) {    
+    // Generate the same kind of call start message that would
+    // come from the IAX2Line after a new connection.
+    PayloadCallStart payload;
+    payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
+    payload.bypassJitterBuffer = true;
+    payload.echo = echo;
+    payload.startMs = _clock.time();
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
+}
+
+void LineRadio::_close() {
+    // Generate the same kind of call start message that would
+    // come from the IAX2Line after a new connection.
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
+        0, 0, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
 }
 
 void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
@@ -246,6 +291,22 @@ void LineRadio::_setCosStatus(bool cosActive) {
         msg.setDest(_destBusId, _destCallId);
         _captureConsumer.consume(msg);
     }
+}
+
+bool LineRadio::isAudioActive() const {
+    return false;
+}
+
+void LineRadio::setToneEnabled(bool b) {
+}
+
+void LineRadio::setToneFreq(float hz) {
+}
+
+void LineRadio::setToneLevel(float dbv) {
+}
+
+void LineRadio::resetDelay() {   
 }
 
 }

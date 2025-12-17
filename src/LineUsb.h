@@ -39,10 +39,12 @@ public:
     LineUsb(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
         unsigned destBusId, unsigned destCallId);
 
-    virtual void consume(const Message& frame);
-
     int open(const char* alsaDeviceName, const char* hidName);
     void close();
+
+    // ----- MessageConsumer --------------------------------------------------
+
+    virtual void consume(const Message& frame);
 
     // ----- Runnable ---------------------------------------------------------
 
@@ -50,17 +52,21 @@ public:
     virtual bool run2();
     virtual void audioRateTick(uint32_t tickMs);
 
+protected:
+
+    /**
+     * This function is called to do the actual playing of the 48K PCM.
+     */
+    virtual void _playPCM48k(int16_t* pcm48k_2, unsigned blockSize);
+
 private:
 
     void _pollHidStatus();
     void _captureIfPossible();
-    void _checkTimeouts();
 
-    void _play(const Message& msg);
     void _playIfPossible();
 
     uint32_t _captureStartMs = 0;
-    //int32_t _captureSkewMs = 0;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
     int _hidFd = 0;
@@ -83,19 +89,7 @@ private:
     int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY];
     unsigned _playAccumulatorSize = 0;
 
-    bool _playing = false;
-    bool _firstPlayOfTalkspurt = false;
-    uint32_t _lastPlayedFrameMs = 0;
-    // If we go silent for this amount of time the playback is assumed
-    // to have ended. 
-    uint32_t _playSilenceIntervalMs = 20 * 4;
-
     uint32_t _captureCount = 0;
-    bool _capturing = false;
-    uint32_t _lastCapturedFrameMs = 0;
-    // If we go silent for this amount of time the capture is assumed
-    // to have ended. 
-    uint32_t _captureSilenceIntervalMs = 20 * 4;
 
     // HID controls
     unsigned _hidCOSOffset = 0;

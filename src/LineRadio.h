@@ -20,6 +20,8 @@
 
 #include "kc1fsz-tools/DTMFDetector2.h"
 #include "amp/Resampler.h"
+// #### TODO: MOVE INCLUDE FILES FOR THIS PROJECT
+#include "AudioCoreOutputPort.h"
 
 #include "Line.h"
 
@@ -29,7 +31,7 @@ class Log;
 class MessageConsumer;
 class Clock;
 
-class LineRadio : public Line {
+class LineRadio : public Line, public AudioCoreOutputPort {
 public:
 
     static const unsigned AUDIO_RATE = 48000;
@@ -41,21 +43,41 @@ public:
         unsigned destBusId, unsigned destCallId);
     void resetStatistics();
 
-    // ----- Runnable ---------------------------------------------------------
+    // ----- MessageConsumer -------------------------------------------------
+    
+    void consume(const Message& frame);
+
+    // ----- Runnable2 ---------------------------------------------------------
 
     virtual void oneSecTick();
 
+    // ----- AudioCoreOutputPort ------------------------------------------------
+
+    virtual bool isAudioActive() const;
+    virtual void setToneEnabled(bool b);
+    virtual void setToneFreq(float hz);
+    virtual void setToneLevel(float dbv);
+    virtual void resetDelay();
+
 protected:
+
+    /**
+     * This function is called to do the actual playing of the 48K PCM.
+     */
+    virtual void _playPCM48k(int16_t* pcm48k_2, unsigned blockSize) = 0;
+
+    void _checkTimeouts();
+
+    void _analyzePlayedAudio(const int16_t* frame, unsigned frameLen);
+    void _playStart();
+    void _playEnd();
 
     void _analyzeCapturedAudio(const int16_t* frame, unsigned frameLen);
     void _processCapturedAudio(const int16_t* frame, unsigned frameLen,
         uint32_t actualCaptureMs, uint32_t idealCaptureMs);
-    void _analyzePlayedAudio(const int16_t* frame, unsigned frameLen);
 
     void _captureStart();
     void _captureEnd();
-    void _playStart();
-    void _playEnd();
 
     void _setCosStatus(bool cos);
 
@@ -75,6 +97,16 @@ protected:
 
     bool _cosActive = false;
     bool _ctcssActive = true;
+
+    bool _playing = false;
+    bool _capturing = false;
+    uint32_t _lastPlayedFrameMs = 0;
+    uint32_t _lastCapturedFrameMs = 0;
+    // If we go silent for this amount of time the playback is assumed
+    // to have ended. 
+    uint32_t _playSilenceIntervalMs = 20 * 4;
+    // If we go silent for this amount of time the capture is assumed to have ended. 
+    uint32_t _captureSilenceIntervalMs = 20 * 4;
 
     bool _record = false;
     std::fstream _playFile;
