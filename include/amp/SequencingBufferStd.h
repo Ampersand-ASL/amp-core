@@ -196,6 +196,9 @@ public:
         // For diagnostic purposes
         _maxBufferDepth = std::max(_maxBufferDepth, _buffer.size());
 
+        const int32_t idealOriginCursor = roundToTick(
+            (int32_t)localMs - (int32_t)_idealDelay, _voiceTickSize);
+
         // Work through the buffer chronologically. Forward on signal frames,
         // look for the start of a talk spurt, play voice frames at the 
         // right time, and discard expired voice frames.
@@ -238,13 +241,10 @@ public:
                         //    the cursor backwards, being careful not to go back any further
                         //    than the last frame played.
                         //
-                        // 2. The ideal dealy wants us to speed up. In that case we shift
-                        //    the cursor forward, being careful not to pass the next availble
+                        // 2. The ideal delay wants us to speed up. In that case we shift
+                        //    the cursor forward, being careful not to pass the next available
                         //    frame in the buffer.
                         // 
-                        int32_t idealOriginCursor = roundToTick(
-                            (int32_t)localMs - (int32_t)_idealDelay, _voiceTickSize);
-
                         if (idealOriginCursor < _originCursor)
                             _originCursor = std::max(idealOriginCursor, (int32_t)_lastPlayedOrigMs);
                         else if (idealOriginCursor > _originCursor)
@@ -316,10 +316,21 @@ public:
                     // We can only play one frame per tick, so break out of the loop
                     break;
                 }
-                // Otherwise the next voice is in the future so there's nothing more to do
-                // in this tick but wait.
+                // Otherwise the next voice is in the future vis-a-vis the origin cursor.
                 else {
-                    break;
+                    // We know the next frame is newer than the origin cursor, but if 
+                    // it is older than the IDEAL origin cursor than move forward to play 
+                    // it now it up (i.e. there is a bubble in the sequencing buffer 
+                    // that we can quickly close).
+                    if ((int32_t)frame.getOrigMs() < idealOriginCursor) {
+                        log.info("Mid TS, closing gap (%d > %d)", _originCursor, frame.getOrigMs());
+                        _originCursor = frame.getOrigMs();
+                        // We're in a loop here, so the next frame will be reconsidered
+                        // the next time around.
+                    }
+                    else {
+                        break;
+                    }
                 }
             }            
         }
