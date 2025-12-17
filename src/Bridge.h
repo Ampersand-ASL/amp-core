@@ -42,6 +42,7 @@ public:
 
     void setSink(MessageConsumer* sink);
     unsigned getCallCount() const;
+    void reset();
 
     // ----- MessageConsumer --------------------------------------------------
 
@@ -50,7 +51,8 @@ public:
     // ----- Runnable2 --------------------------------------------------------
     
     bool run2() { return false; }
-    void audioRateTick();
+    void audioRateTick(uint32_t tickMs);
+    void oneSecTick();
 
 private:
 

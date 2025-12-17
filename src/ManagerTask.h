@@ -45,7 +45,9 @@ public:
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
-    void audioRateTick() { }
+
+    // ### TODO: REMOVE
+    void audioRateTick(uint32_t tickMs) { }
 
 public:
 

@@ -48,8 +48,8 @@ int main(int, const char**) {
     NodeParrot parrot0(log, clock, bus0);
 
     // Trigger the start of a call
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 0, 0,
-        clock.timeUs());
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 0, 0, 
+        0, clock.timeMs());
     msg.setSource(0, 1);
     parrot0.consume(msg);
 

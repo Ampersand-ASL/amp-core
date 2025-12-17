@@ -30,10 +30,9 @@ bool Transcoder_SLIN::decode(const uint8_t* source, unsigned sourceLen,
     assert(sourceLen == BLOCK_SIZE_8K * 2);
     assert(destLen == BLOCK_SIZE_8K);
 
-    int16_t pcm8k_1[BLOCK_SIZE_8K];
     const uint8_t* p = source;
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++) {
-        pcm8k_1[i] = unpack_int16_le(p);
+        destPCM[i] = unpack_int16_le(p);
         p += 2;
     }
     return true;

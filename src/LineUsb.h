@@ -48,7 +48,7 @@ public:
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
-    virtual void audioRateTick();
+    virtual void audioRateTick(uint32_t tickMs);
 
 private:
 
@@ -59,8 +59,8 @@ private:
     void _play(const Message& msg);
     void _playIfPossible();
 
-    uint64_t _captureStartUs = 0;
-    int64_t _captureSkewUs = 0;
+    uint32_t _captureStartMs = 0;
+    //int32_t _captureSkewMs = 0;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
     int _hidFd = 0;
@@ -103,9 +103,6 @@ private:
     uint8_t _hidCOSActiveValue = 0x02;
 
     unsigned _hidPollCount = 0;
-    bool _cosActive = false;
-    // TODO
-    bool _ctcssActive = true;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 

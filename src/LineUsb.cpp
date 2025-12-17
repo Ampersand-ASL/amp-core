@@ -192,14 +192,19 @@ int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
         return -1;
     }
 
-    _captureStartUs = _clock.timeUs();
-    _captureSkewUs = 0;
+    _captureStartMs = _clock.time();
     _captureCount = 0;
+
+    // Call up to the base for signaling
+    _open();
 
     return 0;
 }
 
 void LineUsb::close() {
+
+    _close();
+
     if (_playH)
         snd_pcm_close(_playH);
     _playH = 0;
@@ -245,7 +250,7 @@ bool LineUsb::run2() {
     return false;
 }
 
-void LineUsb::audioRateTick() {
+void LineUsb::audioRateTick(uint32_t tickMs) {
     _pollHidStatus();
     _checkTimeouts();
 }
@@ -277,15 +282,8 @@ void LineUsb::_pollHidStatus() {
                 cosActive = true;
         }
 
-        // Look for transitions
-        if (cosActive && !_cosActive) {
-            _log.info("COS active");
-            _cosActive = true;    
-        } else if (!cosActive && _cosActive) {
-            _log.info("COS inactive");
-            _cosActive = false;
-        }
-
+        _setCosStatus(cosActive);
+        
         _hidPollCount++;
     }
 }
@@ -355,15 +353,8 @@ void LineUsb::_captureIfPossible() {
         // Do we have a full audio block available yet?
         if (_captureAccumulatorSize + samplesRead >= BLOCK_SIZE_48K) {
 
-            // Do a skew calculation
-            uint64_t now = _clock.timeUs();
-            if (_captureCount == 0)
-                _captureStartUs = now;
-            uint64_t idealNow = _captureStartUs + (_captureCount * BLOCK_PERIOD_MS * 1000);
-            // A positive skew means that the system clock is faster than 
-            // the sound card clock.
-            int64_t skew = (int64_t)now - (int64_t)idealNow;
-            _captureSkewUs = skew;
+            uint32_t nowMs = _clock.time();
+            uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
             _captureCount++;
            
             // Form a complete block of mono 16-bit PCM by joining what
@@ -411,9 +402,9 @@ void LineUsb::_captureIfPossible() {
                     _capturing = true;
                     // Force a synchronization of the actual system clock and 
                     // the timestamps that will be put on the generated frames.
-                    _captureStartUs = now;
+                    _captureStartMs = nowMs;
                     _captureCount = 0;
-                    idealNow = now;
+                    idealNowMs = nowMs;
                     _captureStart();
                 }
                 _lastCapturedFrameMs = _clock.time();
@@ -422,11 +413,11 @@ void LineUsb::_captureIfPossible() {
                 _analyzeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
 
                 // Here is where the actual processing of the new block happens
-                _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, now, idealNow);
+                _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, nowMs, idealNowMs);
             }
         }
         // If we don't have a complete block yet then just keep storing
-        // the cpatured audio in the accumulator.
+        // the captured audio in the accumulator.
         else {
             const uint8_t* srcPtr = usbBuffer;
             assert(samplesRead + _captureAccumulatorSize <= BLOCK_SIZE_48K);
@@ -482,7 +473,7 @@ void LineUsb::_play(const Message& msg) {
     // Convert the SLIN_48K LE into 16-bit PCM audio
     int16_t pcm48k_2[BLOCK_SIZE_48K];
     Transcoder_SLIN_48K transcoder;
-    transcoder.decode(msg.raw(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+    transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
 
     // Here is where statistical analysis and/or local recording can take 
     // place for diagnostic purposes.
@@ -540,8 +531,6 @@ void LineUsb::_playIfPossible() {
                 _underrunCount++;
                 // We expect an underrun at the very beginning of a talkspurt
                 // so there is a flag to supress the message
-                //if (!_firstPlayOfTalkspurt)
-                //    _log.error("ALSA write underrun (state %d) (i %d)", pcmState, i);
                 snd_pcm_recover(_playH, rc, 1); 
             } else if (rc == -11) {
                 _log.info("Write full");

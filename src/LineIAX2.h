@@ -75,10 +75,8 @@ public:
 
     /**
      * @param consumer This is the sink interface that received messages
-     * will be sent to. VERY IMPORTANT: Audio frames will have been 
-     * de-jittered before they are passed to this sink. In addition,
-     * interpolation messages will be inserted into the audio stream.
-     * As necessary.
+     * will be sent to. VERY IMPORTANT: Audio frames will not have been 
+     * de-jittered before they are passed to this sink. 
      * @param destValidator An interface that is used to validate the 
      * DESTINATIONS of incoming calls. In other words, this can 
      * control what numbers this channel will ACCEPT calls for. Not
@@ -128,11 +126,12 @@ public:
     virtual bool run2();
 
     /**
-     * Audio rate tick is required here because (at the moment) the receive jitter 
-     * buffer is contained in the line. The audio rate is used to release audio
-     * frames at the right time, or to fill with synthetic interpolation requests.
+     * Audio rate tick is required here because of some background (timeout)
+     * tasks that are still happening.
+     * #### TODO: REMOVE THIS
      */
-    virtual void audioRateTick();
+    virtual void audioRateTick(uint32_t tickMs);
+    
     virtual void oneSecTick();
     virtual void tenSecTick();
 
@@ -232,9 +231,7 @@ private:
         uint32_t lastLagrqMs = 0;
         const uint32_t lagrqIntervalMs = 10 * 1000;
 
-        amp::SequencingBufferStd<Message> jitBuf;
-
-        uint64_t lastRxVoiceFrameUs = 0;
+        uint32_t lastRxVoiceFrameMs = 0;
 
         void reset();
 
@@ -348,13 +345,13 @@ private:
      */
     bool _processInboundIAXData();
     void _processReceivedIAXPacket(const uint8_t* buf, unsigned bufLen, 
-        const sockaddr& peerAddr, uint64_t stampUs);
+        const sockaddr& peerAddr, uint32_t stampMs);
     void _processFullFrame(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr, 
-        uint64_t stampUs);
+        uint32_t stampMs);
     void _processMiniFrame(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr, 
-        uint64_t stampUs);
+        uint32_t stampMs);
     void _processFullFrameInCall(const IAX2FrameFull& frame, Call& call, 
-        uint64_t stampUs);
+        uint32_t stampMs);
 
     /**
      * @return true if there might be more work to be done

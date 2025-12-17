@@ -42,6 +42,8 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
     static const unsigned SESSION_TIMEOUT_MS = 120 * 1000;
+    static const unsigned LINE_ID = 10;
+    static const unsigned CALL_ID = 1;
 
     BridgeCall();
 
@@ -60,7 +62,8 @@ public:
 
     void reset();
 
-    void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec);
+    void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
+        bool bypassJitterBuffer);
 
     bool isActive() const { 
         return _active; 
@@ -79,9 +82,22 @@ public:
     }
 
     void consume(const Message& frame);
-    void audioRateTick();
-    void contributeInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale) const;    
-    void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize);  
+    void audioRateTick(uint32_t tickMs);
+
+    /**
+     * This extracts the call's contribution (if any) to the audio frame for the designated
+     * tick interval.
+     * 
+     * @param tickMs The start of the time interval for which this frame is applicable.
+     */
+    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale, uint32_t tickMs);    
+
+    /**
+     * This provides the call with the mixed audio frame for the designated tick interval.
+     * 
+     * @param tickMs The start of the time interval for which this frame is applicable.
+     */
+    void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
 
 private:
 
@@ -95,40 +111,48 @@ private:
         TONE
     };
 
-    Mode _mode = Mode::PARROT;
+    Mode _mode = Mode::NORMAL;
 
     bool _active = false;
     unsigned _lineId = 0;
     unsigned _callId = 0;
-    uint32_t _startMs;
+    uint32_t _startMs = 0;
     uint32_t _lastAudioMs = 0;
 
-
-    // IMPORTANT: All of the signaling has been handled ahead of this point
-    // so _stageIn will either be silence or audio.
-    Message _stageIn;
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
 
-    // ----- Tone Related -----------------------------------------------------
+    Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
+        unsigned destLineId, unsigned destCallId) const;
 
-    void _toneAudioRateTick();
+    // ----- Normal Mode Related ----------------------------------------------
+
+    void _processNormalAudio(const Message& msg);
+    void _processNormalSignal(const Message& msg);
+
+    // This is the call's contribution to the conference when in normal mode.
+    // IMPORTANT: All of the signaling has been handled ahead of this point
+    // so _stageIn will either be silence or audio.
+    Message _stageIn;
+
+    // ----- Tone Mode Related ------------------------------------------------
+
+    void _toneAudioRateTick(uint32_t tickMs);
 
     bool _toneActive = false;
     float _toneOmega;
     float _tonePhi;
     float _toneLevel;
 
-    // ----- Parrot Related ---------------------------------------------------
+    // ----- Parrot Mode Related ----------------------------------------------
 
-    void _consumeParrotAudio(const Message& msg);
-    void _consumeParrotSignal(const Message& msg);
+    void _processParrotAudio(const Message& msg);
+    void _processParrotSignal(const Message& msg);
 
-    void _parrotAudioRateTick();
+    void _parrotAudioRateTick(uint32_t tickMs);
 
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
-    Message _makeMessage(const PCM16Frame& frame, unsigned destBusId, unsigned destCallId) const;
 
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
@@ -148,7 +172,6 @@ private:
 
     ParrotState _parrotState = ParrotState::NONE;
     uint32_t _parrotStateStartMs = 0;
-
 };
 
     }

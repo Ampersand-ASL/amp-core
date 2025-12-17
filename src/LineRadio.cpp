@@ -55,6 +55,30 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
 }
 
+void LineRadio::_open() {    
+    // Generate the same kind of call start message that would
+    // come from the IAX2Line after a new connection.
+    PayloadCallStart payload;
+    payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
+    payload.bypassJitterBuffer = true;
+    payload.startMs = _clock.time();
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
+}
+
+void LineRadio::_close() {
+    // Generate the same kind of call start message that would
+    // come from the IAX2Line after a new connection.
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
+        0, 0, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
+}
+
 static float dbVfs(int16_t v) {
     float fv = (float)v / 32767.0;
     if (fv == 0)
@@ -86,12 +110,12 @@ void LineRadio::oneSecTick() {
 void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
 
     // Jitter stats
-    if (!_lastFullCaptureUs == 0) {
-        uint32_t gap = _clock.timeUs() - _lastFullCaptureUs;
+    if (!_lastFullCaptureMs == 0) {
+        uint32_t gap = _clock.time() - _lastFullCaptureMs;
         _captureGapTotal += gap;
         _captureGapCount++;
     }
-    _lastFullCaptureUs = _clock.timeUs();
+    _lastFullCaptureMs = _clock.time();
 
     // Power
     for (unsigned i = 0; i < frameLen; i++) {
@@ -113,7 +137,7 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
 }
 
 void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
-    uint64_t actualCaptureUs, uint64_t idealCaptureUs) {
+    uint32_t actualCaptureMs, uint32_t idealCaptureMs) {
 
     assert(blockLen == BLOCK_SIZE_48K);
 
@@ -141,7 +165,7 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
 
     // Make an audio message and send it to the listeners for processing
     Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
-        BLOCK_SIZE_48K * 2, outBuffer, idealCaptureUs);
+        BLOCK_SIZE_48K * 2, outBuffer, 0, idealCaptureMs);
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
@@ -181,7 +205,7 @@ void LineRadio::_captureEnd() {
     }
 
     // Send the unkey message 
-    Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0);
+    Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
@@ -201,6 +225,25 @@ void LineRadio::_playEnd() {
     if (_record) {
         _log.info("Ended audio playing");
         _playFile.close();
+    }
+}
+
+void LineRadio::_setCosStatus(bool cosActive) {   
+    // Look for transitions
+    if (cosActive && !_cosActive) {
+        _log.info("COS active");
+        _cosActive = true;    
+    } else if (!cosActive && _cosActive) {
+
+        _log.info("COS inactive");
+        _cosActive = false;
+
+        // Generate an UNKEY signal on the negative transition
+        Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
+            0, 0, 0, _clock.time());
+        msg.setSource(_busId, _callId);
+        msg.setDest(_destBusId, _destCallId);
+        _captureConsumer.consume(msg);
     }
 }
 

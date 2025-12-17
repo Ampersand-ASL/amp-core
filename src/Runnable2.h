@@ -56,8 +56,12 @@ public:
      * as possible. Although the tick may happen slightly ahead or behind 
      * in "real time," this function will be called for every 20m tick of 
      * the system clock (i.e. none will be skipped entirely).
+     * 
+     * @param tickTimeMs Returns the official beginning time for which this audio
+     * tick applies. This time will likely be before the "clock time" since it 
+     * is locked in at the start of the tick.
      */
-    virtual void audioRateTick() { }
+    virtual void audioRateTick(uint32_t tickTimeMs) = 0;
 
     virtual void oneSecTick() { }
     

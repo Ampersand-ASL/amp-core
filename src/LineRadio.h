@@ -49,13 +49,18 @@ protected:
 
     void _analyzeCapturedAudio(const int16_t* frame, unsigned frameLen);
     void _processCapturedAudio(const int16_t* frame, unsigned frameLen,
-        uint64_t actualCaptureUs, uint64_t idealCaptureUs);
+        uint32_t actualCaptureMs, uint32_t idealCaptureMs);
     void _analyzePlayedAudio(const int16_t* frame, unsigned frameLen);
 
     void _captureStart();
     void _captureEnd();
     void _playStart();
     void _playEnd();
+
+    void _setCosStatus(bool cos);
+
+    void _open();
+    void _close();
 
     Log& _log;
     Clock& _clock;
@@ -67,6 +72,9 @@ protected:
     // This resampler is configured to go from 48K->8K ahead of the DTMF detection
     amp::Resampler _resampler;
     DTMFDetector2 _dtmfDetector;
+
+    bool _cosActive = false;
+    bool _ctcssActive = true;
 
     bool _record = false;
     std::fstream _playFile;
@@ -83,7 +91,7 @@ protected:
     int16_t _playPcmValueMax = 0;
     uint32_t _playPcmValueSum = 0;
     uint32_t _playPcmValueCount = 0;
-    uint32_t _lastFullCaptureUs = 0;
+    uint32_t _lastFullCaptureMs = 0;
     uint32_t _captureGapTotal = 0;
     uint32_t _captureGapCount = 0;
     // Following David NR9V's standard

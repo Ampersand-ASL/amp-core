@@ -32,15 +32,15 @@ Transcoder_G711_ULAW::Transcoder_G711_ULAW() {
 
 bool Transcoder_G711_ULAW::decode(const uint8_t* source, unsigned sourceLen, 
     int16_t* destPCM, unsigned destLen) {
+
     assert(sourceLen == BLOCK_SIZE_8K);
     assert(destLen == BLOCK_SIZE_8K);
     
     // Convert the G711 uLaw encoding into 16-bit PCM audio
-    int16_t pcm8k_1[BLOCK_SIZE_8K];
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++)
-        pcm8k_1[i] = decode_ulaw(source[i]);
+        destPCM[i] = decode_ulaw(source[i]);
 
-        return true;
+    return true;
 }
 
 bool Transcoder_G711_ULAW::encode(const int16_t* sourcePCM, unsigned sourceLen, 
@@ -52,6 +52,7 @@ bool Transcoder_G711_ULAW::encode(const int16_t* sourcePCM, unsigned sourceLen,
     // Make an 8k G711 buffer using the CODEC
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++)
         g711Buffer[i] = encode_ulaw(sourcePCM[i]);
+
     return true;
 }
 

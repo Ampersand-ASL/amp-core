@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <iostream>
+#include <cstring> 
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
@@ -32,6 +33,10 @@ Bridge::Bridge(Log& log, Clock& clock)
     _calls(_callSpace, MAX_CALLS) { 
     for (unsigned i = 0; i < MAX_CALLS; i++) 
         _callSpace[i].init(&log, &clock);
+}
+
+void Bridge::reset() {
+    _calls.visitAll(RESET_VISITOR);
 }
 
 void Bridge::setSink(MessageConsumer* sink) {
@@ -67,12 +72,14 @@ void Bridge::consume(const Message& msg) {
         );
         
         // Add new session for this call
+        // #### TODO: CONSIDER POSITIVE ACK ON ACCEPTED CALL AND ELIMINATE
+        // #### THE NACK CASE BELOW.
         int newIndex = _calls.firstIndex([](const BridgeCall& s) { return !s.isActive(); });
         if (newIndex == -1) {
             _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
             // #### TODO: NEED TO TEST THIS AFTER RACE CONDITION IS RESOLVED
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
-                0, _clock.timeUs());
+                0, _clock.time());
             msg.setDest(msg.getSourceBusId(), msg.getSourceCallId());
             //_bus.consume(msg);
         }
@@ -81,11 +88,12 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call started %d CODEC %X", msg.getSourceCallId(), payload.codec);
+            _log.info("Call started %d CODEC %X, jbBypass %d", 
+                msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer);
 
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
-                payload.startMs, payload.codec);
+                payload.startMs, payload.codec, payload.bypassJitterBuffer);
         }
     }
     else if (msg.getType() == Message::SIGNAL && 
@@ -118,14 +126,25 @@ void Bridge::consume(const Message& msg) {
     }
 }
 
-void Bridge::audioRateTick() {
+/**
+ * This function is the heart of the conference bridge. On every audio tick we 
+ * do the following:
+ * 
+ * 1. Ask each active (speaking) conference participant to prepare input audio 
+ *    frame to contribute to the final mix.
+ * 2. Prepare a mixed audio frame for each conference participant. This is 
+ *    customized because not all participants will want to hear their own audio
+ *    in the mix.
+ * 3. Give each participant an output audio frame.
+ */
+void Bridge::audioRateTick(uint32_t tickMs) {
 
     // Tick each call so that we have an input frame for each.
     _calls.visitIf(
         // Visitor
-        [](BridgeCall& call) { 
+        [tickMs](BridgeCall& call) { 
             // Tick the call to get it to produce an audio frame
-            call.audioRateTick();
+            call.audioRateTick(tickMs);
             return true;
         },
         // Predicate
@@ -159,13 +178,16 @@ void Bridge::audioRateTick() {
             for (unsigned j = 0; j < MAX_CALLS; j++) {
                 if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || i == j)
                     continue;
-                _calls[j].contributeInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale);
+                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale, tickMs);
             }
 
             // Output the result
-            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K);
+            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K, tickMs);
         }
     }
+}
+
+void Bridge::oneSecTick() {
 }
 
     }

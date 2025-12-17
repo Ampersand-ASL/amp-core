@@ -62,8 +62,7 @@ public:
             PayloadCallStart payload;
             payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-                sizeof(payload), (const uint8_t*)&payload,
-                _clock.timeUs());
+                sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
             msg.setSource(1, 6);
             sink->consume(msg);
             _used = true;

@@ -334,7 +334,7 @@ bool LineIAX2::_processInboundIAXData() {
     } 
 #endif
     else if (rc > 0) {
-        _processReceivedIAXPacket(readBuffer, rc, (const sockaddr&)peerAddr, _clock.timeUs());
+        _processReceivedIAXPacket(readBuffer, rc, (const sockaddr&)peerAddr, _clock.time());
         // Return back to be nice, but indicate that there might be more
         return true;
     } else {
@@ -386,11 +386,11 @@ bool LineIAX2::_processInboundDNSData() {
 
 void LineIAX2::_processReceivedIAXPacket(
     const uint8_t* potentiallyDangerousBuf, unsigned bufLen,
-    const sockaddr& peerAddr, uint64_t rxStampUs) {
+    const sockaddr& peerAddr, uint32_t rxStampMs) {
     if (potentiallyDangerousBuf[0] & 0b10000000)
-        _processFullFrame(potentiallyDangerousBuf, bufLen, peerAddr, rxStampUs);
+        _processFullFrame(potentiallyDangerousBuf, bufLen, peerAddr, rxStampMs);
     else 
-        _processMiniFrame(potentiallyDangerousBuf, bufLen, peerAddr, rxStampUs);
+        _processMiniFrame(potentiallyDangerousBuf, bufLen, peerAddr, rxStampMs);
 }
 
 /**
@@ -401,7 +401,7 @@ void LineIAX2::_processReceivedIAXPacket(
  */
 void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf, 
     unsigned bufLen,
-    const sockaddr& peerAddr, uint64_t rxStampUs) {
+    const sockaddr& peerAddr, uint32_t rxStampMs) {
 
     char ipStr[64];
     formatIPAddr(peerAddr, ipStr, 64);
@@ -728,12 +728,12 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
         // At this poing we have high confidence that the frame belongs
         // to an active call.
-        _processFullFrameInCall(frame, call, rxStampUs);
+        _processFullFrameInCall(frame, call, rxStampMs);
     }
 }
 
 void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call, 
-    uint64_t rxStampUs) {
+    uint32_t rxStampMs) {
 
     call.lastFrameRxMs = _clock.time();
    
@@ -794,7 +794,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         // A re-transmit is a legit reason to have a low sequence number
         if (frame.isRetransmit()) {
-            // Apparenty it's normal for a CALLTOKEN to have the retransmit flag on.
+            // Apparently it's normal for a CALLTOKEN to have the retransmit flag on.
             if (!frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_CALLTOKEN)) {
                 // Do nothing
             } else {
@@ -921,12 +921,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         PayloadCallStart payload;
         payload.codec = call.codec;
 
-        // NOTE: origMs=0 here, can't go into the jitter buffer like this!
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-            sizeof(payload), (const uint8_t*)&payload, 0, rxStampUs);
+            sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
-        // Bypass the jitter buffer to avoid messing up any of the delay 
-        // calculations.
         _bus.consume(msg);
     }
     // ANSWER
@@ -956,13 +953,10 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         
         _log.info("Call %u got UNKEY", call.localCallId);
 
-        // Make a signal Message and queue it into the jitter buffer.
         Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
-            0, 0, frame.getTimeStamp(), rxStampUs);
+            0, 0, frame.getTimeStamp(), rxStampMs);
         unkeyMsg.setSource(_busId, call.localCallId);
-        // #### TODO: MAKE SURE THERE IS NO WAY THAT THIS CAN BE DROPPED 
-        // #### IN THE JITTER BUFFER.
-        call.jitBuf.consume(_log, unkeyMsg); 
+        _bus.consume(unkeyMsg);
     }
     // LAGRQ
     // 6.7.4.  LAGRQ Lag Request Message
@@ -1049,7 +1043,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
                 // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
                 // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
                 voiceMsg = Message(Message::Type::AUDIO, call.codec,
-                    vfs, frame.buf(), frame.getTimeStamp(), rxStampUs);
+                    vfs, frame.buf(), frame.getTimeStamp(), rxStampMs);
                 goodVoice = true;
             } else {
                 _log.info("Voice frame size error");
@@ -1060,9 +1054,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         if (goodVoice) {
             voiceMsg.setSource(_busId, call.localCallId);
-            bool queued = call.jitBuf.consume(_log, voiceMsg);
-            if (!queued)
-                _log.error("Failed to queue voice");
+            _bus.consume(voiceMsg);
         }
         // #### TODO: IGNORED PACKET COUNT
     }
@@ -1131,7 +1123,7 @@ int LineIAX2::_allocateCallIx() {
 }
 
 void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
-    const sockaddr& unverifiedPeerAddr, uint64_t rxStampUs) {
+    const sockaddr& unverifiedPeerAddr, uint32_t rxStampMs) {
 
     // Validate
     if (bufLen < 4) {
@@ -1143,7 +1135,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
 
     _visitActiveCallsIf(
         // Visitor
-        [line=this, &log=_log, buf, bufLen, rxStampUs](Call& call) {
+        [line=this, &log=_log, buf, bufLen, rxStampMs](Call& call) {
 
             call.lastFrameRxMs = line->_clock.time();
 
@@ -1152,7 +1144,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             // the remote time and local time are fairly close to each 
             // other in order for this conversion to work.
             uint16_t lowRemoteTime = unpack_uint16_be(buf + 2);
-            uint32_t remoteTime = call.jitBuf.extendTime(lowRemoteTime,
+            uint32_t remoteTime = amp::SequencingBufferStd<Message>::extendTime(lowRemoteTime,
                 call.localElapsedMs(line->_clock));
 
             // Make a voice message from the network frame content and pass it
@@ -1162,7 +1154,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             if (vfs > 0) {
                 if (bufLen <= 4 + vfs) {
                     voiceMsg = Message(Message::Type::AUDIO, call.codec,
-                        vfs, buf + 4, remoteTime, rxStampUs);
+                        vfs, buf + 4, remoteTime, rxStampMs);
                 } else {
                     log.error("Voice frame size error");
                     return;
@@ -1173,10 +1165,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             }
 
             voiceMsg.setSource(line->_busId, call.localCallId);
-
-            bool queued = call.jitBuf.consume(log, voiceMsg);
-            if (!queued)
-                log.error("Failed to queue voice");
+            line->_bus.consume(voiceMsg);
         },
         // Predicate
         [sourceCallId, unverifiedPeerAddr](const Call& call) {
@@ -1334,7 +1323,6 @@ bool LineIAX2::_progressCall(Call& call) {
             call.localCallId = _localCallIdCounter++;
             call.remoteCallId = 0;
             call.reTx.reset();
-            call.jitBuf.reset();
 
             // Make a NEW frame
             //
@@ -1456,12 +1444,9 @@ bool LineIAX2::_progressCall(Call& call) {
             PayloadCallStart payload;
             payload.codec = call.codec;
 
-            // NOTE: origMs=0, can't go into the JB like this!
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-                sizeof(payload), (const uint8_t*)&payload, 0, _clock.timeUs());
+                sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
             msg.setSource(_busId, call.localCallId);
-            // Bypass the jitter buffer to avoid messing up any of the delay 
-            // calculations.
             _bus.consume(msg);
         }
 
@@ -1491,11 +1476,9 @@ bool LineIAX2::_progressCall(Call& call) {
     // Doesn't matter whether we called or was called for these tasks.
 
     if (call.state == Call::State::STATE_TERMINATE_WAITING) {
-        // NOTE: origMs=0, can't go into the jitter buffer like this!
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-            0, 0, 0, _clock.timeUs());
+            0, 0, 0, _clock.time());
         msg.setSource(_busId, call.localCallId);
-        // Bypass the jitter buffer to avoid messing up any of the delay calculations.
         _bus.consume(msg);
 
         call.state = Call::State::STATE_TERMINATED;
@@ -1575,6 +1558,7 @@ void LineIAX2::consume(const Message& msg) {
                 // we don't sent out two voice frames with the same timestamp.
                 //
                 uint32_t elapsed = call.dispenseElapsedUsingMessageOrigin(msg, true);
+                //line->_log.info("Send e %u", elapsed);
                 // The wrap case is identified by looking at the top 16 bits of the 
                 // last voice frame we transmitted.
                 bool hasWrapped = call.lastVoiceFrameElapsedMs == 0 || 
@@ -1602,6 +1586,7 @@ void LineIAX2::consume(const Message& msg) {
                     line->_sendFrameToPeer(miniFrame, msg.size() + 4, 
                         (const sockaddr&)call.peerAddr);              
                 }
+
                 call.lastVoiceFrameElapsedMs = elapsed;
                 call.vox = true;
             }
@@ -1781,7 +1766,7 @@ void LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {
     }
 }
 
-void LineIAX2::audioRateTick() {
+void LineIAX2::audioRateTick(uint32_t tickMs) {
     _visitActiveCallsIf(
         // Visitor
         [&log = _log, &clock = _clock, line = this](Call& call) {
@@ -1906,8 +1891,7 @@ void LineIAX2::Call::reset() {
     pingCount = 0;
     lastLagMs = 0;
     lastLagrqMs = 0;
-    jitBuf.reset();
-    lastRxVoiceFrameUs = 0;
+    lastRxVoiceFrameMs = 0;
 }
 
 uint32_t LineIAX2::Call::localElapsedMs(Clock& clock) const {
@@ -1920,7 +1904,7 @@ uint32_t LineIAX2::Call::dispenseElapsedMs(Clock& clock, bool voiceAlignment) {
 
 uint32_t LineIAX2::Call::dispenseElapsedUsingMessageOrigin(const Message& msg,
     bool voiceAlignment) {
-    uint32_t msgCreateMs = msg.getRxUs() / 1000;
+    uint32_t msgCreateMs = msg.getRxMs();
     return dispenseElapsedFrom(msgCreateMs - localStartMs, voiceAlignment);
 }
 
@@ -1962,40 +1946,6 @@ void LineIAX2::Call::setNetworkDelayEstimate(unsigned ms, bool first) {
     networkDelayEstimateMs = _ndi;
 }
 
-/** 
- * Adaptor that links the SequencingBuffer to the MessgeBus
- */
-class JBOutAdaptor : public amp::SequencingBufferSink<Message> {
-public:
-
-    JBOutAdaptor(Log& log, MessageConsumer& bus, unsigned busId, unsigned callId) 
-    :   //_log(log),
-        _bus(bus),
-        _busId(busId),
-        _callId(callId) {        
-    }
-
-    virtual void playSignal(const Message& payload, uint32_t localTime) {   
-        _bus.consume(payload);
-    }
-
-    virtual void playVoice(const Message& payload, uint32_t localTime) {        
-        _bus.consume(payload);
-    }
-
-    virtual void interpolateVoice(uint32_t origMs, uint32_t localTime, uint32_t duration) {
-        Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, origMs, localTime * 1000);
-        msg.setSource(_busId, _callId);
-        _bus.consume(msg);
-    }
-
-private:
-
-    //Log& _log;
-    MessageConsumer& _bus;
-    unsigned _busId, _callId;
-};
-
 /**
  * Take care of anything that needs to happen on the audio clock. 
  * IMPORTANT: These are time-sensitive operations.
@@ -2003,9 +1953,7 @@ private:
 void LineIAX2::Call::audioRateTick(Log& log, Clock& clock, 
     MessageConsumer& cons, unsigned localBusId, LineIAX2& line) {    
 
-    JBOutAdaptor adaptor(log, cons, localBusId, localCallId);
-    jitBuf.playOut(log, localElapsedMs(clock), &adaptor);
-
+    // #### TODO: THIS WILL MOVE OUT TO THE BRIDGE
     // Look for VOX drop
     if (state == Call::State::STATE_UP) {
         if (vox && 
@@ -2104,12 +2052,6 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
 }
 
 void LineIAX2::Call::logStats(Log& log) {
-    log.info("Call %4d JBOF %4d JBMAX %4d JBDROP %4d JBINT %4d", 
-        localCallId,
-        jitBuf.getOverflowCount(),
-        jitBuf.getMaxBufferDepth(),
-        jitBuf.getLateVoiceFrameCount(),
-        jitBuf.getInterpolatedVoiceFrameCount());
 }
 
 }

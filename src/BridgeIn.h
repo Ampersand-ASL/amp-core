@@ -17,6 +17,7 @@
 #pragma once
 
 #include <functional>
+#include <queue>
 
 #include "itu-g711-plc/Plc.h"
 
@@ -27,7 +28,6 @@
 #include "MessageConsumer.h"
 #include "Transcoder_G711_ULAW.h"
 #include "Transcoder_SLIN_48K.h"
-#include "Transcoder_SLIN.h"
 #include "Transcoder_SLIN_16K.h"
 
 namespace kc1fsz {
@@ -55,15 +55,19 @@ public:
     BridgeIn();
 
     void init(Log* log, Clock* clock) { _log = log; _clock = clock; }
+
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
 
     void setCodec(CODECType codecType);
     void setStartTime(uint32_t ms) { _startTime = ms; }
+    void setBypassJitterBuffer(bool b) { _bypassJitterBuffer = b; }
     
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
+        _bypassJitterBuffer = false;
+        _bypassedFrames = std::queue<Message>();
         _startTime = 0;
-        _sink = nullptr;
+        _jitBuf.reset();
         _transcoder0a.reset(); 
         _transcoder0c.reset(); 
         _transcoder0d.reset(); 
@@ -71,7 +75,7 @@ public:
         _resampler.reset(); 
     }
 
-    void audioRateTick();
+    void audioRateTick(uint32_t tickMs);
 
     /**
      * This is used when a message comes into the call, most likely
@@ -90,10 +94,15 @@ private:
     CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
     // In ms
     uint32_t _startTime = 0;
+    bool _bypassJitterBuffer = false;
 
     // This is the Jitter Buffer used to address timing/sequencing
     // issues on the input side of the Bridge.
     amp::SequencingBufferStd<Message> _jitBuf;
+
+    // If the jitter buffer is bypassed here is where the frames are queued.
+    // ### TODO: PUT A MODE ON THE JB TO SUPPORT BYPASS.
+    std::queue<Message> _bypassedFrames;
 
     Transcoder_G711_ULAW _transcoder0a;
     Transcoder_SLIN_16K _transcoder0c;
