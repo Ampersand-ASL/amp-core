@@ -251,8 +251,8 @@ bool LineUsb::run2() {
 }
 
 void LineUsb::audioRateTick(uint32_t tickMs) {
+    LineRadio::audioRateTick(tickMs);
     _pollHidStatus();
-    _checkTimeouts();
 }
 
 void LineUsb::_pollHidStatus() {

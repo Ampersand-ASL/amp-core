@@ -71,12 +71,6 @@ private:
     snd_pcm_t* _captureH = 0;
     int _hidFd = 0;
 
-    bool _toneActive = false;
-    float _toneAmp = 32767.0 * 0.5;
-    float _toneOmega = 0;
-    float _tonePhi = 0;
-    uint32_t _toneStopMs = 0;
-
     // Buffer used to capture a full audio block. This is 
     // a mono 48k PCM buffer.
     int16_t _captureAccumulator[BLOCK_SIZE_48K];

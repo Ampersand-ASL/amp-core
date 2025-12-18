@@ -20,8 +20,12 @@
 
 #include "kc1fsz-tools/DTMFDetector2.h"
 #include "amp/Resampler.h"
+
 // #### TODO: MOVE INCLUDE FILES FOR THIS PROJECT
 #include "AudioCoreOutputPort.h"
+#include "IDToneGenerator.h"
+#include "Tx.h"
+#include "TxControl.h"
 
 #include "Line.h"
 
@@ -31,7 +35,7 @@ class Log;
 class MessageConsumer;
 class Clock;
 
-class LineRadio : public Line, public AudioCoreOutputPort {
+class LineRadio : public Line, public AudioCoreOutputPort, public Tx {
 public:
 
     static const unsigned AUDIO_RATE = 48000;
@@ -43,21 +47,55 @@ public:
         unsigned destBusId, unsigned destCallId);
     void resetStatistics();
 
+    /**
+     * Example for sanity: 0dBv is 0.5 Vp.
+     */
+    static float dbvToPeak(float dbv) {
+        return pow(10, (dbv / 20)) * 0.5;
+    }
+
+    static float dbVfs(int16_t v) {
+        float fv = (float)v / 32767.0;
+        if (fv == 0)
+            return -96;
+        return 20.0 * log10(fv);
+    }
+
     // ----- MessageConsumer -------------------------------------------------
     
     void consume(const Message& frame);
 
     // ----- Runnable2 ---------------------------------------------------------
-
+    
     virtual void oneSecTick();
+    virtual void audioRateTick(uint32_t tickMs);
 
     // ----- AudioCoreOutputPort ------------------------------------------------
 
-    virtual bool isAudioActive() const;
+    virtual bool isAudioActive() const { return _playing; }
     virtual void setToneEnabled(bool b);
     virtual void setToneFreq(float hz);
     virtual void setToneLevel(float dbv);
     virtual void resetDelay();
+
+    // ----- Tx ------------------------------------------------------------------
+
+    // #### TODO: CONSOLIDATE RUNNABLE STUFF
+    virtual void run() { }
+    virtual int getId() const { return 0; }
+    virtual void setEnabled(bool en) { }
+    virtual bool getEnabled() const { return true; }
+    virtual void setPtt(bool ptt) { }
+    virtual bool getPtt() const { return false; } 
+    // Tx Configuration 
+    virtual void setPLToneMode(PLToneMode mode) { }
+    virtual void setPLToneFreq(float hz) { }
+    virtual void setPLToneLevel(float db) { }
+    virtual void setCtMode(CourtesyToneGenerator::Type ctType) { }
+    // ### TODO: IS THIS NEEDED ANYMORE?
+    virtual CourtesyToneGenerator::Type getCourtesyType() const { 
+        return CourtesyToneGenerator::Type::FAST_UPCHIRP; 
+    }
 
 protected:
 
@@ -68,6 +106,7 @@ protected:
 
     void _checkTimeouts();
 
+    void _generateToneFrame();
     void _analyzePlayedAudio(const int16_t* frame, unsigned frameLen);
     void _playStart();
     void _playEnd();
@@ -98,7 +137,6 @@ protected:
     bool _cosActive = false;
     bool _ctcssActive = true;
 
-    bool _playing = false;
     bool _capturing = false;
     uint32_t _lastPlayedFrameMs = 0;
     uint32_t _lastCapturedFrameMs = 0;
@@ -113,6 +151,11 @@ protected:
     std::fstream _captureFile;
     unsigned _playRecordCounter = 0;
     unsigned _captureRecordCounter = 0;
+
+    bool _toneActive = false;
+    float _toneAmp = 32767.0 * 0.5;
+    float _toneOmega = 0;
+    float _tonePhi = 0;
 
     // Statistical analysis
     uint32_t _captureClipCount = 0;
@@ -130,6 +173,12 @@ protected:
     int16_t _clipThreshold = 32432;
     unsigned _captureClips = 0;
     unsigned _playClips = 0;
+
+    TxControl _txControl;
+
+private:
+
+    bool _playing = false;
 };
 
 }

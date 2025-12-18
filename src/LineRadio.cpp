@@ -40,8 +40,14 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _destBusId(destBusId), 
     _destCallId(destCallId),
     _startTimeMs(_clock.time()),
-    _dtmfDetector(clock, BLOCK_SIZE_8K / 2) {
+    _dtmfDetector(clock, BLOCK_SIZE_8K / 2),
+    _tonePhi(0),
+    _txControl(clock, log, *this, *this) {
     _resampler.setRates(48000, 8000);
+
+    // #### TODO: REMOVE
+    _txControl.setIdRequiredInt(30);
+    _txControl.setCall("KC1FSZ");
 }
 
 void LineRadio::resetStatistics() {
@@ -55,9 +61,14 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
 }
 
- void LineRadio::consume(const Message& msg) {
+/**
+ * This is where played audio comes in from the outside.
+ */
+void LineRadio::consume(const Message& msg) {
 
-    if (msg.getType() == Message::Type::AUDIO) {
+    // NOTE: Tone generation will override. 
+    // TODO: MIX INBOUND AUDIO WITH TONE?
+    if (!_toneActive && msg.getType() == Message::Type::AUDIO) {
 
         // Detect transitions from silence to playing
         if (!_playing) {
@@ -84,14 +95,38 @@ void LineRadio::resetStatistics() {
     }
 }
 
-static float dbVfs(int16_t v) {
-    float fv = (float)v / 32767.0;
-    if (fv == 0)
-        return -96;
-    return 20.0 * log10(fv);
+/**
+ * This is parallel to consume() above. This is used to generate a frame 
+ * of audio when tone is enabled.
+ */
+void LineRadio::_generateToneFrame() {
+
+    // Detect transitions from silence to playing
+    //if (!_playing) {
+    //    _playStart();
+    //}
+
+    int16_t pcm48k_2[BLOCK_SIZE_48K];
+
+    for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+        pcm48k_2[i] = 32767.0f * _toneAmp * std::cos(_tonePhi);
+        _tonePhi += _toneOmega;
+    }
+    _tonePhi = std::fmod(_tonePhi, 2.0f * 3.1415926f);
+
+    // Here is where statistical analysis and/or local recording can take 
+    // place for diagnostic purposes.
+    _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+
+    // Call down to do the actual play on the hardware
+    _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+
+    //_lastPlayedFrameMs = _clock.time();
+    //_playing = true;
 }
 
 void LineRadio::oneSecTick() {
+
     // Stats
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
@@ -109,6 +144,19 @@ void LineRadio::oneSecTick() {
         //_log.info("Capture gap avg (us) %u", _captureGapTotal / _captureGapCount);
         _captureGapTotal = 0;
         _captureGapCount = 0;
+    }
+}
+
+void LineRadio::audioRateTick(uint32_t tickMs) {
+
+    _checkTimeouts();
+
+    // Keep the controller rolling
+    _txControl.run();
+
+    // Handle audio synthesis if necessary
+    if (_toneActive) {
+        _generateToneFrame();
     }
 }
 
@@ -277,8 +325,10 @@ void LineRadio::_playEnd() {
 void LineRadio::_setCosStatus(bool cosActive) {   
     // Look for transitions
     if (cosActive && !_cosActive) {
+
         _log.info("COS active");
         _cosActive = true;    
+
     } else if (!cosActive && _cosActive) {
 
         _log.info("COS inactive");
@@ -293,20 +343,19 @@ void LineRadio::_setCosStatus(bool cosActive) {
     }
 }
 
-bool LineRadio::isAudioActive() const {
-    return false;
-}
-
 void LineRadio::setToneEnabled(bool b) {
+    _toneActive = b;
 }
 
 void LineRadio::setToneFreq(float hz) {
+    _toneOmega = 2.0f * 3.1415926f * hz / (float)AUDIO_RATE;
 }
 
 void LineRadio::setToneLevel(float dbv) {
+    _toneAmp = dbvToPeak(dbv);
 }
 
-void LineRadio::resetDelay() {   
+void LineRadio::resetDelay() {
 }
 
 }
