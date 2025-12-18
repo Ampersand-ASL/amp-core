@@ -45,8 +45,8 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _txControl(clock, log, *this, *this) {
     _resampler.setRates(48000, 8000);
 
-    // #### TODO: REMOVE
-    _txControl.setIdRequiredInt(30);
+    // #### TODO: TEMP REMOVE
+    _txControl.setIdRequiredInt(60);
     _txControl.setCall("KC1FSZ");
 }
 
@@ -101,17 +101,26 @@ void LineRadio::consume(const Message& msg) {
  */
 void LineRadio::_generateToneFrame() {
 
-    // Detect transitions from silence to playing
-    //if (!_playing) {
-    //    _playStart();
-    //}
-
     int16_t pcm48k_2[BLOCK_SIZE_48K];
 
     for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-        pcm48k_2[i] = 32767.0f * _toneAmp * std::cos(_tonePhi);
+        pcm48k_2[i] = 32767.0f * _toneAmpRamp * std::cos(_tonePhi);
+        // IMPORTANT: Phase continuity at all times
         _tonePhi += _toneOmega;
+        _toneAmpRamp += _toneRampIncrement;
+        // Check to see if the target has been achieved.  If so, turn 
+        // off the ramp.
+        if (_toneRampIncrement > 0 && _toneAmpRamp >= _toneAmpTarget) {
+            _toneAmpRamp = _toneAmpTarget;
+            _toneRampIncrement = 0;
+        } else if (_toneRampIncrement < 0 && _toneAmpRamp <= _toneAmpTarget) {
+            _toneAmpRamp = _toneAmpTarget;
+            _toneRampIncrement = 0;
+        }
     }
+
+    // Avoids strange artifacts when phi becomes very large and precision problems
+    // creep in.
     _tonePhi = std::fmod(_tonePhi, 2.0f * 3.1415926f);
 
     // Here is where statistical analysis and/or local recording can take 
@@ -120,9 +129,6 @@ void LineRadio::_generateToneFrame() {
 
     // Call down to do the actual play on the hardware
     _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
-
-    //_lastPlayedFrameMs = _clock.time();
-    //_playing = true;
 }
 
 void LineRadio::oneSecTick() {
@@ -139,12 +145,6 @@ void LineRadio::oneSecTick() {
     }
     */
     resetStatistics();
-
-    if (_captureGapTotal) {
-        //_log.info("Capture gap avg (us) %u", _captureGapTotal / _captureGapCount);
-        _captureGapTotal = 0;
-        _captureGapCount = 0;
-    }
 }
 
 void LineRadio::audioRateTick(uint32_t tickMs) {
@@ -203,12 +203,6 @@ void LineRadio::_close() {
 
 void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
 
-    // Jitter stats
-    if (!_lastFullCaptureMs == 0) {
-        uint32_t gap = _clock.time() - _lastFullCaptureMs;
-        _captureGapTotal += gap;
-        _captureGapCount++;
-    }
     _lastFullCaptureMs = _clock.time();
 
     // Power
@@ -351,8 +345,19 @@ void LineRadio::setToneFreq(float hz) {
     _toneOmega = 2.0f * 3.1415926f * hz / (float)AUDIO_RATE;
 }
 
+/**
+ * Sets the target tone amplitude. Target is achieved using a ramp to avoid
+ * harsh transitions (i.e. "clicks").
+ */
 void LineRadio::setToneLevel(float dbv) {
-    _toneAmp = dbvToPeak(dbv);
+    // A linear transition is used
+    _toneRampIncrement = 1.0f / (_toneTransitionLength * (float)AUDIO_RATE);
+    // The ramp starts at the previous target
+    _toneAmpRamp = _toneAmpTarget;
+    _toneAmpTarget = dbvToPeak(dbv);
+    // Make sure the ramp is flowing in the right direction
+    if (_toneAmpTarget < _toneAmpRamp) 
+        _toneRampIncrement *= -1.0f;
 }
 
 void LineRadio::resetDelay() {

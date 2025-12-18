@@ -153,9 +153,13 @@ protected:
     unsigned _captureRecordCounter = 0;
 
     bool _toneActive = false;
-    float _toneAmp = 32767.0 * 0.5;
+    float _toneAmpTarget = dbvToPeak(-20);
+    float _toneAmpRamp = 0;
+    float _toneRampIncrement = 0;
     float _toneOmega = 0;
     float _tonePhi = 0;
+    // Controls the length of the amplitude transition in order to avoid clicks.
+    const float _toneTransitionLength = 0.015f;
 
     // Statistical analysis
     uint32_t _captureClipCount = 0;
@@ -167,13 +171,12 @@ protected:
     uint32_t _playPcmValueSum = 0;
     uint32_t _playPcmValueCount = 0;
     uint32_t _lastFullCaptureMs = 0;
-    uint32_t _captureGapTotal = 0;
-    uint32_t _captureGapCount = 0;
     // Following David NR9V's standard
     int16_t _clipThreshold = 32432;
     unsigned _captureClips = 0;
     unsigned _playClips = 0;
 
+    // #### TODO: MOVE THIS OUT 
     TxControl _txControl;
 
 private:
