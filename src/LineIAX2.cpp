@@ -1625,7 +1625,7 @@ bool LineIAX2::_progressCall(Call& call) {
             acceptFrame.addIE_str(0x38, (const char*)codec64, 9);
             _sendFrameToPeer(acceptFrame, call);
 
-            _log.info("Accepted call %d from %s %s",
+            _log.info("Call %u accepted from %s %s",
                 call.localCallId,
                 call.remoteNumber.c_str(), call.remoteUser.c_str());
 
