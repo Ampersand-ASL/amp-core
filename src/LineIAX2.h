@@ -84,10 +84,12 @@ public:
      * internally).
      * @param supportDirectedPoke Please see documentation. This controls
      * whether POKE to another address can be requested.
+     * @param privateKeyHex The server's private ED25519 seed in ASCII/Hex
+     * representation. This should be exactly 64 characters long.
      */
-    LineIAX2(Log& log, Clock& clock, int busId, MessageConsumer& consumer,
+    LineIAX2(Log& log, Clock& clock, int lineId, MessageConsumer& consumer,
         CallValidator* destValidator = 0, LocalRegistry* locReg = 0,
-        bool supportDirectedPoke = false);
+        bool supportDirectedPoke = false, const char* privateKeyHex = 0);
 
     /**
      * Opens the network connection for in/out traffic for this line.
@@ -158,9 +160,13 @@ private:
             STATE_LOOKUP_1A,
             STATE_INITIAL,
             STATE_WAITING,
+            // Sent out the DNS request to get the caller's public key
+            STATE_AUTHREP_WAIT_0,
+            // Sent out the AUTHREQ challenge and waiting for the response
+            STATE_AUTHREP_WAIT_1,
             // Waiting for DNS to respond to the validation request
             STATE_IP_VALIDATION_0,
-            // All validations complete, sending accept
+            // All validations complete, clear to send accept
             STATE_CALLER_VALIDATED,
             STATE_LINKED,
             STATE_UP,
@@ -179,6 +185,7 @@ private:
         bool active = false;
         Side side = Side::SIDE_NONE;
         State state = State::STATE_NONE;
+        bool trusted = false;
         int localCallId = 0;
         int remoteCallId = 0;
         uint32_t localStartMs = 0;
@@ -192,6 +199,8 @@ private:
         fixedstring remoteNumber;
         fixedstring remoteUser;
         fixedstring calltoken;
+        // This is the ED5519 public key in binary format
+        unsigned char publicKeyBin[32];
         sockaddr_storage peerAddr;
         uint32_t supportedCodecs = 0;
         CODECType codec = CODECType::IAX2_CODEC_UNKNOWN;
@@ -293,6 +302,8 @@ private:
     // Used to resolve targets using a local file
     LocalRegistry* _locReg = 0;
     bool _supportDirectedPoke;
+    // This is an ED25519 private key in ASCII Hex format (exactly 64 characters)
+    char _privateKeyHex[65];
 
     // The startup time of this line. Mostly used for generating unique
     // tokens.
@@ -329,6 +340,9 @@ private:
     bool _sourceIpValidationRequired = false;
     // Diagnostics    
     unsigned _invalidCallPacketCounter = 0;
+    // Controls authentication methods, only relevant for inbound calls
+    bool _authorizeWithCalltoken = true;
+    bool _authorizeWithAuthreq = true;
 
     /**
      * @return true if there might be more work to be done
@@ -346,21 +360,12 @@ private:
     bool _processInboundIAXData();
     void _processReceivedIAXPacket(const uint8_t* buf, unsigned bufLen, 
         const sockaddr& peerAddr, uint32_t stampMs);
-    void _processFullFrame(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr, 
-        uint32_t stampMs);
     void _processMiniFrame(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr, 
+        uint32_t stampMs);
+    void _processFullFrame(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr, 
         uint32_t stampMs);
     void _processFullFrameInCall(const IAX2FrameFull& frame, Call& call, 
         uint32_t stampMs);
-
-    /**
-     * @return true if there might be more work to be done
-     */
-    bool _processInboundDNSData();
-    void _processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen, 
-        const sockaddr& peerAddr);
-    void _processDNSResponse0(Call& call, const uint8_t* buf, unsigned bufLen);
-    void _processDNSResponse1(Call& call, const uint8_t* buf, unsigned bufLen);
 
     void _sendACK(uint32_t timeStamp, Call& call); 
     void _sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const char* cause);
@@ -375,8 +380,21 @@ private:
     void _sendFrameToPeer(const IAX2FrameFull& frame, Call& call);
     void _sendFrameToPeer(const IAX2FrameFull& frame, const sockaddr& peerAddr);
     void _sendFrameToPeer(const uint8_t* frame, unsigned frameSize, const sockaddr& peerAddr);
+
     void _sendDNSRequestSRV(uint16_t requestId, const char* name);
     void _sendDNSRequestA(uint16_t requestId, const char* name);
+    void _sendDNSRequestTXT(uint16_t requestId, const char* name);
+    void _sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen);
+
+    /**
+     * @return true if there might be more work to be done
+     */
+    bool _processInboundDNSData();
+    void _processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr);
+    void _processDNSResponse0(Call& call, const uint8_t* buf, unsigned bufLen);
+    void _processDNSResponse1(Call& call, const uint8_t* buf, unsigned bufLen);
+    void _processDNSResponseIPValidation(Call& call, const uint8_t* buf, unsigned bufLen);
+    void _processDNSResponsePublicKey(Call& call, const uint8_t* buf, unsigned bufLen);
 
     int _allocateCallIx();   
 

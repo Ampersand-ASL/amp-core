@@ -34,6 +34,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "ed25519.h"
+
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/NetUtils.h"
 #include "kc1fsz-tools/Log.h"
@@ -78,7 +80,7 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 
 LineIAX2::LineIAX2(Log& log, Clock& clock, int busId,
     MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg,
-    bool supportDirectedPoke)
+    bool supportDirectedPoke, const char* privateKeyHex)
 :   _log(log),
     _clock(clock),
     _busId(busId),
@@ -87,6 +89,12 @@ LineIAX2::LineIAX2(Log& log, Clock& clock, int busId,
     _locReg(locReg),
     _supportDirectedPoke(supportDirectedPoke),
     _startTime(clock.time()) {
+    if (privateKeyHex) {
+        strncpy(_privateKeyHex, privateKeyHex, 64);
+        _privateKeyHex[64] = 0;
+    } else {
+        _privateKeyHex[0] = 0;
+    }
 }
 
 int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
@@ -445,146 +453,177 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
     if (destCallId == 0) {
 
         if (frame.isNEW()) {
-            
-            // Create a token relevant to this NEW request
-            char tokenClear[128];
-            snprintf(tokenClear, 128, "T:%s:%X", ipStr, _startTime);
-            MD5_CTX md5Ctx;
-            MD5Init(&md5Ctx);
-            MD5Update(&md5Ctx, (unsigned char*)tokenClear, strlen(tokenClear));
-            unsigned char tokenHashed[16];
-            MD5Final(tokenHashed, &md5Ctx);
-            char tokenHashedText[33];
-            MD5DigestToText(tokenHashed, tokenHashedText);
+        
+            if (_authorizeWithCalltoken) {
 
-            // Check to see if the call token is available.  
-            char token[65];
-            bool hasToken = frame.getIE_str(54, token, 65);
-            // If no token generate a challenge so that the caller comes back 
-            // with it the next time.
-            if (!hasToken || (hasToken && token[0] == 0)) {
+                // Create a token relevant to this NEW request
+                char tokenClear[128];
+                snprintf(tokenClear, 128, "T:%s:%X", ipStr, _startTime);
+                MD5_CTX md5Ctx;
+                MD5Init(&md5Ctx);
+                MD5Update(&md5Ctx, (unsigned char*)tokenClear, strlen(tokenClear));
+                unsigned char tokenHashed[16];
+                char tokenHashedText[33];
+                MD5Final(tokenHashed, &md5Ctx);
+                MD5DigestToText(tokenHashed, tokenHashedText);
 
-                _log.info("NEW received with no token: %s", ipStr);
+                // Check to see if the call token is available.  
+                char token[65];
+                bool hasToken = frame.getIE_str(54, token, 65);
 
-                IAX2FrameFull callTokenFrame;
-                callTokenFrame.setHeader(
-                    // For now the source call ID is set to 1
-                    1, 
-                    // We give back the callers call ID
-                    frame.getSourceCallId(), 
-                    // We give back the caller's timestamp
-                    frame.getTimeStamp(),
-                    0, 1, 6, 40);
-                callTokenFrame.addIE_str(54, tokenHashedText);
-                // Send back to the same address we received
-                _sendFrameToPeer(callTokenFrame, peerAddr);
-            } 
-            // If a NEW with a token has been provided then setup an inbound
-            // call for real.
+                // If no token generate a challenge so that the caller comes back 
+                // with it the next time.
+                if (!hasToken || (hasToken && token[0] == 0)) {
+
+                    _log.info("NEW received with no token: %s", ipStr);
+
+                    IAX2FrameFull callTokenFrame;
+                    callTokenFrame.setHeader(
+                        // For now the source call ID is set to 1
+                        1, 
+                        // We give back the callers call ID
+                        frame.getSourceCallId(), 
+                        // We give back the caller's timestamp
+                        frame.getTimeStamp(),
+                        0, 1, 6, 40);
+                    callTokenFrame.addIE_str(54, tokenHashedText);
+                    // Send back to the same address we received
+                    _sendFrameToPeer(callTokenFrame, peerAddr);
+                    return;
+                } 
+                // If a NEW with a token has been provided then setup an inbound
+                // call for real.
+                else {
+                    if (strcmp(token, tokenHashedText) != 0) {
+                        _log.info("NEW received with invalid token: %s", ipStr);
+                        _sendREJECT(destCallId, peerAddr, "Unknown");
+                        return;
+                    }
+                    else {
+                        _log.info("NEW received with valid token: %s", ipStr);
+                    }
+                }
+            }
+
+            // Pull out the important information and validate it. 
+            // IMPORTANT: The target number comes in with a leading "3"
+            // which is removed here.
+            fixedstring targetNumber;
+            char temp[33];
+            bool found = frame.getIE_str(1, temp, 33);
+            // NOTE: It's not completely clear, but it 
+            // appears that some stations send the number
+            // with a leading "3" and some do not.  There
+            // are no ASL nodes that start with 3 so there 
+            // must be some calling convention here.
+            // 
+            // If a leading "3" is provided we ignore it.
+            if (found && temp[0] == '3') {
+                targetNumber = temp + 1;
+            } else if (found) {
+                targetNumber = temp;
+            } else {
+                _log.error("No target number provided");
+                _sendREJECT(destCallId, peerAddr, "Called number missing");
+                return;
+            }
+
+            if (_validator == 0 ||
+                !_validator->isNumberAllowed(targetNumber.c_str())) {
+                _log.error("Wrong number");
+                _sendREJECT(destCallId, peerAddr, "Wrong number");
+                return;
+            }
+
+            fixedstring callingNumber;
+            found = frame.getIE_str(2, temp, 33);
+            if (found) {
+                callingNumber = temp;
+            } else {
+                _log.error("No calling number provided");
+                _sendREJECT(destCallId, peerAddr, "Calling number missing");
+                return;
+            }
+
+            fixedstring callingUser;
+            found = frame.getIE_str(6, temp, 33);
+            if (found) {
+                callingUser = temp;
+            } else {
+                _log.error("No calling user provided");
+                _sendREJECT(destCallId, peerAddr, "Calling user missing");
+                return;
+            }
+
+            // What CODECs are supported by the caller?
+            uint32_t supportedCodecs;
+            if (!frame.getIE_uint32(8, &supportedCodecs)) {
+                _log.error("No actual CODECs provided");
+                _sendREJECT(destCallId, peerAddr, "ACtual CODECs missing");
+                return;
+            }
+
+            // All good, allocate the call
+            int callIx = _allocateCallIx();
+            if (callIx == -1) {
+                _log.error("No calls available, ignoring");
+                _sendREJECT(destCallId, peerAddr, "No calls available");
+                return;
+            }
+
+            Call& call = _calls[callIx];
+            call.reset();
+            call.active = true;
+            call.side = Call::Side::SIDE_CALLED;
+            call.state = Call::State::STATE_INITIAL;
+            call.trusted = false;
+            call.localCallId = _localCallIdCounter++;
+            call.remoteCallId = frame.getSourceCallId();
+            call.localStartMs = _clock.time();
+            call.expectedInSeqNo = 1;
+            call.remoteNumber = callingNumber;
+            call.remoteUser = callingUser;
+            // Move the entire address in for use when sending out messages
+            memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
+            // Schedule the ping out
+            call.lastLagrqMs = _clock.time();
+            call.nextLMs = _clock.time() + 10 * 1000;
+            call.lastFrameRxMs = _clock.time();
+            call.supportedCodecs = supportedCodecs;
+
+            // Explicit ACK 
+            _sendACK(0, call);
+
+            if (_authorizeWithAuthreq) {
+                // Go out to get the caller's public key
+                call.dnsRequestId = _dnsRequestIdCounter++;
+                char hostName[65];
+                //snprintf(hostName, 65, "%s.nodes.allstarlink.org",
+                // #### TODO: ENVIRONMENT VARIABLE
+                snprintf(hostName, 65, "%s.nodes.allstarlink.w1tkz.net",
+                    call.remoteNumber.c_str());
+                _log.info("Starting AUTHREQ process for %s", hostName);
+                // Start the DNS lookup process
+                _sendDNSRequestTXT(call.dnsRequestId, hostName);
+
+                call.state = Call::State::STATE_AUTHREP_WAIT_0;                
+            }
             else {
-                if (strcmp(token, tokenHashedText) != 0) {
-                    _log.info("NEW received with invalid token: %s", ipStr);
-                    _sendREJECT(destCallId, peerAddr, "Unknown");
-                    return;
+                if (_sourceIpValidationRequired) {
+                    // Make an IP address lookup request
+                    call.dnsRequestId = _dnsRequestIdCounter++;
+                    char hostName[65];
+                    snprintf(hostName, 65, "%s.nodes.allstarlink.org",
+                        call.remoteNumber.c_str());
+                    // Start the DNS lookup process
+                    _sendDNSRequestA(call.dnsRequestId, hostName);
+
+                    call.state = Call::State::STATE_IP_VALIDATION_0;
+                } else {  
+                    // This is the state that means that all authentication/validation
+                    // is complete and we can ACCEPT the call
+                    call.state = Call::State::STATE_CALLER_VALIDATED;                
                 }
-
-                _log.info("NEW received with valid token: %s", ipStr);
-
-                // Pull out the important information and validate it. 
-                // IMPORTANT: The target number comes in with a leading "3"
-                // which is removed here.
-                fixedstring targetNumber;
-                char temp[33];
-                bool found = frame.getIE_str(1, temp, 33);
-                // NOTE: It's not completely clear, but it 
-                // appears that some stations send the number
-                // with a leading "3" and some do not.  There
-                // are no ASL nodes that start with 3 so there 
-                // must be some calling convention here.
-                // 
-                // If a leading "3" is provided we ignore it.
-                if (found && temp[0] == '3') {
-                    targetNumber = temp + 1;
-                } else if (found) {
-                    targetNumber = temp;
-                } else {
-                    _log.error("No target number provided");
-                    _sendREJECT(destCallId, peerAddr, "Called number missing");
-                    return;
-                }
-
-                if (_validator == 0 ||
-                    !_validator->isNumberAllowed(targetNumber.c_str())) {
-                    _log.error("Wrong number");
-                    _sendREJECT(destCallId, peerAddr, "Wrong number");
-                    return;
-                }
-
-                fixedstring callingNumber;
-                found = frame.getIE_str(2, temp, 33);
-                if (found) {
-                    callingNumber = temp;
-                } else {
-                    _log.error("No calling number provided");
-                    _sendREJECT(destCallId, peerAddr, "Calling number missing");
-                    return;
-                }
-
-                fixedstring callingUser;
-                found = frame.getIE_str(6, temp, 33);
-                if (found) {
-                    callingUser = temp;
-                } else {
-                    _log.error("No calling user provided");
-                    _sendREJECT(destCallId, peerAddr, "Calling user missing");
-                    return;
-                }
-
-                // What CODECs are supported by the caller?
-                uint32_t supportedCodecs;
-                if (!frame.getIE_uint32(8, &supportedCodecs)) {
-                    _log.error("No actual CODECs provided");
-                    _sendREJECT(destCallId, peerAddr, "ACtual CODECs missing");
-                    return;
-                }
-
-                // All good, allocate the call
-                int callIx = _allocateCallIx();
-                if (callIx == -1) {
-                    _log.error("No calls available, ignoring");
-                    _sendREJECT(destCallId, peerAddr, "No calls available");
-                    return;
-                }
-
-                Call& call = _calls[callIx];
-                call.reset();
-                call.active = true;
-                call.side = Call::Side::SIDE_CALLED;
-                call.state = Call::State::STATE_INITIAL;
-                call.localCallId = _localCallIdCounter++;
-                call.remoteCallId = frame.getSourceCallId();
-                call.localStartMs = _clock.time();
-                // Use the message time to back into our guess of when the 
-                // peer thinks the call started.
-                //call.remoteEstimatedStartMs = _clock.time() - frame.getTimeStamp();
-                call.expectedInSeqNo = 1;
-                call.remoteNumber = callingNumber;
-                call.remoteUser = callingUser;
-                // Move the entire address in for use when sending out messages
-                memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
-                // Schedule the ping out
-                call.lastLagrqMs = _clock.time();
-                call.nextLMs = _clock.time() + 10 * 1000;
-                call.lastFrameRxMs = _clock.time();
-                call.supportedCodecs = supportedCodecs;
-
-                // Explicit ACK 
-                _sendACK(0, call);
-
-                // #### HERE IS WHERE MORE AUTHENTICATION WOULD 
-                // #### HAPPEN (i.e. GENERATE AUTHRQ)
-
-                call.state = Call::State::STATE_WAITING;                
             }
         }
         // Per the specification, we should respond to POKEs with PONGs. 
@@ -647,88 +686,133 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 }
             }
         }
+        // There are no other message types that are allowed without a valid 
+        // destination call ID
+        else {
+            return;
+        }
     }
-
-    // If there is an active call then continue it based on the message type
-    // and state machine.
+    
+    // Peer is claiming that this is an active call, perform some additional 
+    // validation to find out if we trust the message.
     else {
 
-        /*
-        if (frame.isRetransmit()) {
-            // Apparenty it's normal for a CALLTOKEN to have the retransmit flag on.
-            if (!frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_CALLTOKEN)) 
-                _log.info("WARNING: RETRANSMIT RECEIVED");
-        }
-        */
-
-        // Figure out which call this frame belong to (if any)
-        bool validCall = false;
-        unsigned callIx = 0;
+        // Figure out which call this frame potentially belongs to (if any)
+        bool recognizedCall = false;        
+        unsigned recognizedCallIx = 0;
 
         for (unsigned i = 0; i < MAX_CALLS; i++) {
             Call& call = _calls[i];
-            if (call.active && 
-                call.localCallId == destCallId &&
-                // NOTE: During the waiting stage the remote call ID hasn't 
-                // been locked in yet.
-                (call.state == Call::State::STATE_WAITING ||
-                call.remoteCallId == frame.getSourceCallId())) {
-                validCall = true;
-                callIx = i;
+            if (call.active && call.localCallId == destCallId) {
+                recognizedCall = true;
+                recognizedCallIx = i;
                 break;
             }
         }
 
-        if (!validCall) {
+        if (!recognizedCall) {
             _invalidCallPacketCounter++;
             if (_trace)
                 _log.info("Call not recognized %d/%d, ignoring", frame.getSourceCallId(), destCallId);
-            /*
-            #### TODO: NEED TO REVIEW THIS - WE WERE GETTING INTO A LOOP WITH
-            #### BOTH SIDES SENDING INVAL MESSAGES.
-
-            // Send an INVAL message
-            // See RFC 5456 Section 6.9.2
-            // https://datatracker.ietf.org/doc/html/rfc5456#section-6.9.2
-            IAX2FrameFull invalFrame;
-            // Here we have reversed the source and destination that we received
-            // in hopes that it will mean somehing on the peer side
-            invalFrame.setHeader(destCallId, sourceCallId, 0, 0, 0, 
-                IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_INVAL);
-            _sendFrameToPeer(invalFrame, peerAddr);
-            */
             return;
         }
 
-        Call& call = _calls[callIx];
-
-        /*
-        // TEMP: SHOW DEST PROBLEMS
-        if (frame.getSourceCallId() != call.remoteCallId) {
-            _log.info("Call remote ID problem in state %d", call.state);
-            char msg[128];
-            snprintf(msg, 128, "<==== %s SC=%d DC=%d OS=%d IS=%d TY=%d SC=%d %s",
-                ipStr,
-                frame.getSourceCallId(), frame.getDestCallId(), 
-                frame.getOSeqNo(), frame.getISeqNo(),
-                frame.getType(), frame.getSubclass(),
-                iax2TypeDesc(frame.getType(), frame.getSubclass()));
-            // Supress trace of voice frames
-            if (!frame.isVOICE()) {
-                _log.infoDump(msg, buf, bufLen);
-            }
-        }
-        */
+        Call& untrustedCall = _calls[recognizedCallIx];
 
         // Validation check - make sure the source IP is still right. 
-        if (!call.isPeerAddr(peerAddr)) {
-            _log.info("Peer address on call invalid, ignore");
+        if (!untrustedCall.isPeerAddr(peerAddr)) {
+            _invalidCallPacketCounter++;
+            _log.info("Call %u address invalid", destCallId);
+            // Just ignore, don't change state in case this is a DOS attack
             return;
         }
 
-        // At this poing we have high confidence that the frame belongs
-        // to an active call.
-        _processFullFrameInCall(frame, call, rxStampMs);
+        if (untrustedCall.side == Call::Side::SIDE_CALLER) {
+            // Look for the challenge case
+            if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_CALLTOKEN)) {
+                _log.info("Call %u got CALLTOKEN challenge", destCallId);
+                char token[65];
+                if (!frame.getIE_str(54, token, 65) || token[0] == 0) {
+                    _log.error("Unable to get challenge token");
+                    return;
+                }
+                // Save the token for the NEW retry
+                untrustedCall.calltoken = token;
+                // Go back to the beginning to try again
+                untrustedCall.state = Call::State::STATE_INITIAL;  
+                return;   
+            }
+            // Look for the cases where we should be locking in the peer's call ID
+            else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_ACCEPT) ||
+                frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREQ)) {
+                // Lock in the remote call ID
+                untrustedCall.remoteCallId = frame.getSourceCallId();  
+                untrustedCall.trusted = true;    
+            }
+        }
+
+        // Look for the completion of an AUTHREQ/AUTHREP cycle
+        else if (untrustedCall.side == Call::Side::SIDE_CALLED) {
+            if (untrustedCall.state == Call::State::STATE_AUTHREP_WAIT_1 &&
+                frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP) &&
+                untrustedCall.remoteCallId == frame.getSourceCallId()) {
+
+                // Make a challenge that uses some things that are unique to the call
+                char challengeTxt[32];
+                snprintf(challengeTxt, 31, "%u%u", 
+                    untrustedCall.localCallId, untrustedCall.localStartMs);
+
+                // Only supporting ED25519 challenge, which is found in the 0x20 IE.
+                char sigHex[129];
+                if (!frame.getIE_str(0x20, sigHex, 128) || sigHex[0] == 0) {
+                    _log.error("Call %u no challenge response", destCallId);
+                    return;
+                }
+                if (strlen(sigHex) != 128) {
+                    _log.error("Call %u invalid challenge response", destCallId);
+                    return;
+                }
+
+                // #### TODO ADD CHARACTER VALIDATION HERE
+                unsigned char sigBin[64];
+                asciiHexToBin(sigHex, 128, sigBin, 64);
+
+                // Do the actual public key validation 
+                if (ed25519_verify(sigBin, 
+                    (const uint8_t*)challengeTxt, strlen(challengeTxt), 
+                    untrustedCall.publicKeyBin) == 1) {
+                    untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                    untrustedCall.trusted = true;
+                    _log.info("Call %u good signature", destCallId);
+                }
+                else {
+                    _log.info("Call %u invalid signature", destCallId);
+                }
+            }
+        }
+
+        if (!untrustedCall.trusted) {
+            if (!frame.isACK()) {
+                // Diagnostic messages for untrusted messages being ignored
+                _log.info("Message for call %u untrusted (state %d)", destCallId, untrustedCall.state);
+                char msg[128];
+                snprintf(msg, 128, "<==== %s SC=%d DC=%d OS=%d IS=%d TY=%d SC=%d %s",
+                    ipStr,
+                    frame.getSourceCallId(), frame.getDestCallId(), 
+                    frame.getOSeqNo(), frame.getISeqNo(),
+                    frame.getType(), frame.getSubclass(),
+                    iax2TypeDesc(frame.getType(), frame.getSubclass()));
+                // Supress trace of voice frames
+                if (!frame.isVOICE()) {
+                    _log.infoDump(msg, potentiallyDangerousBuf, bufLen);
+                }
+            }
+            return;
+        }
+        
+        // At this point we have high confidence that the frame belongs to an active call.
+        Call& trustedCall = untrustedCall;
+        _processFullFrameInCall(frame, trustedCall, rxStampMs);
     }
 }
 
@@ -754,17 +838,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         return;
     }        
     
-    // At the start of a call we lock in the remote call ID. This 
-    // is done here (instead of below during the normal message
-    // handling) so that the ACK on the ACCEPT message has the 
-    // correct call IDs
-    if (frame.isACCEPT() &&
-        call.side == Call::Side::SIDE_CALLER && 
-        call.state == Call::State::STATE_WAITING) {
-        // Lock in the remote call ID
-        call.remoteCallId = frame.getSourceCallId();      
-    }
-
     // VNAK messages don't consume sequence numbers to take care of this
     // before checking sequence coherence.
     if (frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_VNAK)) {
@@ -842,32 +915,65 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         return;
     }
 
-    // CALLTOKEN
-    if (frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_CALLTOKEN)) {
-        _log.info("Got CALLTOKEN");
-        char token[65];
-        if (!frame.getIE_str(54, token, 65) || token[0] == 0) {
+    // AUTHREQ
+    if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREQ)) {
+        
+        _log.info("Call %u got AUTHREQ challenge", call.localCallId);
+
+        // Look at the challenge type
+        uint16_t authmethod = 0;
+        if (!frame.getIE_uint16(0x0e, &authmethod)) {
+            _log.error("Call %u unable to get AUTHMETHOD", call.localCallId);
+            return;
+        }
+
+        // NOTE: We are assuming the 0x08 bit signifies ED25519 method (not in the official
+        // RFC document)
+        if ((authmethod & 0x08) == 0) {
+            _log.error("Call %u unsupported AUTHMETHOD", call.localCallId);
+            return;
+        }
+
+        // Pull out the ED25519 challenge token
+        char token[33];
+        if (!frame.getIE_str(0x0f, token, 33) || token[0] == 0) {
             _log.error("Unable to get challenge token");
             return;
         }
-        // Save the token for the NEW retry
-        call.calltoken = token;
-        // Go back to the beginning to try again
-        call.state = Call::State::STATE_INITIAL;     
-    }
-    // AUTHRQ
-    else if (frame.getType() == 6 && frame.getSubclass() == 8) {
-        _log.info("Got AUTHRQ");
+
+        // Sign the challenge using our private key
+        uint8_t seedBin[32];
+        asciiHexToBin(_privateKeyHex, 64, seedBin, 32);
+        unsigned char pubBin[32];
+        unsigned char privBin[64];
+        ed25519_create_keypair(pubBin, privBin, seedBin);
+        unsigned char sig[64];
+        ed25519_sign(sig, (const uint8_t*)token, strlen(token), pubBin, privBin);
+        char sigHex[129];
+        binToAsciiHex(sig, 64, sigHex, 128);
+        sigHex[128] = 0;
+
+        // Make the AUTHREP response
+        IAX2FrameFull authrepFrame;
+        authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
+            call.dispenseElapsedMs(_clock), 
+            call.outSeqNo, call.expectedInSeqNo, 
+            FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
+        // Putting the ED25519 signature into the 0x20 IE (per spec, reserved for
+        // future use)
+        authrepFrame.addIE_str(0x20, sigHex, 128);
+
+        _sendFrameToPeer(authrepFrame, call);
     } 
     // REJECT
     else if (frame.getType() == 6 && frame.getSubclass() == 6) {
-        _log.info("Got REJECT");
+        _log.info("Call %u got REJECT", call.localCallId);
         _hangupCall(call);
     } 
     // ACCEPT (i.e. we are the caller)
     else if (frame.isACCEPT()) {
 
-        _log.info("Got ACCEPT t=%u", call.localElapsedMs(_clock)); 
+        _log.info("Call %u got ACCEPT t=%u", call.localCallId, call.localElapsedMs(_clock)); 
 
         // Since the elapsed time is reset with NEW, the ACCEPT time should
         // represent the round-trip network latency. One-way is half.
@@ -1189,6 +1295,10 @@ void LineIAX2::_processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen,
                 line->_processDNSResponse0(call, buf, bufLen);
             else if (call.state == Call::State::STATE_LOOKUP_1A)
                 line->_processDNSResponse1(call, buf, bufLen);
+            else if (call.state == Call::State::STATE_IP_VALIDATION_0)
+                line->_processDNSResponseIPValidation(call, buf, bufLen);
+            else if (call.state == Call::State::STATE_AUTHREP_WAIT_0)
+                line->_processDNSResponsePublicKey(call, buf, bufLen);
             // Otherwise ignore
             else 
                 log.info("Ignoring unexpected DNS response");
@@ -1213,7 +1323,6 @@ void LineIAX2::_processDNSResponse0(Call& call,
     int rc1 = microdns::parseDNSAnswer_SRV(buf, bufLen,
         &pri, &weight, &port, srvHost, 65);
     if (rc1 < 0) {
-        call.state = Call::State::STATE_INITIAL;
         _log.error("Invalid DNS response (SRV) %d", rc1);
         call.state = Call::State::STATE_TERMINATED;
         return;
@@ -1269,6 +1378,86 @@ void LineIAX2::_processDNSResponse1(Call& call,
     pokeFrame.addIE_str(0x12, "XXXXXXXXXXXXXXXX", 16);
     _sendFrameToPeer(pokeFrame, call);
     */
+}
+
+
+void LineIAX2::_processDNSResponseIPValidation(Call& call, 
+    const uint8_t* buf, unsigned bufLen) {
+
+    if (_trace)
+        _log.infoDump("DNS response (A)", buf, bufLen);
+
+    // Pull the IP address out of the DNS response
+    uint32_t addr;
+    int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
+    if (rc1 < 0) {
+        _log.error("Invalid DNS response (A)");
+        call.state = Call::State::STATE_TERMINATED;
+        return;
+    }
+
+    // NOTE: All of this is assuming IPv4!
+    // Get the address returned by DNS
+    char addrStr[64];
+    formatIP4Address(addr, addrStr, 64);
+    // Get the address of the peer
+    char addrStrPeer[64];
+    formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
+
+    if (strcmp(addrStr, addrStrPeer) == 0) {
+        _log.info("Call %u IP validation succeeded", call.localCallId);
+        call.state = Call::State::STATE_CALLER_VALIDATED;
+    } else {
+        _log.info("Call %u IP validation failed", call.localCallId);
+        call.state = Call::State::STATE_TERMINATED;
+    }
+}
+
+void LineIAX2::_processDNSResponsePublicKey(Call& call, 
+    const uint8_t* buf, unsigned bufLen) {
+
+    if (_trace)
+        _log.infoDump("DNS response (TXT)", buf, bufLen);
+
+    // Pull the port number and domain name from the response 
+    char txt[256];
+    int rc1 = microdns::parseDNSAnswer_TXT(buf, bufLen, txt, 256);
+    if (rc1 < 0) {
+        _log.error("Call %u invalid DNS response (TXT) %d", call.localCallId, rc1);
+        call.state = Call::State::STATE_TERMINATED;
+        return;
+    }
+
+    if (strlen(txt) != 64) {
+        _log.error("Call %u invalid public key", call.localCallId);
+        return;
+    }
+
+    // Once a valid public key is obtained we launch an AUTHREQ challenge
+    // to the calling peer.
+
+    _log.info("Public key %s", txt);
+
+    // #### TODO: ADD SYNTAX CHECKING ON HEX CHARACTERS
+    // Convert the hex public key to binary 
+    asciiHexToBin(txt, 64, call.publicKeyBin, 32);
+
+    // Make a challenge that uses some things that are unique to the call
+    char challenge[32];
+    snprintf(challenge, 31, "%u%u", call.localCallId, call.localStartMs);
+
+    IAX2FrameFull authreqFrame;
+    authreqFrame.setHeader(call.localCallId, call.remoteCallId, 
+        call.dispenseElapsedMs(_clock), 
+        call.outSeqNo, call.expectedInSeqNo, 
+        FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREQ);
+    // NOTE: We are requiring AUTHMETHOD 0x08, which is ED25519 (not in RFC)
+    authreqFrame.addIE_uint16(0x0e, 0x08);
+    authreqFrame.addIE_str(0x0f, challenge);
+
+    _sendFrameToPeer(authreqFrame, call);
+
+    call.state = Call::State::STATE_AUTHREP_WAIT_1;                
 }
 
 bool LineIAX2::_progressCalls() {
@@ -1695,6 +1884,30 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
     }
 }
 
+void LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) {
+
+    if (_trace)
+        _log.infoDump("DNS request", dnsPacket, dnsPacketLen);
+
+    // Send the query to a DNS server
+    struct sockaddr_in dest_addr;
+    memset(&dest_addr, 0, sizeof(dest_addr));
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(53);
+    inet_pton(AF_INET, DNS_IP_ADDR, &dest_addr.sin_addr); 
+    int rc = ::sendto(_dnsSockFd, 
+// Windows uses slightly different types on the socket calls
+#ifdef _WIN32    
+        (const char*)dnsPacket, 
+#else
+        dnsPacket, 
+#endif
+        dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    if (rc < 0) {
+        _log.error("DNS send error");
+    }
+}
+
 void LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {    
 
     _log.info("Making DNS request (SRV) for %s", name);
@@ -1709,25 +1922,8 @@ void LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {
         return;
     }
     unsigned dnsPacketLen = rc0;
-    // Send the query to a DNS server
-    struct sockaddr_in dest_addr;
-    memset(&dest_addr, 0, sizeof(dest_addr));
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(53);
-    inet_pton(AF_INET, DNS_IP_ADDR, &dest_addr.sin_addr); 
 
-    int rc = ::sendto(_dnsSockFd, 
-// Windows uses slightly different types on the socket calls
-#ifdef _WIN32    
-        (const char*)dnsPacket, 
-#else
-        dnsPacket, 
-#endif
-        dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-
-    if (rc < 0) {
-        _log.error("DNS send error");
-    }
+    _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
 void LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {    
@@ -1745,26 +1941,25 @@ void LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {
     }
     unsigned dnsPacketLen = rc0;
 
-    if (_trace)
-        _log.infoDump("DNS request (A)", dnsPacket, dnsPacketLen);
+    _sendDNSRequest(dnsPacket, dnsPacketLen);
+}
 
-    // Send the query to a DNS server
-    struct sockaddr_in dest_addr;
-    memset(&dest_addr, 0, sizeof(dest_addr));
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(53);
-    inet_pton(AF_INET, DNS_IP_ADDR, &dest_addr.sin_addr); 
-    int rc = ::sendto(_dnsSockFd, 
-// Windows uses slightly different types on the socket calls
-#ifdef _WIN32    
-        (const char*)dnsPacket, 
-#else
-        dnsPacket, 
-#endif
-        dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-    if (rc < 0) {
-        _log.error("DNS send error");
+void LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {    
+
+    _log.info("Making DNS request (TXT for %s", name);
+
+    // Make the query
+    const unsigned dnsPacketCapacity = 128;
+    uint8_t dnsPacket[dnsPacketCapacity];
+    int rc0 = microdns::makeDNSQuery_TXT(requestId, name, dnsPacket, dnsPacketCapacity);
+    if (rc0 < 0) {
+        _log.error("Unable to make DNS TXT query");
+        // ### TODO CALL FAILED EVENT
+        return;
     }
+    unsigned dnsPacketLen = rc0;
+
+    _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
 void LineIAX2::audioRateTick(uint32_t tickMs) {
@@ -1860,6 +2055,7 @@ void LineIAX2::Call::reset() {
     active = false;
     side = Side::SIDE_NONE;
     state = State::STATE_NONE;
+    trusted = false;
     localCallId = 0;
     remoteCallId = 0;
     localStartMs = 0;

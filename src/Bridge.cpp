@@ -89,7 +89,7 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call started %d CODEC %X, jbBypass %d, echo %d", 
+            _log.info("Call %u started CODEC %X, jbBypass %d, echo %d", 
                 msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer,
                 payload.echo);
 
