@@ -764,7 +764,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                 // Only supporting ED25519 challenge, which is found in the 0x20 IE.
                 char sigHex[129];
-                if (!frame.getIE_str(0x20, sigHex, 128) || sigHex[0] == 0) {
+                // NOTE: The getIE includes the null termination.
+                if (!frame.getIE_str(0x20, sigHex, 129) || sigHex[0] == 0) {
                     _log.error("Call %u no challenge response", destCallId);
                     return;
                 }
@@ -952,6 +953,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         char sigHex[129];
         binToAsciiHex(sig, 64, sigHex, 128);
         sigHex[128] = 0;
+
+        cout << "Sending response " << sigHex << endl;
 
         // Make the AUTHREP response
         IAX2FrameFull authrepFrame;
