@@ -813,7 +813,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     (const uint8_t*)challengeTxt, strlen(challengeTxt), 
                     untrustedCall.publicKeyBin) == 1) {
                     untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
-                    untrustedCall.trusted = true;
 
                     _log.info("Call %u good signature", destCallId);                   
                 }
@@ -821,17 +820,15 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     _log.info("Call %u invalid signature", destCallId);
                 }
 
-                if (untrustedCall.trusted) {
-                    // Normally the sequence/ACK would be handled later, but this message
-                    // is a special case.
-                    if (frame.getOSeqNo() == untrustedCall.expectedInSeqNo) {
-                        untrustedCall.incrementExpectedInSeqNo();
-                        if (frame.isACKRequired())
-                            _sendACK(frame.getTimeStamp(), untrustedCall);
-                    }
-                    else {
-                        _log.error("Call %u sequence number problem", destCallId);
-                    }
+                // Normally the sequence/ACK would be handled later, but this message
+                // is a special case.
+                if (frame.getOSeqNo() == untrustedCall.expectedInSeqNo) {
+                    untrustedCall.incrementExpectedInSeqNo();
+                    if (frame.isACKRequired())
+                        _sendACK(frame.getTimeStamp(), untrustedCall);
+                }
+                else {
+                    _log.error("Call %u sequence number problem", destCallId);
                 }
 
                 return;
@@ -1485,8 +1482,6 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
     // Once a valid public key is obtained we launch an AUTHREQ challenge
     // to the calling peer.
 
-    _log.info("Public key %s", txt);
-
     // #### TODO: ADD SYNTAX CHECKING ON HEX CHARACTERS
     // Convert the hex public key to binary 
     asciiHexToBin(txt, 64, call.publicKeyBin, 32);
@@ -1657,6 +1652,7 @@ bool LineIAX2::_progressCall(Call& call) {
                 call.localCallId,
                 call.remoteNumber.c_str(), call.remoteUser.c_str());
 
+            call.trusted = true;
             call.state = Call::State::STATE_LINKED;
 
             PayloadCallStart payload;
