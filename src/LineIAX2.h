@@ -115,6 +115,14 @@ public:
      */
     void setPrivateKey(const char* privateKeyHex);
 
+    enum AuthMode {
+        OPEN,
+        SOURCE_IP,
+        CHALLENGE_ED25519
+    };
+
+    void setAuthMode(AuthMode mode);
+
     /**
      * Opens the network connection for in/out traffic for this line.
      *  
@@ -365,7 +373,7 @@ private:
     // Diagnostics    
     unsigned _invalidCallPacketCounter = 0;
     // Controls whether source IP validation is required
-    bool _sourceIpValidationRequired = true;
+    bool _sourceIpValidationRequired = false;
     // Controls authentication methods, only relevant for inbound calls
     bool _authorizeWithCalltoken = true;
     bool _authorizeWithAuthreq = false;

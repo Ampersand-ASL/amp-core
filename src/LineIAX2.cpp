@@ -111,6 +111,26 @@ void LineIAX2::setPrivateKey(const char* privateKeyHex) {
         strcpyLimited(_privateKeyHex, privateKeyHex, sizeof(_privateKeyHex));
 }
 
+void LineIAX2::setAuthMode(AuthMode mode) {
+    if (mode == AuthMode::OPEN) {
+        _sourceIpValidationRequired = false;
+        _authorizeWithCalltoken = false;
+        _authorizeWithAuthreq = false;
+    }
+    else if (mode == AuthMode::SOURCE_IP) {
+        _sourceIpValidationRequired = true;
+        _authorizeWithCalltoken = true;
+        _authorizeWithAuthreq = false;
+        
+    } else if (mode == AuthMode::CHALLENGE_ED25519) {
+        _sourceIpValidationRequired = false;
+        _authorizeWithCalltoken = false;
+        _authorizeWithAuthreq = true;
+    } else {
+        assert(false);
+    }
+}
+
 int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
 
     close();
