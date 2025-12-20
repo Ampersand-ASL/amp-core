@@ -79,22 +79,36 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 }
 
 LineIAX2::LineIAX2(Log& log, Clock& clock, int busId,
-    MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg,
-    bool supportDirectedPoke, const char* privateKeyHex)
+    MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg)
 :   _log(log),
     _clock(clock),
     _busId(busId),
     _bus(bus),
     _validator(validator),
     _locReg(locReg),
-    _supportDirectedPoke(supportDirectedPoke),
     _startTime(clock.time()) {
-    if (privateKeyHex) {
-        strncpy(_privateKeyHex, privateKeyHex, 64);
-        _privateKeyHex[64] = 0;
-    } else {
-        _privateKeyHex[0] = 0;
-    }
+    _privateKeyHex[0] = 0;
+    _pokeAddr[0] = 0;
+    strcpyLimited(_dnsRoot, "allstarlink.org", sizeof(_dnsRoot));
+}
+
+void LineIAX2::setDNSRoot(const char* dnsRoot) {
+    if (dnsRoot)
+        strcpyLimited(_dnsRoot, dnsRoot, sizeof(_dnsRoot));
+}
+
+void LineIAX2::setPokeEnabled(bool b) {
+    _pokeEnabled = b;
+}
+
+void LineIAX2::setPokeAddr(const char* addrAndPort) {
+    if (addrAndPort)
+        strcpyLimited(_pokeAddr, addrAndPort, sizeof(_pokeAddr));
+}
+
+void LineIAX2::setPrivateKey(const char* privateKeyHex) {
+    if (privateKeyHex)
+        strcpyLimited(_privateKeyHex, privateKeyHex, sizeof(_privateKeyHex));
 }
 
 int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
@@ -598,10 +612,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 // Go out to get the caller's public key
                 call.dnsRequestId = _dnsRequestIdCounter++;
                 char hostName[65];
-                //snprintf(hostName, 65, "%s.nodes.allstarlink.org",
-                // #### TODO: ENVIRONMENT VARIABLE
-                snprintf(hostName, 65, "%s.nodes.allstarlink.w1tkz.net",
-                    call.remoteNumber.c_str());
+                snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
                 _log.info("Call %u starting AUTHREQ process for %s", destCallId, hostName);
                 // Start the DNS lookup process
                 _sendDNSRequestTXT(call.dnsRequestId, hostName);
@@ -613,8 +624,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     // Make an IP address lookup request
                     call.dnsRequestId = _dnsRequestIdCounter++;
                     char hostName[65];
-                    snprintf(hostName, 65, "%s.nodes.allstarlink.org",
-                        call.remoteNumber.c_str());
+                    snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
                     // Start the DNS lookup process
                     _sendDNSRequestA(call.dnsRequestId, hostName);
 
@@ -653,10 +663,10 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             // to be triggered.
             if (_supportDirectedPoke) {
                 // Look to see if there is a target address/port in the message
-                char target[128];
-                if (frame.getIE_str(0x20, target, 128)) {
+                char target[129];
+                if (frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR, target, 129)) {
 
-                    _log.info("Directed POKE requested to %s", target);
+                    //_log.info("Directed POKE requested to %s", target);
 
                     // #### TODO: KEY VALIDATION HAPPENS HERE
 
@@ -764,8 +774,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                 // Only supporting ED25519 challenge, which is found in the 0x20 IE.
                 char sigHex[129];
-                // NOTE: The getIE includes the null termination.
-                if (!frame.getIE_str(0x20, sigHex, 129) || sigHex[0] == 0) {
+                // NOTE: The getIE includes space for the null termination.
+                if (!frame.getIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 129) || sigHex[0] == 0) {
                     _log.error("Call %u no challenge response", destCallId);
                     return;
                 }
@@ -925,7 +935,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         // Look at the challenge type
         uint16_t authmethod = 0;
-        if (!frame.getIE_uint16(0x0e, &authmethod)) {
+        if (!frame.getIE_uint16(IEType::IAX2_IE_AUTHMETHODS, &authmethod)) {
             _log.error("Call %u unable to get AUTHMETHOD", call.localCallId);
             return;
         }
@@ -937,14 +947,14 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             return;
         }
 
-        // Pull out the ED25519 challenge token
+        // Pull out the ED25519 challenge token, leaving room for a null-termination
         char token[33];
-        if (!frame.getIE_str(0x0f, token, 33) || token[0] == 0) {
+        if (!frame.getIE_str(IEType::IAX2_IE_CHALLENGE, token, 33) || token[0] == 0) {
             _log.error("Unable to get challenge token");
             return;
         }
 
-        // Sign the challenge using our private key
+        // Sign the challenge token using our private key
         uint8_t seedBin[32];
         asciiHexToBin(_privateKeyHex, 64, seedBin, 32);
         unsigned char pubBin[32];
@@ -956,17 +966,13 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         binToAsciiHex(sig, 64, sigHex, 128);
         sigHex[128] = 0;
 
-        cout << "Sending response " << sigHex << endl;
-
         // Make the AUTHREP response
         IAX2FrameFull authrepFrame;
         authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
             call.outSeqNo, call.expectedInSeqNo, 
             FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
-        // Putting the ED25519 signature into the 0x20 IE (per spec, reserved for
-        // future use)
-        authrepFrame.addIE_str(0x20, sigHex, 128);
+        authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
 
         _sendFrameToPeer(authrepFrame, call);
     } 
@@ -990,7 +996,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             _log.error("Unable to get assigned CODEC");
             _hangupCall(call);
             return;
-        }
+        } 
         else {
             if (codecSupported((CODECType)codec)) {
                 call.codec = (CODECType)codec;
@@ -1029,10 +1035,10 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         call.state = Call::State::STATE_LINKED;
 
+        // Generate an internal message to announce the new call
         PayloadCallStart payload;
         payload.codec = call.codec;
         payload.startMs = call.localStartMs;
-
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
@@ -1100,7 +1106,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         call.lastLagMs = call.localElapsedMs(_clock) - frame.getTimeStamp();
     }
     // PING
-    else if (frame.isTypeClass(6, 0x02)) {
+    else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PING)) {
         IAX2FrameFull respFrame;
         respFrame.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
@@ -1108,7 +1114,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         _sendFrameToPeer(respFrame, call);
     }
     // PONG
-    else if (frame.getType() == 6 && frame.getSubclass() == 3) {
+    else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PONG)) {
 
         call.lastPingTimeMs = _clock.time() - call.lastPingSentMs;
 
@@ -1497,8 +1503,7 @@ bool LineIAX2::_progressCall(Call& call) {
             call.dnsRequestId = _dnsRequestIdCounter++;
             // Create the SRV query hostname
             char srvHostName[65];
-            snprintf(srvHostName, 65, "_iax._udp.%s.nodes.allstarlink.org",
-                call.remoteNumber.c_str());
+            snprintf(srvHostName, 65, "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
             // Start the DNS lookup process
             _sendDNSRequestSRV(call.dnsRequestId, srvHostName);
             call.state = Call::State::STATE_LOOKUP_0A;
@@ -1581,27 +1586,7 @@ bool LineIAX2::_progressCall(Call& call) {
         }
     }
     else if (call.side == Call::Side::SIDE_CALLED) {
-
-        if (call.state == Call::State::STATE_WAITING) {
-
-            if (_sourceIpValidationRequired) {
-                // Make an IP address lookup request
-                call.dnsRequestId = _dnsRequestIdCounter++;
-                char hostName[65];
-                snprintf(hostName, 65, "%s.nodes.allstarlink.org",
-                    call.remoteNumber.c_str());
-                // Start the DNS lookup process
-                _sendDNSRequestA(call.dnsRequestId, hostName);
-                
-                call.state = Call::State::STATE_IP_VALIDATION_0;
-
-                // #### TODO: IMPLEMENT THE HANDLING OF THE RESULT
-            } else {  
-                // TEMPORARY - bypass authentication 
-                call.state = Call::State::STATE_CALLER_VALIDATED;                
-            }
-        }
-        else if (call.state == Call::State::STATE_CALLER_VALIDATED) {
+        if (call.state == Call::State::STATE_CALLER_VALIDATED) {
 
             // Here we assign the CODEC based on what the caller 
             // said they could handle.
@@ -1991,6 +1976,7 @@ void LineIAX2::oneSecTick() {
 }
 
 void LineIAX2::tenSecTick() {
+
     _visitActiveCallsIf(
         [](Call& call) {
             call.resetStats();
@@ -2004,17 +1990,12 @@ void LineIAX2::tenSecTick() {
         [](const Call& call) { return true; }
     );
 
-    // TEMP - KEEP POKE OPEN
+    // An optional feature to generate a POKE request out to an arbitrary server.
+    // This would be used to keep a UDP firewall hole open.
 
-    // This is a special feature that is no in the RFC specification.
-    if (_supportDirectedPoke) {
-        /*
+    if (_pokeEnabled && _pokeAddr[0] != 0) {
         sockaddr_storage pokeAddr;
-        // TODO: GENERALIZE
-        pokeAddr.ss_family = AF_INET;
-        setIPAddr(pokeAddr, "108.20.174.63");
-        setIPPort(pokeAddr, 4569);
-
+        parseIPAddrAndPort(_pokeAddr, pokeAddr);
         IAX2FrameFull poke2;
         poke2.setHeader(
             // Call IDs unused
@@ -2027,7 +2008,6 @@ void LineIAX2::tenSecTick() {
             IAXSubclass::IAX2_SUBCLASS_IAX_POKE);
         _sendFrameToPeer(poke2, (const sockaddr&)pokeAddr);
         _log.infoDump("Sending POKE", poke2.buf(), poke2.size());
-        */
     }
 }
 

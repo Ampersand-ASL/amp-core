@@ -85,7 +85,13 @@ unsigned codecSampleRate(CODECType type);
 unsigned codecBlockSize(CODECType type);
 
 enum IEType {
-    IAX2_IE_FORMAT = 0x09
+    IAX2_IE_FORMAT = 0x09,
+    IAX2_IE_AUTHMETHODS = 0x0e,
+    IAX2_IE_CHALLENGE = 0x0f,
+    // NOTE: Not in IANA yet, working on getting this registered
+    IAX2_IE_ED25519_RESULT = 0x20,
+    // NOTE: Not in IANA yet
+    IAX2_IE_TARGET_ADDR = 0x21
 };
 
 /**

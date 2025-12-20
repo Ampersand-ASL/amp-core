@@ -176,9 +176,6 @@ protected:
     unsigned _captureClips = 0;
     unsigned _playClips = 0;
 
-    // #### TODO: MOVE THIS OUT 
-    TxControl _txControl;
-
 private:
 
     bool _playing = false;

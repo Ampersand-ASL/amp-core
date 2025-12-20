@@ -41,13 +41,9 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _destCallId(destCallId),
     _startTimeMs(_clock.time()),
     _dtmfDetector(clock, BLOCK_SIZE_8K / 2),
-    _tonePhi(0),
-    _txControl(clock, log, *this, *this) {
-    _resampler.setRates(48000, 8000);
+    _tonePhi(0) {
 
-    // #### TODO: TEMP REMOVE
-    _txControl.setIdRequiredInt(60);
-    _txControl.setCall("KC1FSZ");
+    _resampler.setRates(48000, 8000);
 }
 
 void LineRadio::resetStatistics() {
@@ -150,9 +146,6 @@ void LineRadio::oneSecTick() {
 void LineRadio::audioRateTick(uint32_t tickMs) {
 
     _checkTimeouts();
-
-    // Keep the controller rolling
-    _txControl.run();
 
     // Handle audio synthesis if necessary
     if (_toneActive) {

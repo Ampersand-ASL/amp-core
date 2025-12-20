@@ -88,8 +88,32 @@ public:
      * representation. This should be exactly 64 characters long.
      */
     LineIAX2(Log& log, Clock& clock, int lineId, MessageConsumer& consumer,
-        CallValidator* destValidator = 0, LocalRegistry* locReg = 0,
-        bool supportDirectedPoke = false, const char* privateKeyHex = 0);
+        CallValidator* destValidator = 0, LocalRegistry* locReg = 0);
+
+    // Configuration 
+
+    /**
+     * Controls the root of the DNS queries that are used to resolve IP addresses
+     * and lookup public keys. Defaults to "allstarlink.org"
+     */
+    void setDNSRoot(const char* dnsRoot);
+
+    /** 
+     * Controls whether a regular poke is issued. This would generally be used 
+     * to keep a UDP hole punch open.
+     */
+    void setPokeEnabled(bool b);
+
+    /**
+     * The address and port in xx.xx.xx.xx:yyyy (IPv4) or [xx:xx:xx:xx]:yyyy (IPv6)
+     * format.
+     */
+    void setPokeAddr(const char* addrAndPort);
+
+    /**
+     * Sets the private ED25519 seed. This is a 64-byte ASCII hex string.
+     */
+    void setPrivateKey(const char* privateKeyHex);
 
     /**
      * Opens the network connection for in/out traffic for this line.
@@ -301,9 +325,11 @@ private:
     CallValidator* _validator = 0;
     // Used to resolve targets using a local file
     LocalRegistry* _locReg = 0;
-    bool _supportDirectedPoke;
     // This is an ED25519 private key in ASCII Hex format (exactly 64 characters)
     char _privateKeyHex[65];
+    char _dnsRoot[32];
+    bool _pokeEnabled = false;
+    char _pokeAddr[65];
 
     // The startup time of this line. Mostly used for generating unique
     // tokens.
@@ -336,13 +362,14 @@ private:
     uint32_t _callRetryIntervalMs = 30 * 1000;
     // How long we wait before considering a talkspurt to be finished.
     uint32_t _voxUnkeyMs = 100;
-    // Controls whether source IP validation is required
-    bool _sourceIpValidationRequired = false;
     // Diagnostics    
     unsigned _invalidCallPacketCounter = 0;
+    // Controls whether source IP validation is required
+    bool _sourceIpValidationRequired = true;
     // Controls authentication methods, only relevant for inbound calls
     bool _authorizeWithCalltoken = true;
-    bool _authorizeWithAuthreq = true;
+    bool _authorizeWithAuthreq = false;
+    const bool _supportDirectedPoke = true;
 
     /**
      * @return true if there might be more work to be done
