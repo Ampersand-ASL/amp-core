@@ -176,8 +176,6 @@ protected:
     unsigned _captureClips = 0;
     unsigned _playClips = 0;
 
-private:
-
     bool _playing = false;
 };
 

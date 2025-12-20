@@ -294,12 +294,6 @@ void LineUsb::_pollHidStatus() {
 // 
 void LineUsb::_captureIfPossible() {  
    
-    // Trigger tone
-    //if (_cosActive && !_toneActive) {
-    //    _toneActive = true;
-    //    _toneStopMs = _clock.time() + 2000;
-    //}
-
     bool audioCaptureEnabled = (_cosActive && _ctcssActive) || _toneActive;
 
     // Attempt to read inbound (captured) audio data. Whenever a full
@@ -315,18 +309,6 @@ void LineUsb::_captureIfPossible() {
     if (samplesRead > 0) {
 
         assert((unsigned)samplesRead <= BLOCK_SIZE_48K);
-
-        // When the tone is active we substitue/augment synthetic audio for the 
-        // real audio captured. This is purposely done as far upstream as possible.
-        if (_toneActive) {
-            uint8_t* destPtr = usbBuffer;
-            for (unsigned i = 0; i < (unsigned)samplesRead; i++, destPtr += 4) {
-                int16_t sample = std::round(_toneAmp * std::cos(_tonePhi));
-                _tonePhi += _toneOmega;
-                // Tone to left channel
-                pack_int16_le(sample, destPtr);
-            }
-        }
 
         // Do we have a full audio block available yet?
         if (_captureAccumulatorSize + samplesRead >= BLOCK_SIZE_48K) {
