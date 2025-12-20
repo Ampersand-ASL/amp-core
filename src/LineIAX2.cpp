@@ -602,7 +602,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 // #### TODO: ENVIRONMENT VARIABLE
                 snprintf(hostName, 65, "%s.nodes.allstarlink.w1tkz.net",
                     call.remoteNumber.c_str());
-                _log.info("Starting AUTHREQ process for %s", hostName);
+                _log.info("Call %u starting AUTHREQ process for %s", destCallId, hostName);
                 // Start the DNS lookup process
                 _sendDNSRequestTXT(call.dnsRequestId, hostName);
 
