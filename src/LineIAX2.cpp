@@ -633,7 +633,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 call.dnsRequestId = _dnsRequestIdCounter++;
                 char hostName[65];
                 snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
-                _log.info("Call %u starting AUTHREQ process for %s", destCallId, hostName);
+                _log.info("Call %u starting AUTHREQ process for %s", call.localCallId, hostName);
                 // Start the DNS lookup process
                 _sendDNSRequestTXT(call.dnsRequestId, hostName);
 
@@ -814,10 +814,24 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     untrustedCall.publicKeyBin) == 1) {
                     untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
                     untrustedCall.trusted = true;
-                    _log.info("Call %u good signature", destCallId);
+
+                    _log.info("Call %u good signature", destCallId);                   
                 }
                 else {
                     _log.info("Call %u invalid signature", destCallId);
+                }
+
+                if (untrustedCall.trusted) {
+                    // Normally the sequence/ACK would be handled later, but this message
+                    // is a special case.
+                    if (frame.getOSeqNo() == call.expectedInSeqNo) {
+                        call.incrementExpectedInSeqNo();
+                        if (frame.isACKRequired())
+                            _sendACK(frame.getTimeStamp(), call);
+                    }
+                    else {
+                        _log.error("Call %u sequence number problem", destCallId);
+                    }
                 }
 
                 return;
