@@ -1354,7 +1354,11 @@ void LineIAX2::_processDNSResponse0(Call& call,
     int rc1 = microdns::parseDNSAnswer_SRV(buf, bufLen,
         &pri, &weight, &port, srvHost, 65);
     if (rc1 < 0) {
-        _log.error("Invalid DNS response (SRV) %d", rc1);
+        if (rc1 == -3) {
+            _log.info("Call %u node not registered", call.localCallId);
+        } else {
+            _log.error("Invalid DNS response (SRV) %d", rc1);
+        }
         call.state = Call::State::STATE_TERMINATED;
         return;
     }
