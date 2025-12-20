@@ -824,8 +824,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 if (untrustedCall.trusted) {
                     // Normally the sequence/ACK would be handled later, but this message
                     // is a special case.
-                    if (frame.getOSeqNo() == call.expectedInSeqNo) {
-                        call.incrementExpectedInSeqNo();
+                    if (frame.getOSeqNo() == untrustedCall.expectedInSeqNo) {
+                        untrustedCall.incrementExpectedInSeqNo();
                         if (frame.isACKRequired())
                             _sendACK(frame.getTimeStamp(), call);
                     }
