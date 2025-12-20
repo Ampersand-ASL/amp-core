@@ -827,7 +827,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     if (frame.getOSeqNo() == untrustedCall.expectedInSeqNo) {
                         untrustedCall.incrementExpectedInSeqNo();
                         if (frame.isACKRequired())
-                            _sendACK(frame.getTimeStamp(), call);
+                            _sendACK(frame.getTimeStamp(), untrustedCall);
                     }
                     else {
                         _log.error("Call %u sequence number problem", destCallId);
