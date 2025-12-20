@@ -789,6 +789,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 else {
                     _log.info("Call %u invalid signature", destCallId);
                 }
+
+                return;
             }
         }
 
