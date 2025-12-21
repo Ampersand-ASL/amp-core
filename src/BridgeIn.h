@@ -47,8 +47,8 @@ class Clock;
 class BridgeIn : public MessageConsumer {
 public:
 
-    //static const unsigned AUDIO_RATE = 48000;
     static const unsigned BLOCK_SIZE_8K = 160;
+    static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
