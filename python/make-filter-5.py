@@ -5,7 +5,7 @@ Copyright (C) Bruce MacKinnon, 2025
 Software Defined Repeater Controller Project
 
 Need to add this to the path:
-export PYTHONPATH=../../../firpm-py
+export PYTHONPATH=../../firpm-py
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,7 +56,7 @@ ax.axvspan(8000, 24000, color=(0.9, 0.9, 1.0), label='Potential Aliasing Area')
 ax.legend()
 ax.grid(True)
 plt.show()
-
+"""
 # Sanity check: generate a sample signal of one second
 t = np.linspace(0, fs, fs, endpoint=False)
 ft = 12000
@@ -73,3 +73,4 @@ ax.set_xlabel('Tone Freq (Hz)')
 ax.set_ylabel('Magnitude')
 ax.grid(True)
 plt.show()
+"""
