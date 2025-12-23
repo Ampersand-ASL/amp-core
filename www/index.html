@@ -63,10 +63,10 @@ td {
             <br/>
             <br/>
             <input id="node" name="node" type="text" placeholder="Node Number"/>
-            <input id="connect-button" name="connect" type="submit" value="Connect"/>
+            <input id="connect-button" name="call" type="submit" value="Connect"/>
             <br/>
             <br/>
-            <input id="disconnect-button" type="submit" value="Disconnect All"/>
+            <input id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
             <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
             <p>Connections:</p>
             <table>
@@ -78,7 +78,7 @@ td {
                 </tbody>
             </table>
             <br/>
-            <input id="ptt-button" type="submit" value="PTT"/>
+            <input id="ptt-button" name="ptt" type="submit" value="PTT"/>
         </form>
         <hr/>
         <a href="config">Configuration</a>
@@ -135,10 +135,11 @@ async function status_update() {
     }
 }
 
-function status_save(v) {
+function status_save(buttonName) {
     const form = document.getElementById('status-form');
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
+    formObject["button"] = buttonName;
     const jsonString = JSON.stringify(formObject, null, 2);
     fetch('/status-save', {
         method: 'POST',
@@ -158,8 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 500);
     document.getElementById('status-form').addEventListener('submit', function (event) {
         event.preventDefault();
-        const clickedButtonValue = event.submitter.value;
-        status_save(clickedButtonValue);
+        status_save(event.submitter.name);
         // Clear the entry 
         document.getElementById('node').value = ""
         status_update();

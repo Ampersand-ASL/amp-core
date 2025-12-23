@@ -1753,8 +1753,8 @@ void LineIAX2::consume(const Message& msg) {
         disconnectAllNonPermanent();
     }
     else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
-        PayloadConnect* payload = (PayloadConnect*)msg.body();
-        assert(msg.size() == sizeof(PayloadConnect));
+        PayloadCall* payload = (PayloadCall*)msg.body();
+        assert(msg.size() == sizeof(PayloadCall));
         call(payload->localNumber, payload->targetNumber);
     }
     // Everything else gets handed to the calls for processing.

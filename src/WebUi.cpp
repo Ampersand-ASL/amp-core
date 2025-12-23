@@ -1,0 +1,190 @@
+/**
+ * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#include "httplib.h"
+
+#include <process.h>
+
+#include <iostream>
+#include <thread>
+
+#include <nlohmann/json.hpp>
+
+#include "kc1fsz-tools/Log.h"
+#include "kc1fsz-tools/Clock.h"
+#include "kc1fsz-tools/threadsafequeue.h"
+
+#include "Message.h"
+#include "MessageConsumer.h"
+#include "WebUi.h"
+
+using namespace std;
+using json = nlohmann::json;
+
+// https://github.com/yhirose/cpp-httplib
+// https://github.com/nlohmann/json
+
+static const unsigned DEST_CALL_ID = 1;
+
+namespace kc1fsz {
+
+    namespace amp {
+
+WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
+    unsigned networkDestLineId, unsigned radioDestLineId) 
+:   _log(log), 
+    _clock(clock),
+    _consumer(cons),
+    _listenPort(listenPort),
+    _networkDestLineId(networkDestLineId),
+    _radioDestLineId(radioDestLineId) {
+    _beginthread(_uiThread, 0, (void*)this);
+}
+
+bool WebUi::run2() {
+    Message msg;
+    if (_outQueue.try_pop(msg)) {
+        _consumer.consume(msg);
+        return true;
+    }
+    else return false;
+}
+
+void WebUi::_uiThread(void* o) {
+    ((WebUi*)o)->_thread();
+}
+
+void WebUi::_thread() {
+
+    _log.info("ui_thread start");
+
+    //pthread_setname_np(pthread_self(), "amp-server-ui");
+
+    // HTTP
+    httplib::Server svr;
+
+    // ------ Main Page --------------------------------------------------------
+
+    svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
+        res.set_file_content("../amp-core/www/index.html");
+    });
+    svr.Get("/status", [this](const httplib::Request &, httplib::Response &res) {
+        json o;
+        // ### TODO: This will need to come from broadcast
+        o["cos"] = _ptt;
+        o["ptt"] = _ptt;
+        auto a = json::array();
+        json o2;
+        o2["node"] = "2222";
+        auto b = json::array();
+        b.push_back("61057");
+        b.push_back("55553");
+        o2["connections"] = b;
+        a.push_back(o2);
+        o["connections"] = a;
+        res.set_content(o.dump(), "application/json");
+    });
+    svr.Post("/status-save", [this](const httplib::Request &, httplib::Response &res, 
+        const httplib::ContentReader &content_reader) {
+        // Pull out the JSON content
+        std::string body;
+        content_reader([&body](const char *data, size_t data_length) {
+            body.append(data, data_length);
+            return true;
+        });
+        json data = json::parse(body);
+
+        if (data.contains("button")) {
+            if (data["button"] == "ptt") {
+                _ptt = !_ptt;
+                Message msg;
+                if (_ptt) 
+                    msg = Message::signal(Message::SignalType::COS_ON);
+                else 
+                    msg = Message::signal(Message::SignalType::COS_OFF);
+                msg.setDest(_radioDestLineId, DEST_CALL_ID);
+                _outQueue.push(msg);
+            } else if (data["button"] == "call") {
+                // #### TODO: CHANGE
+                string localNode = "672730";
+                string targetNode = data["node"];
+                if (!targetNode.empty()) {
+                    PayloadCall payload;
+                    strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
+                    strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
+                    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+                        sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                    msg.setDest(_networkDestLineId, DEST_CALL_ID);
+                    _outQueue.push(msg);
+                }
+            }
+            else if (data["button"] == "dropall") {
+                Message msg = Message::signal(Message::SignalType::DROP_ALL_NODES);
+                msg.setDest(_networkDestLineId, DEST_CALL_ID);
+                _outQueue.push(msg);
+            }
+        }
+    });
+
+    // ------ Config Page-------------------------------------------------------
+
+    svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
+        res.set_file_content("../www/config.html");
+    });
+    svr.Get("/config-load", [](const httplib::Request &, httplib::Response &res) {
+        json o;
+        o["node"] = "61057";
+        o["password"] = "xxxxxx";
+        o["audiodevice"] = "bus:1,port:3";
+        o["iaxport4"] = 4569;
+         res.set_content(o.dump(), "application/json");
+    });
+    svr.Post("/config-save", [](const httplib::Request &, httplib::Response &res, 
+        const httplib::ContentReader &content_reader) {
+        cout << "Saving changes" << endl;
+        std::string body;
+        content_reader([&](const char *data, size_t data_length) {
+            body.append(data, data_length);
+            return true;
+        });
+        cout << body << endl;
+    });
+    svr.Get("/audiodevice-list", [](const httplib::Request &, httplib::Response &res) {
+        auto a = json::array();
+        json o;
+        o["bus"] = "1";
+        o["port"] = "2";
+        o["query"] = "bus:1,port:2";
+        o["desc"] = "C-Media Electronics, Inc. USB Audio Device";
+        a.push_back(o);
+        o["bus"] = "1";
+        o["port"] = "3";
+        o["query"] = "bus:1,port:3";
+        o["desc"] = "Other";
+        a.push_back(o);
+         res.set_content(a.dump(), "application/json");
+    });
+
+    _log.info("ui_thread listening");
+
+    // OK to use this const
+    svr.listen("0.0.0.0", _listenPort);
+
+    _log.info("ui_thread end");
+}
+
+    }
+}

@@ -84,6 +84,11 @@ public:
 
     void clear();
 
+    /**
+     * Shortcut constructor
+     */
+    static Message signal(SignalType st) { return Message(Type::SIGNAL, st, 0, 0, 0, 0); }
+
 private:
 
     Type _type;
@@ -107,7 +112,7 @@ struct PayloadCallStart {
     bool echo = false;
 };
 
-struct PayloadConnect {
+struct PayloadCall {
     char localNumber[16];
     char targetNumber[16];
 };
