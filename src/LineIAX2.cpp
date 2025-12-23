@@ -1747,87 +1747,100 @@ unsigned LineIAX2::getActiveCalls() const {
  * This function gets called when an audio/text message is available.
  */
 void LineIAX2::consume(const Message& msg) {  
-    _visitActiveCallsIf(
-        // Visitor
-        [line=this, &msg](Call& call) {
-            if (msg.getType() == Message::Type::AUDIO) {
 
-                if (!codecSupported((CODECType)msg.getFormat())) {
-                    line->_log.error("Unsupported CODEC");
-                    return;
+    // Look at for non-call signals
+    if (msg.isSignal(Message::SignalType::DROP_ALL_NODES)) {
+        disconnectAllNonPermanent();
+    }
+    else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
+        PayloadConnect* payload = (PayloadConnect*)msg.body();
+        assert(msg.size() == sizeof(PayloadConnect));
+        call(payload->localNumber, payload->targetNumber);
+    }
+    // Everything else gets handed to the calls for processing.
+    else {
+        _visitActiveCallsIf(
+            // Visitor
+            [line=this, &msg](Call& call) {
+                if (msg.getType() == Message::Type::AUDIO) {
+
+                    if (!codecSupported((CODECType)msg.getFormat())) {
+                        line->_log.error("Unsupported CODEC");
+                        return;
+                    }
+
+                    // Figure out which kind of frame to send.  This follows 
+                    // some tricky logic defined in RFC 5456 Section 8.1.2.
+                    // 
+                    // "Mini frames carry a 16-bit time-stamp, which is the lower 16 bits
+                    // of the transmitting peer's full 32-bit time-stamp for the call.
+                    // The time-stamp allows synchronization of incoming frames so that
+                    // they MAY be processed in chronological order instead of the
+                    // (possibly different) order in which they are received.  The 16-bit
+                    // time-stamp wraps after 65.536 seconds, at which point a full frame
+                    // SHOULD be sent to notify the remote peer that its time-stamp has
+                    // been reset.  A call MUST continue to send mini frames starting
+                    // with time-stamp 0 even if acknowledgment of the resynchronization
+                    // is not received."
+                    //
+                    // In order to implement this we keep track of the 32-bit timestamp 
+                    // of each voice frame sent (full or mini) and watch for the overflow 
+                    // between the lower 16 and upper 16 bits of the timestamp.
+
+                    // One other important thing here related to timing. The voice 
+                    // frames are sent out with the elapsed time aligned to 20ms boundaries.
+                    // We keep track of the previous elapsed time used to make sure that 
+                    // we don't sent out two voice frames with the same timestamp.
+                    //
+                    uint32_t elapsed = call.dispenseElapsedUsingMessageOrigin(msg, true);
+                    //line->_log.info("Send e %u", elapsed);
+                    // The wrap case is identified by looking at the top 16 bits of the 
+                    // last voice frame we transmitted.
+                    bool hasWrapped = call.lastVoiceFrameElapsedMs == 0 || 
+                        (elapsed & 0xffff0000) != (call.lastVoiceFrameElapsedMs & 0xffff0000);
+                    // In the wrap case we send a full frame
+                    if (hasWrapped) {
+                        IAX2FrameFull voiceFrame;
+                        voiceFrame.setHeader(call.localCallId, call.remoteCallId, 
+                            elapsed, 
+                            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_VOICE, call.codec);
+                        voiceFrame.setBody(msg.body(), msg.size());
+                        line->_sendFrameToPeer(voiceFrame, call);
+                    }
+                    // If no wrap then we can safely use a mini-frame
+                    else {
+                        // NOTE: Make this large enough for the biggest code!
+                        const unsigned miniFrameMaxSize = 160 * 2 * 2 + 4;
+                        assert(msg.size() <= miniFrameMaxSize - 4);
+                        uint8_t miniFrame[miniFrameMaxSize];
+                        // We make sure the F bit =0 to indicate a mini-frame
+                        pack_uint16_be((0x7fff & call.localCallId), miniFrame);
+                        // Send only the lower 16 bits of the timestamp per the spec
+                        pack_uint16_be(0xffff & elapsed, miniFrame + 2);
+                        memcpy(miniFrame + 4, msg.body(), msg.size());
+                        line->_sendFrameToPeer(miniFrame, msg.size() + 4, 
+                            (const sockaddr&)call.peerAddr);              
+                    }
+
+                    call.lastVoiceFrameElapsedMs = elapsed;
+                    call.vox = true;
                 }
-
-                // Figure out which kind of frame to send.  This follows 
-                // some tricky logic defined in RFC 5456 Section 8.1.2.
-                // 
-                // "Mini frames carry a 16-bit time-stamp, which is the lower 16 bits
-                // of the transmitting peer's full 32-bit time-stamp for the call.
-                // The time-stamp allows synchronization of incoming frames so that
-                // they MAY be processed in chronological order instead of the
-                // (possibly different) order in which they are received.  The 16-bit
-                // time-stamp wraps after 65.536 seconds, at which point a full frame
-                // SHOULD be sent to notify the remote peer that its time-stamp has
-                // been reset.  A call MUST continue to send mini frames starting
-                // with time-stamp 0 even if acknowledgment of the resynchronization
-                // is not received."
-                //
-                // In order to implement this we keep track of the 32-bit timestamp 
-                // of each voice frame sent (full or mini) and watch for the overflow 
-                // between the lower 16 and upper 16 bits of the timestamp.
-
-                // One other important thing here related to timing. The voice 
-                // frames are sent out with the elapsed time aligned to 20ms boundaries.
-                // We keep track of the previous elapsed time used to make sure that 
-                // we don't sent out two voice frames with the same timestamp.
-                //
-                uint32_t elapsed = call.dispenseElapsedUsingMessageOrigin(msg, true);
-                //line->_log.info("Send e %u", elapsed);
-                // The wrap case is identified by looking at the top 16 bits of the 
-                // last voice frame we transmitted.
-                bool hasWrapped = call.lastVoiceFrameElapsedMs == 0 || 
-                    (elapsed & 0xffff0000) != (call.lastVoiceFrameElapsedMs & 0xffff0000);
-                // In the wrap case we send a full frame
-                if (hasWrapped) {
-                    IAX2FrameFull voiceFrame;
-                    voiceFrame.setHeader(call.localCallId, call.remoteCallId, 
-                        elapsed, 
-                        call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_VOICE, call.codec);
-                    voiceFrame.setBody(msg.body(), msg.size());
-                    line->_sendFrameToPeer(voiceFrame, call);
+                else if (msg.getType() == Message::Type::SIGNAL) {
+                    if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
+                        line->_hangupCall(call);
+                    }
+                    else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
+                        line->_log.info("Explicit unkey consumed");
+                    }
                 }
-                // If no wrap then we can safely use a mini-frame
-                else {
-                    // NOTE: Make this large enough for the biggest code!
-                    const unsigned miniFrameMaxSize = 160 * 2 * 2 + 4;
-                    assert(msg.size() <= miniFrameMaxSize - 4);
-                    uint8_t miniFrame[miniFrameMaxSize];
-                    // We make sure the F bit =0 to indicate a mini-frame
-                    pack_uint16_be((0x7fff & call.localCallId), miniFrame);
-                    // Send only the lower 16 bits of the timestamp per the spec
-                    pack_uint16_be(0xffff & elapsed, miniFrame + 2);
-                    memcpy(miniFrame + 4, msg.body(), msg.size());
-                    line->_sendFrameToPeer(miniFrame, msg.size() + 4, 
-                        (const sockaddr&)call.peerAddr);              
-                }
-
-                call.lastVoiceFrameElapsedMs = elapsed;
-                call.vox = true;
+            },
+            // Predicate (filters the calls)
+            [msg](const Call& call) {
+                return call.state == Call::State::STATE_UP &&
+                    (int)msg.getDestCallId() == call.localCallId;
             }
-            else if (msg.getType() == Message::Type::SIGNAL) {
-                if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
-                    line->_hangupCall(call);
-                }
-                else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
-                    line->_log.info("Explicit unkey consumed");
-                }
-            }
-        },
-        // Predicate (filters the calls)
-        [msg](const Call& call) {
-            return call.state == Call::State::STATE_UP &&
-                (int)msg.getDestCallId() == call.localCallId;
-        }
-    );
+        );
+    }
 }
 
 void LineIAX2::_sendACK(uint32_t timeStamp, Call& call) {    

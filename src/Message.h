@@ -44,7 +44,14 @@ public:
         CALL_END,
         CALL_TERMINATE,
         RADIO_KEY,
-        RADIO_UNKEY
+        RADIO_UNKEY,
+        // Requests network call/drop
+        CALL_NODE,
+        DROP_NODE,
+        DROP_ALL_NODES,
+        // Tells an audio interface that the COS signal has been activated/deactivated
+        COS_ON,
+        COS_OFF
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
@@ -59,6 +66,7 @@ public:
 
     Type getType() const { return _type; }
     bool isVoice() const { return _type == Type::AUDIO; }
+    bool isSignal(SignalType st) const { return _type == Type::SIGNAL && _format == st; }
     unsigned getFormat() const { return _format; }
 
     unsigned size() const { return _size; }
@@ -97,6 +105,11 @@ struct PayloadCallStart {
     bool bypassJitterBuffer = false;
     uint32_t startMs;
     bool echo = false;
+};
+
+struct PayloadConnect {
+    char localNumber[16];
+    char targetNumber[16];
 };
 
 }
