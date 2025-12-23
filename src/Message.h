@@ -42,6 +42,9 @@ public:
         SIGNALTYPE_NONE = 0,
         CALL_START,
         CALL_END,
+        // Sent out periodically by the line that "owns" the call to provide
+        // and update on the status of teh call.
+        CALL_STATUS,
         CALL_TERMINATE,
         RADIO_KEY,
         RADIO_UNKEY,
@@ -102,14 +105,21 @@ private:
     unsigned _destBusId = 0, _destCallId = 0;
 };
 
-/**
- * The body of a CALL_START message type
- */
 struct PayloadCallStart {
+    char localNumber[16];
+    char remoteNumber[16];
     CODECType codec;
     bool bypassJitterBuffer = false;
     uint32_t startMs;
     bool echo = false;
+    bool originated = false;
+};
+
+struct PayloadCallStatus {
+    char localNumber[16];
+    char remoteNumber[16];
+    uint32_t lastRxMs;
+    uint32_t lastTxMs;
 };
 
 struct PayloadCall {

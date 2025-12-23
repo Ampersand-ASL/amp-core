@@ -1210,6 +1210,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             voiceMsg.setDest(_destLineId, DEST_CALL_ID);
             _bus.consume(voiceMsg);
         }
+
+        call.lastRxVoiceFrameMs = _clock.time();
         // #### TODO: IGNORED PACKET COUNT
     }
     // TEXT
@@ -1292,6 +1294,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
         [line=this, &log=_log, buf, bufLen, rxStampMs](Call& call) {
 
             call.lastFrameRxMs = line->_clock.time();
+            call.lastRxVoiceFrameMs = line->_clock.time();
 
             // Get the short time from the frame and convert it into a 
             // full time. IMPORTANT: There is an assumption here that 
@@ -1822,6 +1825,7 @@ void LineIAX2::consume(const Message& msg) {
                             (const sockaddr&)call.peerAddr);              
                     }
 
+                    call.lastTxVoiceFrameMs = line->_clock.time();
                     call.lastVoiceFrameElapsedMs = elapsed;
                     call.vox = true;
                 }
@@ -2026,6 +2030,26 @@ void LineIAX2::oneSecTick() {
             call.oneSecTick(line->_log, line->_clock, *line);
         },
         // Predicate
+        [](const Call& call) { return true; }       
+    );
+
+    // Publish the status messages for each call. This is useful to keep 
+    // UIs up to date
+    _visitActiveCallsIf(
+        // This function will be called for each active call in the system.
+        // (Even the terminated ones)
+        [this](Call& call) {
+            PayloadCallStatus status;
+            strcpyLimited(status.localNumber, call.localNumber.c_str(), sizeof(status.localNumber));
+            strcpyLimited(status.remoteNumber, call.remoteNumber.c_str(), sizeof(status.remoteNumber));
+            status.lastRxMs = call.lastRxVoiceFrameMs;
+            status.lastTxMs = call.lastTxVoiceFrameMs;
+            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_STATUS, sizeof(status),
+                (const uint8_t*)&status, 0, 0);
+            msg.setSource(_busId, call.localCallId);
+            msg.setDest(_destLineId, DEST_CALL_ID);
+        },
+        // Predicate
         [](const Call& call) { return true; }
     );
 }
@@ -2129,6 +2153,7 @@ void LineIAX2::Call::reset() {
     lastLagMs = 0;
     lastLagrqMs = 0;
     lastRxVoiceFrameMs = 0;
+    lastTxVoiceFrameMs = 0;
 }
 
 uint32_t LineIAX2::Call::localElapsedMs(Clock& clock) const {

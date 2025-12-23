@@ -274,6 +274,7 @@ private:
         const uint32_t lagrqIntervalMs = 10 * 1000;
 
         uint32_t lastRxVoiceFrameMs = 0;
+        uint32_t lastTxVoiceFrameMs = 0;
 
         void reset();
 
