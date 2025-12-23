@@ -71,6 +71,7 @@ static const uint32_t _terminationTimeoutMs = 15 * 1000;
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
+static const unsigned DEST_CALL_ID = 1;
 
 namespace kc1fsz {
 
@@ -79,13 +80,14 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 }
 
 LineIAX2::LineIAX2(Log& log, Clock& clock, int busId,
-    MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg)
+    MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg, unsigned destLineId)
 :   _log(log),
     _clock(clock),
     _busId(busId),
     _bus(bus),
     _validator(validator),
     _locReg(locReg),
+    _destLineId(destLineId),
     _startTime(clock.time()) {
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
@@ -1073,6 +1075,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
+        msg.setDest(_destLineId, DEST_CALL_ID);
         _bus.consume(msg);
     }
     // ANSWER
@@ -1105,6 +1108,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
             0, 0, frame.getTimeStamp(), rxStampMs);
         unkeyMsg.setSource(_busId, call.localCallId);
+        unkeyMsg.setDest(_destLineId, DEST_CALL_ID);
         _bus.consume(unkeyMsg);
     }
     // LAGRQ
@@ -1203,6 +1207,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         if (goodVoice) {
             voiceMsg.setSource(_busId, call.localCallId);
+            voiceMsg.setDest(_destLineId, DEST_CALL_ID);
             _bus.consume(voiceMsg);
         }
         // #### TODO: IGNORED PACKET COUNT
@@ -1314,6 +1319,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             }
 
             voiceMsg.setSource(line->_busId, call.localCallId);
+            voiceMsg.setDest(line->_destLineId, DEST_CALL_ID);
             line->_bus.consume(voiceMsg);
         },
         // Predicate
@@ -1662,6 +1668,7 @@ bool LineIAX2::_progressCall(Call& call) {
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
             msg.setSource(_busId, call.localCallId);
+            msg.setDest(_destLineId, DEST_CALL_ID);
             _bus.consume(msg);
         }
 
@@ -1694,6 +1701,7 @@ bool LineIAX2::_progressCall(Call& call) {
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
             0, 0, 0, _clock.time());
         msg.setSource(_busId, call.localCallId);
+        msg.setDest(_destLineId, DEST_CALL_ID);
         _bus.consume(msg);
 
         call.state = Call::State::STATE_TERMINATED;

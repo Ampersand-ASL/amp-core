@@ -61,7 +61,7 @@ public:
      * tick applies. This time will likely be before the "clock time" since it 
      * is locked in at the start of the tick.
      */
-    virtual void audioRateTick(uint32_t tickTimeMs) = 0;
+    virtual void audioRateTick(uint32_t tickTimeMs) { }
 
     virtual void oneSecTick() { }
     

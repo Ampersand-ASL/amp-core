@@ -88,7 +88,8 @@ public:
      * representation. This should be exactly 64 characters long.
      */
     LineIAX2(Log& log, Clock& clock, int lineId, MessageConsumer& consumer,
-        CallValidator* destValidator = 0, LocalRegistry* locReg = 0);
+        CallValidator* destValidator, LocalRegistry* locReg, 
+        unsigned destLineId);
 
     // Configuration 
 
@@ -333,6 +334,8 @@ private:
     CallValidator* _validator = 0;
     // Used to resolve targets using a local file
     LocalRegistry* _locReg = 0;
+    // The line that all messages are directed to
+    unsigned _destLineId;
     // This is an ED25519 private key in ASCII Hex format (exactly 64 characters)
     char _privateKeyHex[65];
     char _dnsRoot[32];
