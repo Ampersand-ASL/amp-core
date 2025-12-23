@@ -16,5 +16,5 @@
  */
 #pragma once
 
-void ui_thread();
-
+void ui_thread2();
+void ui_thread(void*);

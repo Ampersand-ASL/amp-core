@@ -14,19 +14,29 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "httplib.h"
+
 #include <iostream>
 #include <thread>
 
 #include <nlohmann/json.hpp>
-#include "httplib.h"
+
+#include "kc1fsz-tools/Log.h"
+
+#include "ui-thread.h"
 
 using namespace std;
+using namespace kc1fsz;
 using json = nlohmann::json;
 
 // https://github.com/yhirose/cpp-httplib
 // https://github.com/nlohmann/json
 
-void ui_thread() {
+void ui_thread2() { ui_thread(0); }
+
+void ui_thread(void* l) {
+
+    Log* log = (Log*)l;
 
     //pthread_setname_np(pthread_self(), "amp-server-ui");
 
