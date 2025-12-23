@@ -41,7 +41,7 @@ public:
     static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
-    static const unsigned MAX_TAPS = 31;
+    static const unsigned MAX_TAPS = 45;
 
     /** 
      * Resets internal state without changing the sample rates.
@@ -77,7 +77,8 @@ public:
     static const int16_t F2_COEFFS[F2_TAPS];
 
     // LPF used for down-sampling from 48K to 16K
-    static const unsigned F16_TAPS = 31;
+    //static const unsigned F16_TAPS = 31;
+    static const unsigned F16_TAPS = 45;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
     static const int16_t F16_COEFFS[F16_TAPS];
