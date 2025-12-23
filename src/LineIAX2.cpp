@@ -1072,6 +1072,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         PayloadCallStart payload;
         payload.codec = call.codec;
         payload.startMs = call.localStartMs;
+        strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+        strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
@@ -1211,7 +1213,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             _bus.consume(voiceMsg);
         }
 
-        call.lastRxVoiceFrameMs = _clock.time();
+        call.lastRxVoiceFrameMs = _clock.timeUs() / 1000;
         // #### TODO: IGNORED PACKET COUNT
     }
     // TEXT
@@ -1294,7 +1296,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
         [line=this, &log=_log, buf, bufLen, rxStampMs](Call& call) {
 
             call.lastFrameRxMs = line->_clock.time();
-            call.lastRxVoiceFrameMs = line->_clock.time();
+            call.lastRxVoiceFrameMs = line->_clock.timeUs() / 1000;
 
             // Get the short time from the frame and convert it into a 
             // full time. IMPORTANT: There is an assumption here that 
@@ -1701,8 +1703,13 @@ bool LineIAX2::_progressCall(Call& call) {
     // Doesn't matter whether we called or was called for these tasks.
 
     if (call.state == Call::State::STATE_TERMINATE_WAITING) {
+
+        PayloadCallEnd payload;
+        strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+        strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+        
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-            0, 0, 0, _clock.time());
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());            
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, DEST_CALL_ID);
         _bus.consume(msg);
@@ -1825,7 +1832,7 @@ void LineIAX2::consume(const Message& msg) {
                             (const sockaddr&)call.peerAddr);              
                     }
 
-                    call.lastTxVoiceFrameMs = line->_clock.time();
+                    call.lastTxVoiceFrameMs = line->_clock.timeUs() / 1000;
                     call.lastVoiceFrameElapsedMs = elapsed;
                     call.vox = true;
                 }

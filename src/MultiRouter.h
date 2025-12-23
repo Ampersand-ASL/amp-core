@@ -33,11 +33,12 @@ namespace kc1fsz {
 class MultiRouter : public MessageConsumer, public Runnable2 {
 public:
 
-    MultiRouter(threadsafequeue<Message>& queue);
+    MultiRouter();
 
     void addRoute(MessageConsumer* consumer, unsigned lineId);
 
     void consume(const Message& msg);
+
     bool run2();
 
     struct Dest {
@@ -45,9 +46,10 @@ public:
         unsigned lineId;
     };
 
+    static const unsigned BROADCAST = 0;
+
 private:
 
-    threadsafequeue<Message>& _queue;
     std::vector<Dest> _dests;
 };
 

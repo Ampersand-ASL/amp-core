@@ -18,24 +18,16 @@
 
 namespace kc1fsz {
 
-MultiRouter::MultiRouter(threadsafequeue<Message>& queue) 
-:   _queue(queue) { }
+MultiRouter::MultiRouter() { }
 
 bool MultiRouter::run2() {
-    if (_queue.empty())
-        return false;
-    while (!_queue.empty()) {
-        Message msg;
-        if (_queue.try_pop(msg)) {
-            consume(msg);
-        }
-    }
-    return true;
+    return false;
 }
 
 void MultiRouter::consume(const Message& msg) {
+    // Dispatch the message to its intended destination
     for (auto it = _dests.begin(); it != _dests.end(); it++) {
-        if (it->lineId == msg.getDestBusId()) {
+        if (it->lineId == msg.getDestBusId() || it->lineId == BROADCAST) {
             it->consumer->consume(msg);
         }
     }

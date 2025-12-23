@@ -54,6 +54,47 @@ WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
     _beginthread(_uiThread, 0, (void*)this);
 }
 
+void WebUi::consume(const Message& msg) {   
+    // Some selected message types will be copied and sent over to the UI 
+    // thread for processing
+    if (msg.isSignal(Message::COS_ON)) {
+        _cos.store(true);
+    } else if (msg.isSignal(Message::COS_OFF)) {
+        _cos.store(false);
+    } else if (msg.isSignal(Message::SignalType::CALL_START)) {
+        assert(msg.size() == sizeof(PayloadCallStart));
+        const PayloadCallStart* payload = (const PayloadCallStart*)msg.body();
+        string remoteNumber = payload->remoteNumber;
+        if (!remoteNumber.empty()) {
+            _status.manipulateUnderLock([&remoteNumber, payload](std::vector<Peer>& v) {
+                Peer peer;
+                peer.remoteNumber = remoteNumber;
+                // #### TODO: NEED TO MAKE THIS 64-bit!
+                peer.startMs = payload->startMs;
+                v.push_back(peer);
+            });
+        }
+    } else if (msg.isSignal(Message::SignalType::CALL_END)) {
+        assert(msg.size() == sizeof(PayloadCallEnd));
+        const PayloadCallEnd* payload = (const PayloadCallEnd*)msg.body();
+        string remoteNumber = payload->remoteNumber;
+        if (!remoteNumber.empty()) {
+            _status.manipulateUnderLock([remoteNumber, payload](std::vector<Peer>& v) {
+                v.erase(
+                    std::remove_if(v.begin(), v.end(),
+                        [remoteNumber](Peer& p) { 
+                            return p.remoteNumber == remoteNumber; 
+                        }
+                    ), 
+                    v.end());                 
+            });
+        }
+    }
+        //msg.isSignal(Message::SignalType::CALL_STATUS)) {
+        //cout << "Got signal" << endl;
+    //}
+}
+
 bool WebUi::run2() {
     Message msg;
     if (_outQueue.try_pop(msg)) {
@@ -83,28 +124,32 @@ void WebUi::_thread() {
     });
     svr.Get("/status", [this](const httplib::Request &, httplib::Response &res) {
         json o;
-        // ### TODO: This will need to come from broadcast
-        o["cos"] = _ptt;
+        o["cos"] = _cos.load();
         o["ptt"] = _ptt;
+        // Build the list of nodes that we are connected to 
         auto a = json::array();
-        json o2;
-        o2["node"] = "2222";
-        auto b = json::array();
-        b.push_back("61057");
-        b.push_back("55553");
-        o2["connections"] = b;
-        a.push_back(o2);
+        vector<Peer> list = _status.getCopy();
+        for (Peer l : list) {
+            json o2;
+            o2["node"] = l.remoteNumber;
+            auto b = json::array();
+            // #### TODO: NEED TO ADD CONNECTIONS
+            o2["connections"] = b;
+            a.push_back(o2);
+        }
         o["connections"] = a;
+
         res.set_content(o.dump(), "application/json");
     });
     svr.Post("/status-save", [this](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
-        // Pull out the JSON content
+        // Pull out the JSON content from the post body
         std::string body;
         content_reader([&body](const char *data, size_t data_length) {
             body.append(data, data_length);
             return true;
         });
+
         json data = json::parse(body);
 
         if (data.contains("button")) {
@@ -142,10 +187,11 @@ void WebUi::_thread() {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        res.set_file_content("../www/config.html");
+        res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [](const httplib::Request &, httplib::Response &res) {
         json o;
+        // #### TODO: BOGUS DATA
         o["node"] = "61057";
         o["password"] = "xxxxxx";
         o["audiodevice"] = "bus:1,port:3";
@@ -177,8 +223,6 @@ void WebUi::_thread() {
         a.push_back(o);
          res.set_content(a.dump(), "application/json");
     });
-
-    _log.info("ui_thread listening");
 
     // OK to use this const
     svr.listen("0.0.0.0", _listenPort);

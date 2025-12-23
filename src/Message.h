@@ -115,11 +115,16 @@ struct PayloadCallStart {
     bool originated = false;
 };
 
+struct PayloadCallEnd {
+    char localNumber[16];
+    char remoteNumber[16];
+};
+
 struct PayloadCallStatus {
     char localNumber[16];
     char remoteNumber[16];
-    uint32_t lastRxMs;
-    uint32_t lastTxMs;
+    uint64_t lastRxMs;
+    uint64_t lastTxMs;
 };
 
 struct PayloadCall {
