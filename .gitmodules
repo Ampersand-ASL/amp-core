@@ -13,3 +13,6 @@
 [submodule "sound-map"]
 	path = sound-map
 	url = https://github.com/Ampersand-ASL/sound-map.git
+[submodule "json"]
+	path = json
+	url = https://github.com/nlohmann/json.git
