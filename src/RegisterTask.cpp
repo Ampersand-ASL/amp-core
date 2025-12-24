@@ -50,7 +50,7 @@ void RegisterTask::configure(const char* regServerUrl,
     _iaxPort = iaxPort;
 }
 
-void RegisterTask::doRegister() {     
+void RegisterTask::_doRegister() {     
 
     _curl = curl_easy_init();
 
@@ -66,7 +66,6 @@ void RegisterTask::doRegister() {
     // Populate the JSON template with the necessary information.
     snprintf(_jsonData, JSON_DATA_SIZE, JSON_TEMPLATE, _iaxPort, 
         _nodeNumber.c_str(), _nodeNumber.c_str(), _password.c_str());
-    //_log.info(_jsonData);
 
     curl_easy_setopt(_curl, CURLOPT_URL, _regServerUrl.c_str());
     curl_easy_setopt(_curl, CURLOPT_FORBID_REUSE, 1L); 
@@ -112,7 +111,7 @@ void RegisterTask::tenSecTick() {
     if (_clock.time() >= _nextRegisterMs) {
         _nextRegisterMs = _clock.time() + _regIntervalMs;
         if (!_nodeNumber.empty())
-            doRegister();
+            _doRegister();
     }
 }
 

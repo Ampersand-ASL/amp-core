@@ -32,14 +32,17 @@ public:
 
     StatsTask(Log& log, Clock& clock, const char* version);
 
+    /**
+     * NOTE: This function can be called at any time. The updates will take effect
+     * in the next polling cycle.
+     * 
+     * @param statsServerUrl The URL of the ASL stats server.
+     */
     void configure(const char* statsServerUrl, const char* nodeNumber);
 
     // ----- Runnable -----------------------------------------------------------
 
-    // #### TODO: REMOVE
-    int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
     bool run2() { return false; }
-    void audioRateTick(uint32_t tickTimeMs) { }
 
     void tenSecTick();
 

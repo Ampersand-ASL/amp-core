@@ -32,26 +32,30 @@ public:
 
     RegisterTask(Log& log, Clock& clock);
 
+    /**
+     * NOTE: This function can be called at any time. The updates will take effect
+     * in the next polling cycle.
+     * 
+     * @param regServerUrl The URL of the ASL registration server.
+     */
     void configure(const char* regServerUrl, const char* nodeNumber, const char* password, 
         unsigned iaxPort);
 
-    void doRegister();
-
     // ----- Runnable -------
 
-    // #### TODO: REMOVE
-    int getPolls(pollfd* fds, unsigned fdsCapacity) { return 0; }
     bool run2() { return false; }
-    void audioRateTick(uint32_t tickTimeMs) { }
     void tenSecTick();
 
 private:
+
+    void _doRegister();
 
     static size_t _writeCallback(void* contents, size_t size, size_t nmemb, void* userp);
     void _writeCallback2(const char* contents, size_t size);
 
     Log& _log;
     Clock& _clock;
+
     fixedstring _regServerUrl;
     fixedstring _nodeNumber;
     fixedstring _password;

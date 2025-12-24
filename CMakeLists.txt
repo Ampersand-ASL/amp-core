@@ -31,7 +31,6 @@ add_executable(main-local-parrot
   src/Message.cpp
   src/Line.cpp
   src/LineUsb.cpp
-  src/MessageBus.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
   src/Transcoder_SLIN.cpp
@@ -144,7 +143,6 @@ add_executable(protocol-test
   src/tests/protocol-test-1.cpp
   src/EventLoop.cpp
   src/Message.cpp
-  src/MessageBus.cpp
   src/RegisterTask.cpp
   src/Line.cpp
   src/LineIAX2.cpp
@@ -330,3 +328,15 @@ target_include_directories(bridge-test PRIVATE itu-g711-codec/src)
 # This program has a large stack size because of the jitter buffer
 #target_link_options(bridge-test PRIVATE -Wl,--stack,4096000)
 
+# ----- config-test ----------------------------------------------------
+
+add_executable(config-test
+  src/tests/config-test.cpp
+  src/Config.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(config-test PRIVATE src)
+target_include_directories(config-test PRIVATE include)
+target_include_directories(config-test PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(config-test PRIVATE json/include)
