@@ -131,23 +131,35 @@ public:
      *
      * @param listenFamily - Either AF_INET or AF_INET6
      * @param listenPort
-     * @param localNumber
      * @param localUser (Research in process to see if this is relevent here)
      *
      * @returns 0 if the open was successful.
      */
     int open(short addrFamily, int listenPort, const char* localUser);
 
+    /**
+     * Resets all calls as a side-effect.
+     */
     void close();
 
     /**
-     * This will use DNS to convert the target number to an IP address.
+     * Calls the target node. This will use DNS to convert the target number 
+     * to an IP address.
      */
     int call(const char* localNumber, const char* targetNumber);
 
-    void disconnectAllNonPermanent();
+    /**
+     * Drops the target node number.
+     */
+    int drop(const char* localNumber, const char* targetNumber);
+
+    /**
+     * Drops all connections that aren't marked as permanent.
+     */
+    void dropAllNonPermanent();
 
     void setTrace(bool a) { _trace = a; }
+
     unsigned getActiveCalls() const;
 
     void processManagementCommand(const char* msg);
@@ -346,6 +358,7 @@ private:
     // The startup time of this line. Mostly used for generating unique
     // tokens.
     uint32_t _startTime;
+
     // The IP address family used for this connection. Either AF_INET
     // or AF_INET6.
     short _addrFamily = 0;

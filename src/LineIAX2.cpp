@@ -48,13 +48,6 @@
 #include "MessageConsumer.h"
 #include "Message.h"
 
-/*
-Useful: https://unix.stackexchange.com/questions/561725/disable-volume-controls-on-external-speaker-connected-through-usb-sound-card
-
-Edited /usr/share/pulseaudio/alsa-mixer/paths/analog-output.conf.common
-[PCM] section, volume=ignore
-*/
-
 using namespace std;
 
 static unsigned AUDIO_TICK_MS = 20;
@@ -217,6 +210,11 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
 }
 
 void LineIAX2::close() {   
+
+    // Clean up all of the calls
+    for (unsigned i = 0; i < MAX_CALLS; i++)
+        _calls[i].reset();
+
     if (_iaxSockFd) 
         ::close(_iaxSockFd);
     if (_dnsSockFd) 
@@ -284,7 +282,32 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     return 0;
 }
 
-void LineIAX2::disconnectAllNonPermanent() {
+int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
+
+    _log.info("Request to drop %s -> %s", localNumber, targetNumber);
+
+    bool found = false;
+
+    _visitActiveCallsIf(
+        // Visitor
+        [&found, localNumber, targetNumber, this](Call& call) {
+            this->_hangupCall(call);
+            found = true;
+        },
+        // Predicate
+        [localNumber, targetNumber](const Call& call) {
+            return call.remoteNumber == targetNumber && call.localNumber == localNumber;
+        }
+    );
+
+    if (found) {
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+void LineIAX2::dropAllNonPermanent() {
     _visitActiveCallsIf(
         // Visitor
         [&log=_log, line=this](Call& call) {
@@ -325,7 +348,7 @@ void LineIAX2::processManagementCommand(const char* cmd) {
         */
         else if (tokens.size() == 6 && 
             tokens.at(0) == "rpt" && tokens.at(1) == "cmd" && tokens.at(4) == "6") {
-            disconnectAllNonPermanent();
+            dropAllNonPermanent();
         }
     }
 }
@@ -333,12 +356,19 @@ void LineIAX2::processManagementCommand(const char* cmd) {
 int LineIAX2::getPolls(pollfd* fds, unsigned fdsCapacity) {
     if (fdsCapacity < 2) 
         return -1;
-    // We're only watching for receive events
-    fds[0].fd = _iaxSockFd;
-    fds[0].events = POLLIN;
-    fds[1].fd = _dnsSockFd;
-    fds[1].events = POLLIN;
-    return 2;
+    int used = 0;
+    if (_iaxSockFd) {
+        // We're only watching for receive events
+        fds[used].fd = _iaxSockFd;
+        fds[used].events = POLLIN;
+        used++;
+    }
+    if (_dnsSockFd > 0) {
+        fds[used].fd = _dnsSockFd;
+        fds[used].events = POLLIN;
+        used++;
+    }
+    return used;
 }
 
 bool LineIAX2::run2() {   
@@ -1760,12 +1790,17 @@ void LineIAX2::consume(const Message& msg) {
 
     // Look at for non-call signals
     if (msg.isSignal(Message::SignalType::DROP_ALL_NODES)) {
-        disconnectAllNonPermanent();
+        dropAllNonPermanent();
     }
     else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
         call(payload->localNumber, payload->targetNumber);
+    }
+    else if (msg.isSignal(Message::SignalType::DROP_NODE)) {
+        PayloadCall* payload = (PayloadCall*)msg.body();
+        assert(msg.size() == sizeof(PayloadCall));
+        drop(payload->localNumber, payload->targetNumber);
     }
     // Everything else gets handed to the calls for processing.
     else {
@@ -1915,6 +1950,9 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame,
 
 void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
+
+    if (!_iaxSockFd)
+        return;
 
     int rc = ::sendto(_iaxSockFd, 
 // Windows uses slightly different types on the socket calls

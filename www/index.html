@@ -1,6 +1,6 @@
 <html>
     <head>
-        <title>Ampersand Configuration</title>
+        <title>Ampersand Home Page</title>
         <style>
 /* https://www.color-hex.com/color-palette/98179)             */
 body {
@@ -14,7 +14,8 @@ body {
 #connect-button {
     background-color: #38dc38;
 }
-#disconnect-button {
+
+.disconnect-button {
     background-color: #ff5c5c;
 }
 
@@ -64,9 +65,10 @@ td {
             <br/>
             <input id="node" name="node" type="text" placeholder="Node Number"/>
             <input id="connect-button" name="call" type="submit" value="Connect"/>
+            <input class="disconnect-button" id="drop-button" name="drop" type="submit" value="Disconnect"/>
             <br/>
             <br/>
-            <input id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
+            <input class="disconnect-button" id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
             <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
             <p>Connections:</p>
             <table>
@@ -139,6 +141,18 @@ function status_save(buttonName) {
     const form = document.getElementById('status-form');
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
+
+    if (buttonName == "fav0") {
+        buttonName = "call"
+        formObject["node"] = "55553"
+    } else if (buttonName == "fav1") {
+        buttonName = "call"
+        formObject["node"] = "61057"
+    } else if (buttonName == "fav2") {
+        buttonName = "call"
+        formObject["node"] = "27339"
+    }
+
     formObject["button"] = buttonName;
     const jsonString = JSON.stringify(formObject, null, 2);
     fetch('/status-save', {

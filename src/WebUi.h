@@ -18,10 +18,14 @@
 
 #include <atomic>
 
+#include <nlohmann/json.hpp>
+
 #include "kc1fsz-tools/threadsafequeue.h"
 #include "kc1fsz-tools/copyableatomic.h"
 
 #include "Runnable2.h"
+
+using json = nlohmann::json;
 
 namespace kc1fsz {
 

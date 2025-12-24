@@ -47,6 +47,12 @@ namespace kc1fsz {
 // IMPORTANT: https://0pointer.de/blog/projects/all-about-periods.html
 //
 // A good article on volume: https://www.dr-lex.be/info-stuff/volumecontrols.html
+/*
+Useful: https://unix.stackexchange.com/questions/561725/disable-volume-controls-on-external-speaker-connected-through-usb-sound-card
+
+Edited /usr/share/pulseaudio/alsa-mixer/paths/analog-output.conf.common
+[PCM] section, volume=ignore
+*/
 
 /*
 Notes on OSS Compatibility

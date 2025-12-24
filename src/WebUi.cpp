@@ -162,7 +162,8 @@ void WebUi::_thread() {
                     msg = Message::signal(Message::SignalType::COS_OFF);
                 msg.setDest(_radioDestLineId, DEST_CALL_ID);
                 _outQueue.push(msg);
-            } else if (data["button"] == "call") {
+            } 
+            else if (data["button"] == "call") {
                 // #### TODO: CHANGE
                 string localNode = "672730";
                 string targetNode = data["node"];
@@ -171,6 +172,21 @@ void WebUi::_thread() {
                     strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
                     strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
                     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+                        sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                    msg.setDest(_networkDestLineId, DEST_CALL_ID);
+                    _outQueue.push(msg);
+                }
+            } 
+            else if (data["button"] == "drop") {
+                // #### TODO: CHANGE
+                string localNode = "672730";
+                string targetNode = data["node"];
+                if (!targetNode.empty()) {
+                    // NOTE: Drop uses the same payload as call
+                    PayloadCall payload;
+                    strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
+                    strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
+                    Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_NODE, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
                     msg.setDest(_networkDestLineId, DEST_CALL_ID);
                     _outQueue.push(msg);
