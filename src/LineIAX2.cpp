@@ -2220,6 +2220,7 @@ uint32_t LineIAX2::Call::dispenseElapsedFrom(uint32_t ts, bool voiceAlignment) {
         ts = alignToTick(ts, AUDIO_TICK_MS);
     // Not allowed to move back in time
     if (ts < lastElapsedTimeStampDispensed) {
+        cout << "Not allowed to move back from " << ts << " " << lastElapsedTimeStampDispensed << endl;
         ts = lastElapsedTimeStampDispensed;
     } else {
         lastElapsedTimeStampDispensed = ts;

@@ -255,7 +255,7 @@ public:
                 if (frame.getOrigMs() > (_originCursor - _initialMargin)) {
                     log.info("Mid TS, moved cursor back (%d < %d) size: %d", 
                         frame.getOrigMs(), _originCursor, size());
-                    _originCursor = frame.getOrigMs();
+                    _originCursor = roundToTick(frame.getOrigMs());
                 }
                 // If the next frame is unreasonably early then discard it.
                 else {
