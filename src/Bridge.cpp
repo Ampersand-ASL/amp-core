@@ -193,7 +193,15 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 }
 
 void Bridge::oneSecTick() {
+    _calls.visitIf(
+        // Visitor
+        [](BridgeCall& call) { 
+            call.oneSecTick();
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
 }
-
     }
 }

@@ -23,8 +23,7 @@ namespace kc1fsz {
     namespace amp {
 
 void Config::setDefaults() {
-    audioDevice = "vendorname:\"C-Media  Electronics, Inc.\"";
-    iaxPort4 = 4569;
+    iaxPort4 = "4569";
     aslRegUrl = "https://register.allstarlink.org";
     aslStatUrl = "=http://stats.allstarlink.org/uhandler";
     aslDnsRoot = "nodes.allstarlink.org";
@@ -32,28 +31,34 @@ void Config::setDefaults() {
 
 json Config::toJson() {
     json o;
-    o["call"] = call.c_str();
-    o["node"] = node.c_str();
-    o["password"] = password.c_str();
-    o["audioDevice"] = audioDevice.c_str();
+    o["lastUpdateMs"] = lastUpdateMs;
+    o["call"] = call;
+    o["node"] = node;
+    o["password"] = password;
+    o["audioDeviceType"] = audioDeviceType;
+    o["audioDeviceUsbBus"] = audioDeviceUsbBus;
+    o["audioDeviceUsbPort"] = audioDeviceUsbPort;
     o["iaxPort4"] = iaxPort4;
-    o["aslRegUrl"] = aslRegUrl.c_str();
-    o["aslStatUrl"] = aslStatUrl.c_str();
-    o["aslDnsRoot"] = aslDnsRoot.c_str();
-    o["privateKey"] = privateKey.c_str();
+    o["aslRegUrl"] = aslRegUrl;
+    o["aslStatUrl"] = aslStatUrl;
+    o["aslDnsRoot"] = aslDnsRoot;
+    o["privateKey"] = privateKey;
     return o;
 }
 
 void Config::fromJson(json o) {
-    call = o["call"].get<std::string>().c_str();
-    node = o["node"].get<std::string>().c_str();
-    password = o["password"].get<std::string>().c_str();
-    audioDevice = o["audioDevice"].get<std::string>().c_str();
+    lastUpdateMs = o["lastUpdateMs"].get<uint64_t>();
+    call = o["call"].get<std::string>();
+    node = o["node"].get<std::string>();
+    password = o["password"].get<std::string>();
+    audioDeviceType = o["audioDeviceType"].get<std::string>();
+    audioDeviceUsbBus = o["audioDeviceUsbBus"].get<int>();
+    audioDeviceUsbPort = o["audioDeviceUsbPort"].get<int>();
     iaxPort4 = o["iaxPort4"].get<int>();
-    aslRegUrl = o["aslRegUrl"].get<std::string>().c_str();
-    aslStatUrl = o["aslStatUrl"].get<std::string>().c_str();
-    aslDnsRoot = o["aslDnsRoot"].get<std::string>().c_str();
-    privateKey = o["privateKey"].get<std::string>().c_str();
+    aslRegUrl = o["aslRegUrl"].get<std::string>();
+    aslStatUrl = o["aslStatUrl"].get<std::string>();
+    aslDnsRoot = o["aslDnsRoot"].get<std::string>();
+    privateKey = o["privateKey"].get<std::string>();
 }
 
     }

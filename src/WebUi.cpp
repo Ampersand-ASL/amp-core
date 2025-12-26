@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <thread>
+#include <fstream>
 
 #include <nlohmann/json.hpp>
 
@@ -44,13 +45,14 @@ namespace kc1fsz {
     namespace amp {
 
 WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
-    unsigned networkDestLineId, unsigned radioDestLineId) 
+    unsigned networkDestLineId, unsigned radioDestLineId, const char* configFileName) 
 :   _log(log), 
     _clock(clock),
     _consumer(cons),
     _listenPort(listenPort),
     _networkDestLineId(networkDestLineId),
-    _radioDestLineId(radioDestLineId) {
+    _radioDestLineId(radioDestLineId),
+    _configFileName(configFileName) {
     _beginthread(_uiThread, 0, (void*)this);
 }
 
@@ -197,6 +199,9 @@ void WebUi::_thread() {
                 msg.setDest(_networkDestLineId, DEST_CALL_ID);
                 _outQueue.push(msg);
             }
+            else if (data["button"] == "exit") {
+                exit(0);
+            }
         }
     });
 
@@ -205,24 +210,31 @@ void WebUi::_thread() {
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
         res.set_file_content("../amp-core/www/config.html");
     });
-    svr.Get("/config-load", [](const httplib::Request &, httplib::Response &res) {
-        json o;
-        // #### TODO: BOGUS DATA
-        o["node"] = "61057";
-        o["password"] = "xxxxxx";
-        o["audiodevice"] = "bus:1,port:3";
-        o["iaxport4"] = 4569;
-         res.set_content(o.dump(), "application/json");
+    svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
+        cout << _config.getCopy().toJson().dump() << endl;
+         res.set_content(_config.getCopy().toJson().dump(), "application/json");
     });
-    svr.Post("/config-save", [](const httplib::Request &, httplib::Response &res, 
+    svr.Post("/config-save", [this](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
-        cout << "Saving changes" << endl;
         std::string body;
         content_reader([&](const char *data, size_t data_length) {
             body.append(data, data_length);
             return true;
         });
         cout << body << endl;
+        json jBody = json::parse(body);
+
+        // #### TODO: Reformat audio device selection
+
+        // Merge with existing config
+        Config newConfig = _config.getCopy();
+        newConfig.lastUpdateMs = _clock.timeUs() / 1000;
+        newConfig.node = jBody["node"];
+        newConfig.password = jBody["password"];
+        newConfig.iaxPort4 = jBody["iaxPort4"];
+        ofstream cf(_configFileName);
+        cf << newConfig.toJson().dump() << endl;
+        cf.close();
     });
     svr.Get("/audiodevice-list", [](const httplib::Request &, httplib::Response &res) {
         auto a = json::array();

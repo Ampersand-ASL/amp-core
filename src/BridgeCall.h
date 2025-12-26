@@ -39,6 +39,7 @@ public:
 
     static const unsigned AUDIO_RATE = 48000;
     static const unsigned BLOCK_SIZE_8K = 160;
+    static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
     static const unsigned SESSION_TIMEOUT_MS = 120 * 1000;
@@ -92,6 +93,7 @@ public:
     void consume(const Message& frame);
 
     void audioRateTick(uint32_t tickMs);
+    void oneSecTick();
 
     /**
      * This extracts the call's contribution (if any) to the audio frame for the designated
@@ -154,6 +156,7 @@ private:
 
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
+    void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
 
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
@@ -176,6 +179,10 @@ private:
     ParrotState _parrotState = ParrotState::NONE;
     uint32_t _parrotStateStartMs = 0;
     uint32_t _lastUnkeyProcessedMs = 0;
+
+    unsigned _clipCount = 0;
+    float _peakPower = 0;
+    float _avgPower = 0;
 };
 
     }

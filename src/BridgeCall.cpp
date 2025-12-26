@@ -118,6 +118,21 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
     }
 }
 
+void BridgeCall::oneSecTick() {
+    if (_mode == Mode::PARROT) {
+
+        _clipCount += _bridgeIn.getClipCount();
+
+        float peak1s = _bridgeIn.getPeakPower();
+        if (peak1s > _peakPower)
+            _peakPower = peak1s;
+
+        float avg1s = _bridgeIn.getAvgPower();
+        if (avg1s > _avgPower)
+            _avgPower = avg1s;
+    }
+}
+
 Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
     unsigned destLineId, unsigned destCallId) const {
     // Convert the PCM16 data into LE mode as defined by the CODEC.
@@ -215,13 +230,14 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
     if (_parrotState == ParrotState::WAITING_FOR_RECORD)  {
         if (vad) {
             _log->info("Record start");
+
             _parrotState = ParrotState::RECORDING;
             _playQueue = std::queue<PCM16Frame>(); 
             _playQueueDepth = 0;
 
-            // Load up the pre-playback audio
-            _loadAudioFile("playback-8k.pcm", _playQueue);
-            _loadSilence(25, _playQueue);
+            _clipCount = 0;
+            _peakPower = -96;
+            _avgPower = -96;
 
             _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
             _playQueueDepth++;
@@ -256,7 +272,9 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         // clicks or pops on key.
         if (_clock->isPast(_parrotStateStartMs + 1500)) {
             // Load the greeting into the play queue           
-            _loadAudioFile("greeting-8k.pcm", _playQueue);
+            _loadAudioFile("parrot-connected", _playQueue);
+            _loadSilence(25, _playQueue);
+            _loadAudioFile("ready-to-record", _playQueue);
             // Trigger the greeting playback
             _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
             _log->info("Greeting start");
@@ -292,7 +310,46 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     } 
     else if (_parrotState == ParrotState::PAUSE_AFTER_RECORD) {
         if (_clock->isPast(_parrotStateStartMs + 750)) {
+
             _log->info("Playback start");
+
+            // Pull out the recording
+            std::vector<PCM16Frame> hold;
+            while (!_playQueue.empty()) {
+                hold.push_back(_playQueue.front());
+                _playQueue.pop();
+            }
+            _playQueue = std::queue<PCM16Frame>();
+
+            _loadAudioFile("peak", _playQueue);
+            _loadSilence(25, _playQueue);
+            
+            char fn[64];
+            if (_peakPower < -40) {
+                snprintf(fn, 64, "less-than-minus-40db");
+            } else {
+                snprintf(fn, 64, "minus-%ddb", (int)abs(_peakPower));
+            }
+            _loadAudioFile(fn, _playQueue);
+
+            _loadSilence(25, _playQueue);
+
+            _loadAudioFile("average", _playQueue);
+            _loadSilence(25, _playQueue);
+
+            if (_avgPower < -40) {
+                snprintf(fn, 64, "less-than-minus-40db");
+            } else {
+                snprintf(fn, 64, "minus-%ddb", (int)abs(_avgPower));
+            }
+            _loadAudioFile(fn, _playQueue);
+
+            _loadSilence(25, _playQueue);
+            
+            _loadAudioFile("playback", _playQueue);
+            _loadSilence(25, _playQueue);
+            _loadAudio(hold, _playQueue);
+
             _parrotState = ParrotState::PLAYING;
             _parrotStateStartMs = _clock->time();
         }
@@ -315,8 +372,9 @@ void BridgeCall::_loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) c
     string fullPath("../media");
     if (getenv("AMP_MEDIA_DIR"))
         fullPath = getenv("AMP_MEDIA_DIR");
-    fullPath += "/";
+    fullPath += "/16k/";
     fullPath += fn;
+    fullPath += ".pcm";
 
     ifstream aud(fullPath, std::ios::binary);
     if (!aud.is_open()) {
@@ -324,28 +382,28 @@ void BridgeCall::_loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) c
         return;
     }
 
-    int16_t pcm8k[160];
+    int16_t pcm16k[BLOCK_SIZE_16K];
     unsigned pcmPtr = 0;
     char buffer[2];
     amp::Resampler resampler;
-    resampler.setRates(8000, 48000);
+    resampler.setRates(16000, 48000);
 
     while (aud.read(buffer, 2)) {
-        pcm8k[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
-        if (pcmPtr == BLOCK_SIZE_8K) {
+        pcm16k[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
+        if (pcmPtr == BLOCK_SIZE_16K) {
             int16_t pcm48k[BLOCK_SIZE_48K];
-            resampler.resample(pcm8k, BLOCK_SIZE_8K, pcm48k, BLOCK_SIZE_48K);
+            resampler.resample(pcm16k, BLOCK_SIZE_16K, pcm48k, BLOCK_SIZE_48K);
             queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
             pcmPtr = 0;
         }
     }
 
     // Clean up last frame
-    if (pcmPtr < BLOCK_SIZE_8K) {
-        for (unsigned i = 0; i < BLOCK_SIZE_8K - pcmPtr; i++)
-            pcm8k[pcmPtr++] = 0;
+    if (pcmPtr < BLOCK_SIZE_16K) {
+        for (unsigned i = 0; i < BLOCK_SIZE_16K - pcmPtr; i++)
+            pcm16k[pcmPtr++] = 0;
         int16_t pcm48k[BLOCK_SIZE_48K];
-        resampler.resample(pcm8k, BLOCK_SIZE_8K, pcm48k, BLOCK_SIZE_48K);
+        resampler.resample(pcm16k, BLOCK_SIZE_16K, pcm48k, BLOCK_SIZE_48K);
         queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
         pcmPtr = 0;
     }
@@ -358,5 +416,11 @@ void BridgeCall::_loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) con
     for (unsigned i = 0; i < ticks; i++)
         queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
 }
+
+void BridgeCall::_loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const {
+    for (auto it = audio.begin(); it != audio.end(); it++) 
+        queue.push(*it);
+}
+
     }
 }

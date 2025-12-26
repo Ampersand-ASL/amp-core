@@ -171,6 +171,22 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         // Resample PCM data up to 48K
         _resampler.resample(pcm2, codecBlockSize(_codecType), 
             pcm48k, BLOCK_SIZE_48K);
+       
+        // Compute power statistics on PCM audio. This is done using the NR9V method.
+        // Circular wrap on the statistics collection
+        _stats[_statsPtr].reset();
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i += 6) {
+            int16_t sample = abs(pcm48k[i]);
+            _stats[_statsPtr].avgSquare += (float)sample * (float)sample;
+            if (sample > _clipThreshold) {
+                _stats[_statsPtr].clipCount++;
+            }
+            if (sample > _stats[_statsPtr].peak)
+                _stats[_statsPtr].peak = sample;
+        }
+        _stats[_statsPtr].avgSquare /= 160.0f;
+        if (++_statsPtr == STATS_LEN)
+            _statsPtr = 0;
 
         // Transcode to SLIN_48K
         uint8_t slin48k[BLOCK_SIZE_48K * 2];
@@ -185,6 +201,39 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
     }
     else {
         assert(false);
+    }
+}
+
+unsigned BridgeIn::getClipCount() const {
+    unsigned result = 0;
+    for (unsigned i = 0; i < STATS_LEN; i++)
+        result += _stats[i].clipCount;
+    return result;
+}
+
+float BridgeIn::getPeakPower() const {
+    int16_t peak = 0;
+    for (unsigned i = 0; i < STATS_LEN; i++) {
+        if (_stats[i].peak > peak) {
+            peak = _stats[i].peak;
+        }
+    }
+    if (peak == 0) {
+        return -96.0;
+    } else {
+        return 10.0 * log10(((float)peak * (float)peak) / (32767.0f * 32767.0f));
+    }
+}
+
+float BridgeIn::getAvgPower() const {
+    float avgSquare = 0;
+    for (unsigned i = 0; i < STATS_LEN; i++)
+        avgSquare += _stats[i].avgSquare;
+    avgSquare /= (float)STATS_LEN;
+    if (avgSquare == 0) {
+        return -96.0;
+    } else {
+        return 10.0 * log10(avgSquare / (32767.0f * 32767.0f));
     }
 }
 

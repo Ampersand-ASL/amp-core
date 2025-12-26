@@ -34,8 +34,8 @@ body {
             <label for="audiodevice">Audio Device:</label>
             <select id="audiodevice" name="audiodevice">
             </select>
-            <label for="iaxport4">IAX Port (IPv4):</label>
-            <input type="text" id="iaxport4" name="iaxport4"/>
+            <label for="iaxPort4">IAX Port (IPv4):</label>
+            <input type="text" id="iaxPort4" name="iaxPort4"/>
             <span></span>
             <input type="submit" value="Save" class="save-button"/>
         </form>
@@ -79,7 +79,7 @@ async function config_load() {
         document.getElementById("node").setAttribute("value", data["node"]);
         document.getElementById("password").setAttribute("value", data["password"]);
         document.getElementById("audiodevice").value = data["audiodevice"];
-        document.getElementById("iaxport4").setAttribute("value", data["iaxport4"]);
+        document.getElementById("iaxPort4").setAttribute("value", data["iaxPort4"]);
     } catch (error) {
         console.error('Error fetching data:', error.message);
     }

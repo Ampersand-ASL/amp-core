@@ -177,6 +177,9 @@ void LineRadio::_open(bool echo) {
     payload.bypassJitterBuffer = true;
     payload.echo = echo;
     payload.startMs = _clock.time();
+    payload.localNumber[0] = 0;
+    payload.remoteNumber[0] = 0;
+    payload.originated = true;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);

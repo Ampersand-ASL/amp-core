@@ -16,10 +16,10 @@
  */
 #pragma once
 
-#include <nlohmann/json.hpp>
+#include <cstdint>
+#include <string>
 
-#include "kc1fsz-tools/fixedstring.h"
-#include "kc1fsz-tools/fixedstring2.h"
+#include <nlohmann/json.hpp>
 
 namespace kc1fsz {
     namespace amp {
@@ -27,15 +27,40 @@ namespace kc1fsz {
 class Config {
 public:
 
-    fixedstring call;
-    fixedstring node;
-    fixedstring password;
-    fixedstring audioDevice;
-    int iaxPort4;
-    fixedstring aslRegUrl;
-    fixedstring aslStatUrl;
-    fixedstring aslDnsRoot;
-    fixedstring2<128> privateKey;
+    Config() { }
+
+    Config(const Config& other) {
+        *this = other;
+    }
+
+    Config& operator=(const Config& other) {
+        lastUpdateMs = other.lastUpdateMs;
+        call = other.call;
+        node = other.node;
+        password = other.password;
+        audioDeviceType = other.audioDeviceType;
+        audioDeviceUsbBus = other.audioDeviceUsbBus;
+        audioDeviceUsbPort = other.audioDeviceUsbPort;
+        iaxPort4 = other.iaxPort4;
+        aslRegUrl = other.aslRegUrl;
+        aslStatUrl = other.aslStatUrl;
+        aslDnsRoot = other.aslDnsRoot;
+        privateKey = other.privateKey;
+        return *this;
+    }
+
+    uint64_t lastUpdateMs = 0;
+    std::string call;
+    std::string node;
+    std::string password;
+    std::string audioDeviceType; 
+    std::string audioDeviceUsbBus;
+    std::string audioDeviceUsbPort;
+    std::string iaxPort4;
+    std::string aslRegUrl;
+    std::string aslStatUrl;
+    std::string aslDnsRoot;
+    std::string privateKey;
     
     void setDefaults();
 

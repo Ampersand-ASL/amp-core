@@ -24,6 +24,7 @@
 #include "kc1fsz-tools/copyableatomic.h"
 
 #include "Runnable2.h"
+#include "Config.h"
 
 using json = nlohmann::json;
 
@@ -42,7 +43,10 @@ class WebUi : public Runnable2, public MessageConsumer {
 public:
 
     WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
-        unsigned networkDestLineId, unsigned radioDestLineId);
+        unsigned networkDestLineId, unsigned radioDestLineId,
+        const char* configFileName);
+
+    void setConfig(const Config& config) { _config.set(config); }
 
     // ----- MessageConsumer --------------------------------------------
 
@@ -71,10 +75,14 @@ private:
     const unsigned _listenPort;
     const unsigned _networkDestLineId;
     const unsigned _radioDestLineId;
+    const std::string _configFileName;
+
     std::atomic<bool> _cos;
     bool _ptt = false;
     threadsafequeue<Message> _outQueue;
     copyableatomic<std::vector<Peer>> _status;
+    copyableatomic<amp::Config> _config;
+
 };
 
     }
