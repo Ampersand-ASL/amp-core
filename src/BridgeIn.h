@@ -81,8 +81,6 @@ public:
         _transcoder0d.reset(); 
         _transcoder1.reset(); 
         _resampler.reset(); 
-        for (unsigned i = 0; i < STATS_LEN; i++)
-            _stats[i].reset();
     }
 
     // Statistics
@@ -150,20 +148,6 @@ private:
     // This is used at the end to convert to the "bus format"
     // that is passed around internally.
     Transcoder_SLIN_48K _transcoder1;
-
-    // Audio input statistics (one per 20ms block)
-    struct BlockStats {
-        void reset() { clipCount = 0; peak = 0; avgSquare = 0; }
-        unsigned clipCount = 0;
-        int16_t peak = 0;
-        float avgSquare = 0;
-    };
-    // We have enough statistics for 1 second
-    static const unsigned STATS_LEN = 50;
-    BlockStats _stats[STATS_LEN];
-    unsigned _statsPtr = 0;
-    // Following David NR9V's standard
-    const int16_t _clipThreshold = 32432;
 };
 
     }

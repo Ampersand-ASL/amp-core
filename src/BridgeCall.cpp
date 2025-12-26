@@ -17,6 +17,7 @@
 #include <cassert>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 
 #include "Message.h"
 #include "BridgeCall.h"
@@ -115,21 +116,6 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
         _toneAudioRateTick(tickMs);
     } else if (_mode == Mode::PARROT) {
         _parrotAudioRateTick(tickMs);
-    }
-}
-
-void BridgeCall::oneSecTick() {
-    if (_mode == Mode::PARROT) {
-
-        _clipCount += _bridgeIn.getClipCount();
-
-        float peak1s = _bridgeIn.getPeakPower();
-        if (peak1s > _peakPower)
-            _peakPower = peak1s;
-
-        float avg1s = _bridgeIn.getAvgPower();
-        if (avg1s > _avgPower)
-            _avgPower = avg1s;
     }
 }
 
@@ -235,10 +221,6 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
             _playQueue = std::queue<PCM16Frame>(); 
             _playQueueDepth = 0;
 
-            _clipCount = 0;
-            _peakPower = -96;
-            _avgPower = -96;
-
             _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
             _playQueueDepth++;
         }
@@ -314,21 +296,27 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _log->info("Playback start");
 
             // Pull out the recording
-            std::vector<PCM16Frame> hold;
+            std::vector<PCM16Frame> recording;
             while (!_playQueue.empty()) {
-                hold.push_back(_playQueue.front());
+                recording.push_back(_playQueue.front());
                 _playQueue.pop();
             }
             _playQueue = std::queue<PCM16Frame>();
+
+            // Analyze the recording for relevant stats
+            float peakPower, avgPower;
+            _analyzeRecording(recording, &peakPower, &avgPower);
 
             _loadAudioFile("peak", _playQueue);
             _loadSilence(25, _playQueue);
             
             char fn[64];
-            if (_peakPower < -40) {
+            if (peakPower < -40) {
                 snprintf(fn, 64, "less-than-minus-40db");
+            } else if (peakPower > 0) {
+                peakPower = 0;
             } else {
-                snprintf(fn, 64, "minus-%ddb", (int)abs(_peakPower));
+                snprintf(fn, 64, "minus-%ddb", (int)abs(peakPower));
             }
             _loadAudioFile(fn, _playQueue);
 
@@ -337,10 +325,12 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _loadAudioFile("average", _playQueue);
             _loadSilence(25, _playQueue);
 
-            if (_avgPower < -40) {
+            if (avgPower < -40) {
                 snprintf(fn, 64, "less-than-minus-40db");
+            } else if (avgPower > 0) {
+                avgPower = 0;
             } else {
-                snprintf(fn, 64, "minus-%ddb", (int)abs(_avgPower));
+                snprintf(fn, 64, "minus-%ddb", (int)abs(avgPower));
             }
             _loadAudioFile(fn, _playQueue);
 
@@ -348,7 +338,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             
             _loadAudioFile("playback", _playQueue);
             _loadSilence(25, _playQueue);
-            _loadAudio(hold, _playQueue);
+            _loadAudio(recording, _playQueue);
 
             _parrotState = ParrotState::PLAYING;
             _parrotStateStartMs = _clock->time();
@@ -420,6 +410,67 @@ void BridgeCall::_loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) con
 void BridgeCall::_loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const {
     for (auto it = audio.begin(); it != audio.end(); it++) 
         queue.push(*it);
+}
+
+
+void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio, 
+    float* peakPower, float* avgPower) {
+
+    unsigned blockSize = 160 * 50;
+
+    // Perform the audio analysis on the recording using the David NR9V method. 
+    float peak = 0;
+    float avgSquareBlock = 0;
+    unsigned sampleCountBlock = 0;
+    float peakAvgSquare = 0;
+
+    unsigned frameCount = audio.size();
+    unsigned ignoreCount = 300 / 20;
+    // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
+    // influence of tail.
+    if (frameCount > ignoreCount)
+        frameCount -= ignoreCount;
+    else {
+        *peakPower = -96.0;
+        *avgPower = -96.0;
+        return;
+    }
+
+    for (unsigned j = 0; j < frameCount; j++) {
+        assert(audio.at(j).size() == BLOCK_SIZE_48K);
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i += 6) {
+            
+            int16_t sample = abs(audio.at(j).data()[i]);
+
+            if (sample > peak) {
+                peak = sample;
+            }
+
+            avgSquareBlock += (float)sample * (float)sample;
+            sampleCountBlock++;
+
+            // On every complete block we stop to see if we have a new peak average
+            if (sampleCountBlock == blockSize) {
+                avgSquareBlock /= (float)sampleCountBlock;
+                if (avgSquareBlock > peakAvgSquare)
+                    peakAvgSquare = avgSquareBlock;
+                sampleCountBlock = 0;
+                avgSquareBlock = 0;
+            }
+        }
+    }
+    
+    if (peak == 0) {
+        *peakPower = -96.0;
+    } else {
+        *peakPower = 10.0 * log10((peak * peak) / (32767.0f * 32767.0f));
+    }
+
+    if (peakAvgSquare == 0) {
+        *avgPower = -96.0;
+    } else {
+        *avgPower = 10.0 * log10(peakAvgSquare / (32767.0f * 32767.0f));
+    }
 }
 
     }

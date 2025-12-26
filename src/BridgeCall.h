@@ -93,7 +93,6 @@ public:
     void consume(const Message& frame);
 
     void audioRateTick(uint32_t tickMs);
-    void oneSecTick();
 
     /**
      * This extracts the call's contribution (if any) to the audio frame for the designated
@@ -158,6 +157,8 @@ private:
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
 
+    void _analyzeRecording(const std::vector<PCM16Frame>& audio, float* peakPower, float* avgPower);
+
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
     unsigned _playQueueDepth = 0;
@@ -179,10 +180,6 @@ private:
     ParrotState _parrotState = ParrotState::NONE;
     uint32_t _parrotStateStartMs = 0;
     uint32_t _lastUnkeyProcessedMs = 0;
-
-    unsigned _clipCount = 0;
-    float _peakPower = 0;
-    float _avgPower = 0;
 };
 
     }
