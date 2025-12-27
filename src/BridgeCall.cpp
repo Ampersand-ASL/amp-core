@@ -258,10 +258,20 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             // Load the greeting into the play queue           
             _loadAudioFile("parrot-connected", _playQueue);
             _loadSilence(25, _playQueue);
+
             if (!_sourceAddrValidated) {
                 _loadAudioFile("node-is-unregistered", _playQueue);
                 _loadSilence(25, _playQueue);
             }
+
+            if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G711_ULAW) {
+                _loadAudioFile("codec-is-8k-ulaw", _playQueue);
+                _loadSilence(25, _playQueue);
+            } else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) {
+                _loadAudioFile("codec-is-16k-linear", _playQueue);
+                _loadSilence(25, _playQueue);
+            }
+
             _loadAudioFile("ready-to-record", _playQueue);
             // Trigger the greeting playback
             _parrotState = ParrotState::PLAYING_PROMPT_GREETING;

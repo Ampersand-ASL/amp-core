@@ -60,6 +60,8 @@ public:
 
     void setCodec(CODECType codecType);
 
+    CODECType getCodec() const { return _codecType; }
+
     void setStartTime(uint32_t ms) { 
         _startTime = ms; 
         _jitBuf.setStartMs(ms);
