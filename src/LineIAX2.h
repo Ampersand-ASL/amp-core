@@ -234,7 +234,8 @@ private:
         int localCallId = 0;
         int remoteCallId = 0;
         uint32_t localStartMs = 0;
-        uint32_t lastElapsedTimeStampDispensed = 0;
+        // Used by dispenseElapsed() function. 
+        uint32_t lastElapsedMsDispensed = 0;
         uint8_t outSeqNo = 0;
         uint8_t expectedInSeqNo = 0;
         // TODO: CLARIFY RX/TX
@@ -274,8 +275,8 @@ private:
         uint16_t dnsRequestId;
         // Used for VOX keying
         bool vox = false;
-        uint32_t nextLMs = 0;
-
+        uint32_t lastLMs = 0;
+        const uint32_t L_INTERVAL_MS = 20 * 1000;
         uint32_t lastPingSentMs = 0;
         int32_t lastPingTimeMs = 0;
         unsigned pingCount = 0;
@@ -283,7 +284,7 @@ private:
         // This is used for tracking LAGRQ/LAGRP latency
         int32_t lastLagMs = 0;
         uint32_t lastLagrqMs = 0;
-        const uint32_t lagrqIntervalMs = 10 * 1000;
+        const uint32_t LAGRQ_INTERVAL_MS = 10 * 1000;
 
         uint64_t lastRxVoiceFrameMs = 0;
         uint64_t lastTxVoiceFrameMs = 0;
@@ -314,10 +315,8 @@ private:
          * @return The milliseconds elapsed since the start of the call, with the 
          * ability to request to have the time aligned on the current 20ms boundary.
          */
-        uint32_t dispenseElapsedMs(Clock& clock, bool voiceAlignment = false);
-        uint32_t dispenseElapsedUsingMessageOrigin(const Message& msg,
-            bool voiceAlignment = false);
-        uint32_t dispenseElapsedFrom(uint32_t ts, bool voiceAlignment = false);
+        uint32_t dispenseElapsedMs(Clock& clock);
+        uint32_t dispenseElapsedMsForVoice(const Message& msg);
 
         void incrementExpectedInSeqNo() {
             // This is a one-byte number that is expected to wrap.

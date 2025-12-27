@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include "kc1fsz-tools/Log.h"
-#include "kc1fsz-tools/linux/LinuxPollTimer.h"
+#include "kc1fsz-tools/StdPollTimer.h"
 #include "kc1fsz-tools/StdPollTimer.h"
 #include "kc1fsz-tools/linux/StdClock.h"
 #include "kc1fsz-tools/fixedqueue.h"
@@ -15,6 +15,7 @@
 
 #include "itu-g711-codec/codec.h"
 #include "amp/Resampler.h"
+#include "amp/SequencingBufferStd.h"
 
 #include "Message.h"
 #include "IAX2FrameFull.h"
@@ -32,7 +33,8 @@ static void bufferTest1() {
 
 static void timerTest1() {
 
-    LinuxPollTimer timer2ms(20000);
+    StdClock clock;
+    StdPollTimer timer2ms(clock, 20000);
 
     timer2ms.reset();
     // Wait until the next 20ms tick to get aligned
@@ -126,37 +128,6 @@ static void frameTest1() {
     assert(fl.size() == 0);
 }
 
-static void make_poke() {
-
-    //sockaddr_storage pokeAddr;
-    //pokeAddr.ss_family = AF_INET;
-    //setIPAddr(pokeAddr, "108.20.174.63");
-    //setIPPort(pokeAddr, 4569);
-
-    IAX2FrameFull poke2;
-    poke2.setHeader(
-        // Call IDs unused
-        0, 0,
-        // Keep passing through same time (for diagnostics)
-        8888, 
-        // SEQ UNUSED
-        0, 0, 
-        FrameType::IAX2_TYPE_IAX, 
-        IAXSubclass::IAX2_SUBCLASS_IAX_POKE);
-    // Using the CAUSE for now
-    poke2.addIE_str(0x16, "108.20.174.63");
-    
-    //nc -u 174.242.75.129 4569 < out.bin
-
-    ofstream of("out.bin", std::ios::binary);
-    for (unsigned i = 0; i < poke2.size(); i++) {
-        printf("%02x ", (int)poke2.buf()[i]);
-        char buf[1] = { (char)poke2.buf()[i] };
-        of.write(buf, 1);
-    }
-    printf("\n");
-}
-
 /*
 static void dspTest1() {
 
@@ -208,14 +179,21 @@ static void resampler_1() {
     amp::Resampler resampler;
 }
 
+static void testRound() {
+    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6755, 20) == 6740);
+    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6752, 20) == 6740);
+    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6740, 20) == 6740);
+    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6779, 20) == 6760);
+}
+
 int main(int, const char**) {
-    make_poke();
+    testRound();
     //resampler_1();
     //pack1();
     //bufferTest1();
     clockTest1();
     timerTest1();
     timerTest2();
-    //frameTest1();
+    frameTest1();
     //dspTest1();
 }

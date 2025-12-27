@@ -156,6 +156,10 @@ public:
         float a = round((float)v / (float)tick);
         return a * (float)tick;
     }
+
+    static uint32_t roundDownToTick(uint32_t v, uint32_t tick) {
+        return (v / tick) * tick;
+    }
     
     // ----- Diagnostics -----------------------------------------------
 
@@ -226,14 +230,17 @@ public:
             // First frame of the talkpsurt? 
             if (!_inTalkspurt) {
                 
+                // The voice frame may not necessarily be on a voice tick boundary
+                // so the cursor position needs to be rounded.
+                // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
                 _originCursor = roundToTick(frame.getOrigMs() - _initialMargin,
                     _voiceTickSize);
 
                 if (_originCursor > oldOriginCursor)
-                    log.info("Start TS, moving forward %u->%u %u %d", 
+                    log.info("Start TS, moving forward %u -> %u %u %d", 
                         oldOriginCursor, _originCursor, frame.getOrigMs(), size());
                 else if (_originCursor < oldOriginCursor)
-                    log.info("Start TS, moving backward %u<-%u %u %d", 
+                    log.info("Start TS, moving backward %u <- %u %u %d", 
                         _originCursor, oldOriginCursor, frame.getOrigMs(), size());
                 else 
                     log.info("Start TS, No movement %u %u %d", 
@@ -250,30 +257,46 @@ public:
             // to pick it up.
             if ((int32_t)frame.getOrigMs() < _originCursor) {
 
-                // If the next frame is within a reasonable range then move the cursor 
+                // A few rules:
+                // 1. Never move back further than has already been played in this 
+                // talkspurt.
+                // 2. Always move back onto a voice tick boundary.
+                // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
+                uint32_t proposedCursor = max(_lastPlayedOrigMs, 
+                    roundDownToTick(frame.getOrigMs(), _voiceTickSize));
+
+                // If the frame is within a reasonable range then move the cursor 
                 // back to pick up the frame.
-                if (frame.getOrigMs() > (_originCursor - _initialMargin)) {
-                    log.info("Mid TS, moved cursor back (%d < %d) size: %d", 
-                        frame.getOrigMs(), _originCursor, size());
-                    _originCursor = roundToTick(frame.getOrigMs(), _voiceTickSize);
+                if (proposedCursor >= (_originCursor - _initialMargin)) {
+                    // The cursor will need to stay on a tick boundary
+                    _originCursor = proposedCursor;
+                    log.info("Mid TS, moved cursor back (%d <- %d) size: %d", 
+                        _originCursor, oldOriginCursor, size());
                 }
                 // If the next frame is unreasonably early then discard it.
                 else {
-                    log.info("Mid TS, discarded frame (%d < %d) size: %d", 
+                    log.info("Mid TS, discarded frame (%d << %d) size: %d", 
                         frame.getOrigMs(), _originCursor, size());
                     _lateVoiceFrameCount++;
                     _buffer.pop();
                 }
                 // NOTICE: We're in a loop so we get another shot at it,
             }
-            // If we got the frame we are waiting for then play it
-            else if ((int32_t)frame.getOrigMs() == _originCursor) {
+            // If we've got a frame that is inside of the current tick then play it.
+            // NOTE: *Most* of the time the voice ticks will be aligned on audio 
+            // tick boundaries, but occasionally we may get one that is is not, most
+            // likely because the timestamp for the tick was consumed by another 
+            // message.
+            //
+            // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
+            else if ((int32_t)frame.getOrigMs() >= _originCursor &&
+                     (int32_t)frame.getOrigMs() < _originCursor + (int32_t)_voiceTickSize) {
                 
                 sink->play(frame, localMs);
 
                 voiceFramePlayed = true;
                 _lastPlayedLocal = localMs;
-                _lastPlayedOrigMs = frame.getOrigMs();
+                _lastPlayedOrigMs = _originCursor;
                 _voicePlayoutCount++;
 
                 bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
@@ -396,7 +419,8 @@ private:
     uint32_t _startMs = 0;
 
     // This is the important variable. This always points to the next
-    // origin time to be played.
+    // origin time to be played. This will always be on a 20ms boundary 
+    // (i.e. 0, 20, 40, 60, 80, 100, ....)
     int32_t _originCursor = 0;
     uint32_t _talkspurtFirstOrigin = 0;
     // The orig timestamp of the newest frame to be put into the buffer,

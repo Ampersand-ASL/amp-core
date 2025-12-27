@@ -258,10 +258,11 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     call.remoteNumber = targetNumber;
     call.side = Call::Side::SIDE_CALLER;
     call.state = Call::State::STATE_LOOKUP_0;
-    // Moved to place where NEW is sent
-    call.localStartMs = _clock.time();
+    // Move back a few ms to make sure that the elapsed time is always positive
+    // in some of the dispense operations below.
+    call.localStartMs = _clock.time() - AUDIO_TICK_MS;
     call.lastLagrqMs = _clock.time();
-    call.nextLMs = _clock.time() + 10 * 1000;
+    call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
 
     // Check the local registration to see if we can resolve 
@@ -645,7 +646,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.trusted = false;
             call.localCallId = _localCallIdCounter++;
             call.remoteCallId = frame.getSourceCallId();
-            call.localStartMs = _clock.time();
+            // Leave some space so that the elapsed time never becomes negative
+            call.localStartMs = _clock.time() - AUDIO_TICK_MS;
             call.expectedInSeqNo = 1;
             call.remoteNumber = callingNumber;
             call.remoteUser = callingUser;
@@ -653,7 +655,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
             // Schedule the ping out
             call.lastLagrqMs = _clock.time();
-            call.nextLMs = _clock.time() + 10 * 1000;
+            call.lastLMs = _clock.time();
             call.lastFrameRxMs = _clock.time();
             call.supportedCodecs = supportedCodecs;
 
@@ -1837,7 +1839,7 @@ void LineIAX2::consume(const Message& msg) {
                     // We keep track of the previous elapsed time used to make sure that 
                     // we don't sent out two voice frames with the same timestamp.
                     //
-                    uint32_t elapsed = call.dispenseElapsedUsingMessageOrigin(msg, true);
+                    uint32_t elapsed = call.dispenseElapsedMsForVoice(msg);
                     //line->_log.info("Send e %u", elapsed);
                     // The wrap case is identified by looking at the top 16 bits of the 
                     // last voice frame we transmitted.
@@ -2168,7 +2170,7 @@ void LineIAX2::Call::reset() {
     localCallId = 0;
     remoteCallId = 0;
     localStartMs = 0;
-    lastElapsedTimeStampDispensed = 0;
+    lastElapsedMsDispensed = 0;
     outSeqNo = 0;
     expectedInSeqNo = 0;
     lastVoiceFrameElapsedMs = 0;
@@ -2191,7 +2193,7 @@ void LineIAX2::Call::reset() {
     reTx.reset();
     dnsRequestId = 0;
     vox = false;
-    nextLMs = 0;
+    lastLMs = 0;
     lastPingSentMs = 0;
     lastPingTimeMs = 0;
     pingCount = 0;
@@ -2201,31 +2203,39 @@ void LineIAX2::Call::reset() {
     lastTxVoiceFrameMs = 0;
 }
 
+// #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
 uint32_t LineIAX2::Call::localElapsedMs(Clock& clock) const {
     return clock.time() - localStartMs;
 }
 
-uint32_t LineIAX2::Call::dispenseElapsedMs(Clock& clock, bool voiceAlignment) {
-    return dispenseElapsedFrom(clock.time() - localStartMs, voiceAlignment);
-}
-
-uint32_t LineIAX2::Call::dispenseElapsedUsingMessageOrigin(const Message& msg,
-    bool voiceAlignment) {
-    uint32_t msgCreateMs = msg.getRxMs();
-    return dispenseElapsedFrom(msgCreateMs - localStartMs, voiceAlignment);
-}
-
-uint32_t LineIAX2::Call::dispenseElapsedFrom(uint32_t ts, bool voiceAlignment) {
-    if (voiceAlignment)
-        ts = alignToTick(ts, AUDIO_TICK_MS);
-    // Not allowed to move back in time
-    if (ts < lastElapsedTimeStampDispensed) {
-        cout << "Not allowed to move back from " << ts << " " << lastElapsedTimeStampDispensed << endl;
-        ts = lastElapsedTimeStampDispensed;
-    } else {
-        lastElapsedTimeStampDispensed = ts;
+// #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
+uint32_t LineIAX2::Call::dispenseElapsedMs(Clock& clock) {
+    uint32_t currentTickStartMs = alignToTick(localElapsedMs(clock), AUDIO_TICK_MS);
+    // If the timestamp corresponding to the start of this tick has already been 
+    // dispensed then use the next timestamp for non-voice messages.
+    if (lastElapsedMsDispensed == currentTickStartMs) {
+        lastElapsedMsDispensed = currentTickStartMs + 1;
+    } 
+    // If the timestamp corresponding to the start of this tick has not been dispensed
+    // yet then use a timestamp from the previous tick for non-voice messages to keep the 
+    // start of this tick available for a potential voice frame.
+    else if (lastElapsedMsDispensed < currentTickStartMs) {
+        lastElapsedMsDispensed = currentTickStartMs - 1;
     }
-    return ts;
+    // If the last dispensed timestamp is later than the start of the current audio 
+    // tick then something has gone wrong. Just keep issuing the same timestamp 
+    // until things catch up.
+    else if (lastElapsedMsDispensed > currentTickStartMs) {
+        cout << "Unexpected timestamp seq " << lastElapsedMsDispensed << ", " << currentTickStartMs << endl;
+    }
+    return lastElapsedMsDispensed;
+}
+
+uint32_t LineIAX2::Call::dispenseElapsedMsForVoice(const Message& msg) {
+    uint32_t voiceElapsedMs = alignToTick(msg.getRxMs() - localStartMs, AUDIO_TICK_MS);
+    // Voice frames are always allowed to use the start-of-tick timestamp 
+    lastElapsedMsDispensed = voiceElapsedMs;
+    return lastElapsedMsDispensed;
 }
 
 bool LineIAX2::Call::isPeerAddr(const sockaddr& addr) const {
@@ -2307,8 +2317,8 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
         lastPingSentMs = clock.time();
     }
 
-    // Need a L text packet?
-    if (clock.isPast(nextLMs)) {
+    // Need top send out a L text packet?
+    if (clock.isPast(lastLMs + L_INTERVAL_MS)) {
         IAX2FrameFull respFrame2;
         respFrame2.setHeader(localCallId, remoteCallId, 
             dispenseElapsedMs(clock), 
@@ -2317,12 +2327,11 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
         // NOTE: INCLUDING NULL!
         respFrame2.setBody((const uint8_t*)"L ", 3);
         line._sendFrameToPeer(respFrame2, *this);
-        // #### TODO: CONSTANT
-        nextLMs = clock.time() + 20 * 1000;
+        lastLMs = clock.time();
     }
 
     // Need a LAGRQ?
-    if (clock.isPast(lastLagrqMs + lagrqIntervalMs)) {
+    if (clock.isPast(lastLagrqMs + LAGRQ_INTERVAL_MS)) {
         // 6.7.4.  LAGRQ Lag Request Message
         // A LAGRQ is a lag request.  It is sent to determine the lag between
         // two IAX endpoints, including the amount of time used to process a
