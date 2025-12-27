@@ -1,0 +1,58 @@
+/**
+ * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#pragma once
+
+#include <functional>
+#include <string>
+
+#include <nlohmann/json.hpp>
+
+#include "Runnable2.h"
+
+using json = nlohmann::json;
+
+namespace kc1fsz {   
+
+class Log;
+
+    namespace amp {
+
+/**
+ * Fires a callback any time the system configuration is changed.
+ */
+class ConfigPoller : public Runnable2 {
+public:
+
+    ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb);
+
+    // ----- Runnable2 --------------------------------------------------------
+
+    bool run2() { return false; }
+    void oneSecTick();
+
+private: 
+
+    Log& _log;
+    std::string _fn;
+    std::function<void(const json& cfg)> _cb;
+    // Initialize at the epoch
+    std::filesystem::file_time_type _lastUpdate;
+    bool _startup = true;
+};
+
+    }
+}

@@ -142,6 +142,15 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
         _log.error("Unable to open IAX port (%d)", errno);
         return -1;
     }    
+    
+    // Configure reuse
+    int optval = 1; 
+    // This allows the socket to bind to a port that is in TIME_WAIT state,
+    // or allows multiple sockets to bind to the same port (useful for multicast).
+    if (setsockopt(iaxSockFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) < 0) {
+        _log.error("IAX setsockopt SO_REUSEADDR failed (%d)", errno);
+        return -1;
+    }
 
     struct sockaddr_storage servaddr;
     memset(&servaddr, 0, sizeof(servaddr));
@@ -179,6 +188,14 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
     int dnsSockFd = socket(AF_INET, SOCK_DGRAM, 0);
     if (dnsSockFd < 0) {
         ::close(iaxSockFd);
+        return -1;
+    }
+
+    optval = 1; 
+    // This allows the socket to bind to a port that is in TIME_WAIT state,
+    // or allows multiple sockets to bind to the same port (useful for multicast).
+    if (setsockopt(dnsSockFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) < 0) {
+        _log.error("DNS setsockopt SO_REUSEADDR failed (%d)", errno);
         return -1;
     }
 

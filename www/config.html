@@ -31,8 +31,8 @@ body {
             <input type="text" id="node" name="node"/>
             <label for="password">Password:</label>
             <input type="text" id="password" name="password"/>
-            <label for="audiodevice">Audio Device:</label>
-            <select id="audiodevice" name="audiodevice">
+            <label for="audioDevice">Audio Device:</label>
+            <select id="audioDevice" name="audioDevice">
             </select>
             <label for="iaxPort4">IAX Port (IPv4):</label>
             <input type="text" id="iaxPort4" name="iaxPort4"/>
@@ -55,7 +55,7 @@ async function load_audiodevice_menu() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        const sel = document.getElementById('audiodevice');
+        const sel = document.getElementById('audioDevice');
         sel.replaceChildren();
         for (const i of data) {
             var opt = document.createElement('option');
@@ -75,10 +75,13 @@ async function config_load() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        console.log(data)
+        console.log("config_load", data)
+        // Store the entire config document 
+        sessionStorage.setItem("config", JSON.stringify(data))
+        // Pull out some specific values for this screen
         document.getElementById("node").setAttribute("value", data["node"]);
         document.getElementById("password").setAttribute("value", data["password"]);
-        document.getElementById("audiodevice").value = data["audiodevice"];
+        document.getElementById("audioDevice").value = data["audioDevice"];
         document.getElementById("iaxPort4").setAttribute("value", data["iaxPort4"]);
     } catch (error) {
         console.error('Error fetching data:', error.message);
@@ -89,13 +92,21 @@ function config_save() {
     const form = document.getElementById('config-form');
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
-    const jsonString = JSON.stringify(formObject, null, 2);
+    // Move across a few specific things 
+    fullConfig = JSON.parse(sessionStorage.getItem("config"))
+    //console.log("Full Config", fullConfig);
+    fullConfig["node"] = formObject["node"].trim();
+    fullConfig["password"] = formObject["password"].trim();
+    fullConfig["audioDevice"] = formObject["audioDevice"].trim();
+    fullConfig["iaxPort4"] = formObject["iaxPort4"].trim();
+    console.log("Full Config + Changes", fullConfig)
+    // Push back to the server
     fetch('/config-save', {
         method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: jsonString,
+            body: JSON.stringify(fullConfig, null, 2)
         }
     );
 }

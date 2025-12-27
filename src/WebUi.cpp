@@ -211,8 +211,9 @@ void WebUi::_thread() {
         res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
-        cout << _config.getCopy().toJson().dump() << endl;
-         res.set_content(_config.getCopy().toJson().dump(), "application/json");
+        cout << "/config-load" << endl;
+        cout << _config.getCopy().dump() << endl;
+         res.set_content(_config.getCopy().dump(), "application/json");
     });
     svr.Post("/config-save", [this](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
@@ -221,19 +222,13 @@ void WebUi::_thread() {
             body.append(data, data_length);
             return true;
         });
+        cout << "/config-save" << endl;
         cout << body << endl;
         json jBody = json::parse(body);
-
+        jBody["lastUpdateMs"] = _clock.timeUs() / 1000;
         // #### TODO: Reformat audio device selection
-
-        // Merge with existing config
-        Config newConfig = _config.getCopy();
-        newConfig.lastUpdateMs = _clock.timeUs() / 1000;
-        newConfig.node = jBody["node"];
-        newConfig.password = jBody["password"];
-        newConfig.iaxPort4 = jBody["iaxPort4"];
         ofstream cf(_configFileName);
-        cf << newConfig.toJson().dump() << endl;
+        cf << jBody.dump() << endl;
         cf.close();
     });
     svr.Get("/audiodevice-list", [](const httplib::Request &, httplib::Response &res) {

@@ -48,6 +48,8 @@ void RegisterTask::configure(const char* regServerUrl,
     _nodeNumber = nodeNumber;
     _password = password;    
     _iaxPort = iaxPort;
+
+    _log.info("RegisterTask %s, %s, %d", _regServerUrl.c_str(), _nodeNumber.c_str(), _iaxPort);
 }
 
 void RegisterTask::_doRegister() {     
@@ -82,9 +84,11 @@ void RegisterTask::_doRegister() {
     _resultArea[0] = 0;
     _resultAreaLen = 0;
 
+    //_log.info("Registering");
+
     CURLcode res = curl_easy_perform(_curl);
     if (res != CURLE_OK) {
-        _log.error("Registration failed (1) for %s", _nodeNumber.c_str());
+        _log.error("Registration failed (1) for %s %d", _nodeNumber.c_str(), res);
     }
     else {
         long http_code = 0;
@@ -101,6 +105,8 @@ void RegisterTask::_doRegister() {
         }
     }
 
+    //_log.info("Done registering");
+
     curl_slist_free_all(_headers);
     curl_easy_cleanup(_curl);
     _headers = 0;
@@ -110,7 +116,7 @@ void RegisterTask::_doRegister() {
 void RegisterTask::tenSecTick() {
     if (_clock.time() >= _nextRegisterMs) {
         _nextRegisterMs = _clock.time() + _regIntervalMs;
-        if (!_nodeNumber.empty())
+        if (!_regServerUrl.empty() && !_nodeNumber.empty() && !_password.empty())
             _doRegister();
     }
 }

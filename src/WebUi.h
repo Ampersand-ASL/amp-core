@@ -24,7 +24,6 @@
 #include "kc1fsz-tools/copyableatomic.h"
 
 #include "Runnable2.h"
-#include "Config.h"
 
 using json = nlohmann::json;
 
@@ -46,7 +45,7 @@ public:
         unsigned networkDestLineId, unsigned radioDestLineId,
         const char* configFileName);
 
-    void setConfig(const Config& config) { _config.set(config); }
+    void setConfig(const json& config) { _config.set(config); }
 
     // ----- MessageConsumer --------------------------------------------
 
@@ -81,7 +80,7 @@ private:
     bool _ptt = false;
     threadsafequeue<Message> _outQueue;
     copyableatomic<std::vector<Peer>> _status;
-    copyableatomic<amp::Config> _config;
+    copyableatomic<json> _config;
 
 };
 

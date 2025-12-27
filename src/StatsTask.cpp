@@ -45,7 +45,8 @@ void StatsTask::configure(const char* url, const char* nodeNumber) {
 void StatsTask::tenSecTick() {
     if (_clock.isPast(_lastAttemptMs + _intervalMs)) {
         _lastAttemptMs = _clock.time();
-        _doStats();
+        if (!_url.empty() && !_nodeNumber.empty())
+            _doStats();
     }
 }
 
