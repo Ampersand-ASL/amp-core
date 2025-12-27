@@ -231,6 +231,7 @@ private:
         Side side = Side::SIDE_NONE;
         State state = State::STATE_NONE;
         bool trusted = false;
+        bool sourceAddrValidated = false;
         int localCallId = 0;
         int remoteCallId = 0;
         uint32_t localStartMs = 0;

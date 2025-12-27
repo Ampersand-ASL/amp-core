@@ -65,6 +65,7 @@ void BridgeCall::reset() {
     _startMs = 0;
     _lastAudioMs = 0;
     _echo = false;
+    _sourceAddrValidated = false;
     
     _bridgeIn.reset();
     _bridgeOut.reset();
@@ -83,7 +84,7 @@ void BridgeCall::reset() {
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-    bool bypassJitterBuffer, bool echo, Mode initialMode) {
+    bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode) {
 
     _active = true;
     _lineId = lineId;  
@@ -96,6 +97,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeOut.setCodec(codec);
 
     _echo = echo;
+    _sourceAddrValidated = sourceAddrValidated;
     _mode = initialMode;
 
     if (_mode == Mode::PARROT) {
@@ -256,6 +258,10 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             // Load the greeting into the play queue           
             _loadAudioFile("parrot-connected", _playQueue);
             _loadSilence(25, _playQueue);
+            if (!_sourceAddrValidated) {
+                _loadAudioFile("node-is-unregistered", _playQueue);
+                _loadSilence(25, _playQueue);
+            }
             _loadAudioFile("ready-to-record", _playQueue);
             // Trigger the greeting playback
             _parrotState = ParrotState::PLAYING_PROMPT_GREETING;

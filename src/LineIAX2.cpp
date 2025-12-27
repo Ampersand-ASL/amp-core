@@ -674,20 +674,14 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 call.state = Call::State::STATE_AUTHREP_WAIT_0;                
             }
             else {
-                if (_sourceIpValidationRequired) {
-                    // Make an IP address lookup request
-                    call.dnsRequestId = _dnsRequestIdCounter++;
-                    char hostName[65];
-                    snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
-                    // Start the DNS lookup process
-                    _sendDNSRequestA(call.dnsRequestId, hostName);
+                // Make an IP address lookup request. 
+                call.dnsRequestId = _dnsRequestIdCounter++;
+                char hostName[65];
+                snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
+                // Start the DNS lookup process
+                _sendDNSRequestA(call.dnsRequestId, hostName);
 
-                    call.state = Call::State::STATE_IP_VALIDATION_0;
-                } else {  
-                    // This is the state that means that all authentication/validation
-                    // is complete and we can ACCEPT the call
-                    call.state = Call::State::STATE_CALLER_VALIDATED;                
-                }
+                call.state = Call::State::STATE_IP_VALIDATION_0;
             }
         }
         // Per the specification, we should respond to POKEs with PONGs. 
@@ -1480,25 +1474,36 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        _log.error("Invalid DNS response (A)");
-        call.state = Call::State::STATE_TERMINATED;
-        return;
+        if (_sourceIpValidationRequired) {
+            _log.error("Call %d invalid DNS response (A)", call.localCallId);
+            call.state = Call::State::STATE_TERMINATED;
+        } else {
+            _log.info("Call %d ignoring DNS lookup failure", call.localCallId);
+            call.state = Call::State::STATE_CALLER_VALIDATED;
+        }
     }
+    else {
+        // NOTE: All of this is assuming IPv4!
+        // Get the address returned by DNS
+        char addrStr[64];
+        formatIP4Address(addr, addrStr, 64);
+        // Get the address of the peer
+        char addrStrPeer[64];
+        formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
 
-    // NOTE: All of this is assuming IPv4!
-    // Get the address returned by DNS
-    char addrStr[64];
-    formatIP4Address(addr, addrStr, 64);
-    // Get the address of the peer
-    char addrStrPeer[64];
-    formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
-
-    if (strcmp(addrStr, addrStrPeer) == 0) {
-        _log.info("Call %u IP validation succeeded", call.localCallId);
-        call.state = Call::State::STATE_CALLER_VALIDATED;
-    } else {
-        _log.info("Call %u IP validation failed", call.localCallId);
-        call.state = Call::State::STATE_TERMINATED;
+        if (strcmp(addrStr, addrStrPeer) == 0) {
+            _log.info("Call %u IP validation succeeded", call.localCallId);
+            call.state = Call::State::STATE_CALLER_VALIDATED;
+            call.sourceAddrValidated = true;
+        } else {
+            if (_sourceIpValidationRequired) {
+                _log.info("Call %u IP validation failed", call.localCallId);
+                call.state = Call::State::STATE_TERMINATED;
+            } else{
+                _log.info("Call %u ignoring IP validation failure", call.localCallId);
+                call.state = Call::State::STATE_CALLER_VALIDATED;
+            }
+        }
     }
 }
 
@@ -1701,6 +1706,7 @@ bool LineIAX2::_progressCall(Call& call) {
             PayloadCallStart payload;
             payload.codec = call.codec;
             payload.startMs = call.localStartMs;
+            payload.sourceAddrValidated = call.sourceAddrValidated;
 
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
@@ -2167,6 +2173,7 @@ void LineIAX2::Call::reset() {
     side = Side::SIDE_NONE;
     state = State::STATE_NONE;
     trusted = false;
+    sourceAddrValidated = false;
     localCallId = 0;
     remoteCallId = 0;
     localStartMs = 0;

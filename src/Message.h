@@ -113,6 +113,7 @@ struct PayloadCallStart {
     uint32_t startMs;
     bool echo = false;
     bool originated = false;
+    bool sourceAddrValidated = false;
 };
 
 struct PayloadCallEnd {

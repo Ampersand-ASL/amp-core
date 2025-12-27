@@ -70,7 +70,7 @@ public:
     void reset();
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-        bool bypassJitterBuffer, bool echo, Mode initialMode);
+        bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode);
 
     bool isActive() const { 
         return _active; 
@@ -116,6 +116,7 @@ private:
     MessageConsumer* _sink;
 
     bool _echo = false;
+    bool _sourceAddrValidated = false;
     Mode _mode = Mode::NORMAL;
 
     bool _active = false;

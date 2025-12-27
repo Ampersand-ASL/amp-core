@@ -89,14 +89,14 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call %u started CODEC %X, jbBypass %d, echo %d", 
+            _log.info("Call %u started CODEC %X, jbBypass %d, echo %d, validated %d", 
                 msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer,
-                payload.echo);
+                payload.echo, payload.sourceAddrValidated);
 
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
-                _defaultMode);
+                payload.sourceAddrValidated, _defaultMode);
         }
     }
     else if (msg.getType() == Message::SIGNAL && 
