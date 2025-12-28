@@ -66,6 +66,7 @@ private:
     };
 
     static void _uiThread(void*);
+    static void* _uiThreadPosix(void* o) { _uiThread(o); return 0; };
     void _thread();
 
     Log& _log;

@@ -16,7 +16,9 @@
  */
 #include "httplib.h"
 
+#ifdef _WIN32
 #include <process.h>
+#endif
 
 #include <iostream>
 #include <thread>
@@ -53,7 +55,16 @@ WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
     _networkDestLineId(networkDestLineId),
     _radioDestLineId(radioDestLineId),
     _configFileName(configFileName) {
+
+#ifdef _WIN32
     _beginthread(_uiThread, 0, (void*)this);
+#else
+    // Get the service thread running
+    pthread_t new_thread_id;
+    if (pthread_create(&new_thread_id, NULL, _uiThreadPosix, (void*)this)!= 0) {
+        perror("Error creating thread");
+    }
+#endif
 }
 
 void WebUi::consume(const Message& msg) {   

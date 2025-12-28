@@ -92,7 +92,7 @@ void service_thread(void* ud) {
     // Get current scheduling parameters
     if (pthread_getschedparam(self_thread, &policy, &param) != 0) {
         perror("pthread_getschedparam failed");
-        return 0;
+        return;
     }
     if (policy != SCHED_OTHER) {
         // Set the new policy to SCHED_OTHER and priority to 0 (required for SCHED_OTHER)
@@ -103,12 +103,12 @@ void service_thread(void* ud) {
             if (errno == EPERM) {
                 printf("Permission denied. Ensure the process has CAP_SYS_NICE if changing from a real-time policy.\n");
             }
-            return 0;
+            return;
         }
         // Get current scheduling parameters
         if (pthread_getschedparam(self_thread, &policy, &param) != 0) {
             perror("pthread_getschedparam failed");
-            return 0;
+            return;
         }
         log.info("Thread policy: %d, priority: %d", policy, param.sched_priority);
     }
