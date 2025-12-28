@@ -46,6 +46,8 @@ using namespace kc1fsz;
 
 void service_thread(void* ud) {
 
+    pthread_setname_np(pthread_self(), "SVC  ");
+
     // Pull out the thread startup arguments
     const service_thread_args* args = (service_thread_args*)ud;
     const string cfgFileName = args->cfgFileName;

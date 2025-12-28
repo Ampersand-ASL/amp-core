@@ -37,6 +37,8 @@ class Log;
 class ConfigPoller : public Runnable2 {
 public:
 
+    static const char* DEFAULT_CONFIG;
+
     ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb);
 
     // ----- Runnable2 --------------------------------------------------------

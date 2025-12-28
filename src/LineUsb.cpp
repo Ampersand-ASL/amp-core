@@ -226,18 +226,20 @@ int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
     int used = 0, rc;    
 
-    // We always want to be alerted about capture
-    rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
-    if (rc < 0) {
-        _log.error("FD problem 2");
-    } else {
-        used += rc;
-        fdsCapacity -= rc;
+    if (_captureH) {
+        // We always want to be alerted about capture
+        rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
+        if (rc < 0) {
+            _log.error("FD problem 2");
+        } else {
+            used += rc;
+            fdsCapacity -= rc;
+        }
     }
 
     // Alerts about playing are only needed when there is something 
     // in the accumulator that needs to be swept out.
-    if (_playAccumulatorSize > 0) {
+    if (_playH && _playAccumulatorSize > 0) {
         rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
         if (rc < 0) {
             _log.error("FD problem 3");
@@ -262,6 +264,9 @@ void LineUsb::audioRateTick(uint32_t tickMs) {
 }
 
 void LineUsb::_pollHidStatus() {
+
+    if (_hidFd == 0)
+        return;
 
     // The HID device will send status updates on the FD. We use
     // this as a prompt to call the ioctl() to get status.
@@ -300,6 +305,9 @@ void LineUsb::_pollHidStatus() {
 // 
 void LineUsb::_captureIfPossible() {  
    
+    if (!_captureH)
+        return;
+
     bool audioCaptureEnabled = (_cosActive && _ctcssActive) || _toneActive;
 
     // Attempt to read inbound (captured) audio data. Whenever a full
@@ -450,6 +458,9 @@ void LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 }
 
 void LineUsb::_playIfPossible() {
+
+    if (!_playH)
+        return;
 
     if (_playAccumulatorSize == 0)
         return;

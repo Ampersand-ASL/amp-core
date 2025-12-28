@@ -123,9 +123,9 @@ void WebUi::_uiThread(void* o) {
 
 void WebUi::_thread() {
 
-    _log.info("ui_thread start");
+    pthread_setname_np(pthread_self(), "amp-server-ui");
 
-    //pthread_setname_np(pthread_self(), "amp-server-ui");
+    _log.info("ui_thread start");
 
     // HTTP
     httplib::Server svr;
