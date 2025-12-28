@@ -203,7 +203,8 @@ private:
             STATE_LOOKUP_0,
             STATE_LOOKUP_0A,
             STATE_LOOKUP_1A,
-            STATE_INITIAL,
+            // Go into this state when ready to start initiating a call
+            STATE_INITIATION_WAIT,
             STATE_WAITING,
             // Sent out the DNS request to get the caller's public key
             STATE_AUTHREP_WAIT_0,
@@ -215,10 +216,13 @@ private:
             STATE_CALLER_VALIDATED,
             STATE_LINKED,
             STATE_UP,
+            // This is the state that requests a termination. 
             STATE_TERMINATE_WAITING,
-            STATE_TERMINATED,
-            STATE_CALL_FAILED,
-            STATE_POKE_0
+            // This is a state that we enter to shutdown a connection.
+            // We stay here for a short time to allow the retransmission of any 
+            // unACKd messages. Once the retransmit buffer empties the connection
+            // is closed.
+            STATE_TERMINATED
         };
 
         enum Side {
@@ -241,7 +245,6 @@ private:
         uint8_t expectedInSeqNo = 0;
         // TODO: CLARIFY RX/TX
         uint32_t lastVoiceFrameElapsedMs = 0;
-        uint32_t lastHangupMs = 0;
         fixedstring localNumber;
         fixedstring remoteNumber;
         fixedstring remoteUser;

@@ -57,10 +57,9 @@ static const uint32_t FAST_PING_INTERVAL_MS = 2 * 1000;
 // How long can the call go without receiving any messages before 
 // a hangup is generated.
 static const uint32_t _inactivityTimeoutMs = 40 * 1000;
-// #### TODO: CLEAN UP
 // How long we will wait around before cleaning up a terminated call. 
-// This window is used to allow the peer to request re-transmits.
-static const uint32_t _terminationTimeoutMs = 15 * 1000;
+// This window is used to allow time to re-transmit and unacknowledged messages.
+static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
@@ -244,8 +243,9 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
 
     _log.info("Request to call %s -> %s", localNumber, targetNumber);
 
-    // Make sure we don't have an active call already
+    // Make sure we don't have an active call already to the same target number.
     bool found = false;
+
     _visitActiveCallsIf(
         // Visitor
         [&found, localNumber, targetNumber, &log = _log](const Call& call) {
@@ -254,12 +254,15 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
         },
         // Predicate
         [localNumber, targetNumber](const Call& call) {
-            return call.remoteNumber == targetNumber && call.localNumber == localNumber;
+            return call.remoteNumber == targetNumber && 
+              call.localNumber == localNumber &&
+              call.state != Call::State::STATE_TERMINATE_WAITING && 
+              call.state != Call::State::STATE_TERMINATED;
         }
     );
-    if (found) {
+
+    if (found)
         return -1;
-    }
 
     int callIx = _allocateCallIx();
     if (callIx == -1) {
@@ -282,9 +285,8 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
 
-    // Check the local registration to see if we can resolve 
-    // the target immediately.
-
+    // Check the local registration (if available) to see if we can resolve the target 
+    // without going out to the DNS/directory.
     if (_locReg) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
@@ -293,7 +295,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
             formatIPAddrAndPort((const sockaddr&)targetAddr, addr, 64);
             _log.info("Resolved %s locally -> %s", call.remoteNumber.c_str(), addr);
             memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
-            call.state = Call::State::STATE_INITIAL;
+            call.state = Call::State::STATE_INITIATION_WAIT;
         }
     }
 
@@ -309,12 +311,15 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
     _visitActiveCallsIf(
         // Visitor
         [&found, localNumber, targetNumber, this](Call& call) {
-            this->_hangupCall(call);
+            _hangupCall(call);
             found = true;
         },
         // Predicate
         [localNumber, targetNumber](const Call& call) {
-            return call.remoteNumber == targetNumber && call.localNumber == localNumber;
+            return call.remoteNumber == targetNumber && 
+              call.localNumber == localNumber && 
+              call.state != Call::State::STATE_TERMINATE_WAITING && 
+              call.state != Call::State::STATE_TERMINATED;
         }
     );
 
@@ -659,7 +664,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.reset();
             call.active = true;
             call.side = Call::Side::SIDE_CALLED;
-            call.state = Call::State::STATE_INITIAL;
             call.trusted = false;
             call.localCallId = _localCallIdCounter++;
             call.remoteCallId = frame.getSourceCallId();
@@ -813,8 +817,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 }
                 // Save the token for the NEW retry
                 untrustedCall.calltoken = token;
-                // Go back to the beginning to try again
-                untrustedCall.state = Call::State::STATE_INITIAL;  
+                // Go back to the beginning and send a NEW again.
+                untrustedCall.state = Call::State::STATE_INITIATION_WAIT;
                 return;   
             }
             // Look for the cases where we should be locking in the peer's call ID
@@ -1288,14 +1292,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         }
     }
     // HANGUP
-    else if (frame.getType() == 6 && frame.getSubclass() == 5) {
+    else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_HANGUP)) {
         _log.info("Call %u got HANGUP", call.localCallId); 
-        if (call.side == Call::Side::SIDE_CALLER) {
-            call.state = Call::State::STATE_CALL_FAILED;
-            call.lastHangupMs = _clock.time();
-        } else {
-            _terminateCall(call);
-        }
+        call.state = Call::State::STATE_TERMINATE_WAITING;
     }
     // COMFORT NOISE
     else if (frame.getType() == 10) {
@@ -1449,7 +1448,7 @@ void LineIAX2::_processDNSResponse1(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        call.state = Call::State::STATE_INITIAL;
+        call.state = Call::State::STATE_TERMINATED;
         _log.error("Invalid DNS response (A)");
         return;
     }
@@ -1463,23 +1462,8 @@ void LineIAX2::_processDNSResponse1(Call& call,
 
     call.dnsRequestId = 0;
     // Now in a state to start connecting
-    call.state = Call::State::STATE_INITIAL;
-
-    /*
-    call.state = Call::State::STATE_POKE_0;
-    // TEMP
-    // SEND A PROBE TO SEE WHAT HAPPENS
-    IAX2FrameFull pokeFrame;
-    pokeFrame.setHeader(call.localCallId, 0, 
-        0x7777, 
-        0, 0, 
-        6, 0x1e);
-    // CHECK TO SEE IF IEs CAUSE A PROBLEM
-    pokeFrame.addIE_str(0x12, "XXXXXXXXXXXXXXXX", 16);
-    _sendFrameToPeer(pokeFrame, call);
-    */
+    call.state = Call::State::STATE_INITIATION_WAIT;
 }
-
 
 void LineIAX2::_processDNSResponseIPValidation(Call& call, 
     const uint8_t* buf, unsigned bufLen) {
@@ -1606,7 +1590,7 @@ bool LineIAX2::_progressCall(Call& call) {
             _sendDNSRequestSRV(call.dnsRequestId, srvHostName);
             call.state = Call::State::STATE_LOOKUP_0A;
         }
-        else if (call.state == Call::State::STATE_INITIAL) { 
+        else if (call.state == Call::State::STATE_INITIATION_WAIT) { 
             
             _log.info("Initiating a call %s -> %s", 
                 call.localNumber.c_str(), call.remoteNumber.c_str()); 
@@ -1675,12 +1659,6 @@ bool LineIAX2::_progressCall(Call& call) {
             _sendFrameToPeer(frame, call);
 
             call.state = Call::State::STATE_WAITING;
-        }
-        else if (call.state == Call::State::STATE_CALL_FAILED) {
-            if (_clock.isPast(call.lastHangupMs + _callRetryIntervalMs)) {
-                _log.info("Retry call");
-                call.state = Call::State::STATE_INITIAL;
-            }
         }
     }
     else if (call.side == Call::Side::SIDE_CALLED) {
@@ -1777,7 +1755,7 @@ bool LineIAX2::_progressCall(Call& call) {
         // until the retransmit buffer is clear, or until
         // a timeout has expired.
         if (call.reTx.empty() || 
-            _clock.isPast(call.terminationMs + _terminationTimeoutMs))
+            _clock.isPast(call.terminationMs + TERMINATION_TIMEOUT_MS))
             call.reset();
     }
 
@@ -2198,7 +2176,6 @@ void LineIAX2::Call::reset() {
     outSeqNo = 0;
     expectedInSeqNo = 0;
     lastVoiceFrameElapsedMs = 0;
-    lastHangupMs = 0;
     localNumber.clear();
     remoteNumber.clear();
     remoteUser.clear();
@@ -2235,30 +2212,17 @@ uint32_t LineIAX2::Call::localElapsedMs(Clock& clock) const {
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
 uint32_t LineIAX2::Call::dispenseElapsedMs(Clock& clock) {
     uint32_t currentTickStartMs = alignToTick(localElapsedMs(clock), AUDIO_TICK_MS);
-    // If the timestamp corresponding to the start of this tick has already been 
-    // dispensed then use the next timestamp for non-voice messages.
-    if (lastElapsedMsDispensed == currentTickStartMs) {
-        lastElapsedMsDispensed = currentTickStartMs + 1;
-    } 
-    // If the timestamp corresponding to the start of this tick has not been dispensed
-    // yet then use a timestamp from the previous tick for non-voice messages to keep the 
-    // start of this tick available for a potential voice frame.
-    else if (lastElapsedMsDispensed < currentTickStartMs) {
-        lastElapsedMsDispensed = currentTickStartMs - 1;
-    }
-    // If the last dispensed timestamp is later than the start of the current audio 
-    // tick then something has gone wrong. Just keep issuing the same timestamp 
-    // until things catch up.
-    else if (lastElapsedMsDispensed > currentTickStartMs) {
-        cout << "Unexpected timestamp seq " << lastElapsedMsDispensed << ", " << currentTickStartMs << endl;
-    }
+    // Give out the timestamp that is as close as possible to the
+    // start of the tick, but never go backwards.
+    lastElapsedMsDispensed = max(lastElapsedMsDispensed + 1, currentTickStartMs);
     return lastElapsedMsDispensed;
 }
 
 uint32_t LineIAX2::Call::dispenseElapsedMsForVoice(const Message& msg) {
     uint32_t voiceElapsedMs = alignToTick(msg.getRxMs() - localStartMs, AUDIO_TICK_MS);
-    // Voice frames are always allowed to use the start-of-tick timestamp 
-    lastElapsedMsDispensed = voiceElapsedMs;
+    // Give out the timestamp that is as close as possible to the
+    // start of the tick, but never go backwards.
+    lastElapsedMsDispensed = max(lastElapsedMsDispensed + 1, voiceElapsedMs);
     return lastElapsedMsDispensed;
 }
 
