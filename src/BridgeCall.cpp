@@ -326,13 +326,16 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _loadAudioFile("peak", _playQueue);
             _loadSilence(25, _playQueue);
             
+            // #### TODO: DO A BETTER JOB ON THE CLIPPING CASE
+
+            int peakPowerInt = (int)peakPower;
             char fn[64];
-            if (peakPower < -40) {
+            if (peakPowerInt < -40) {
                 snprintf(fn, 64, "less-than-minus-40db");
-            } else if (peakPower > 0) {
-                peakPower = 0;
+            } else if (peakPowerInt < 0) {                
+                snprintf(fn, 64, "minus-%ddb", abs(peakPowerInt));
             } else {
-                snprintf(fn, 64, "minus-%ddb", (int)abs(peakPower));
+                snprintf(fn, 64, "0db");
             }
             _loadAudioFile(fn, _playQueue);
 
