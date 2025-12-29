@@ -109,7 +109,7 @@ int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
     int err;
 
     if ((err = snd_pcm_open(&_playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
-        _log.error("Cannot open playback device %d", err);
+        _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
         return -1;
     }
     if ((err = snd_pcm_open(&_captureH, alsaDeviceName, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
