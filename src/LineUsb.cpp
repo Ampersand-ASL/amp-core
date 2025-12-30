@@ -106,6 +106,8 @@ LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer,
 
 int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
 
+    close();
+
     int err;
 
     if ((err = snd_pcm_open(&_playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {

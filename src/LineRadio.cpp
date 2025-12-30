@@ -190,8 +190,11 @@ void LineRadio::_open(bool echo) {
 void LineRadio::_close() {
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
+    PayloadCallEnd payload;
+    payload.localNumber[0] = 0;
+    payload.remoteNumber[0] = 0;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-        0, 0, 0, _clock.time());
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
