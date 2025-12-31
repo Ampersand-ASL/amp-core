@@ -18,6 +18,8 @@
 
 #include <queue>
 
+#include "kc1fsz-tools/threadsafequeue.h"
+
 #include "PCM16Frame.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
@@ -57,9 +59,12 @@ public:
     /**
      * One-time initialization. Connects the call to the outside world.
      */
-    void init(Log* log, Clock* clock) {
+    void init(Log* log, Clock* clock, threadsafequeue<Message>* ttsQueueReq,
+        threadsafequeue<Message>* ttsQueueRes) {
         _log = log;
         _clock = clock;
+        _ttsQueueReq = ttsQueueReq;
+        _ttsQueueRes = ttsQueueRes;
         _bridgeIn.init(_log, _clock);
     }
 
@@ -114,6 +119,8 @@ private:
     Log* _log;
     Clock* _clock;
     MessageConsumer* _sink;
+    threadsafequeue<Message>* _ttsQueueReq;
+    threadsafequeue<Message>* _ttsQueueRes;
 
     bool _echo = false;
     bool _sourceAddrValidated = false;
@@ -153,16 +160,26 @@ private:
 
     void _processParrotAudio(const Message& msg);
     void _parrotAudioRateTick(uint32_t tickMs);
+    void _processParrotTTSAudio(const Message& msg);
 
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
 
+    /**
+     * Puts one 16K LE frame onto the queue provided
+     */
+    void _loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const;
+
     void _analyzeRecording(const std::vector<PCM16Frame>& audio, float* peakPower, float* avgPower);
+
+    // The audio captured from the caller
+    std::queue<PCM16Frame> _captureQueue;
+    unsigned _captureQueueDepth = 0;
 
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
-    unsigned _playQueueDepth = 0;
+
     // The audio received and waiting to be echoed
     std::queue<PCM16Frame> _echoQueue;
 
@@ -170,10 +187,12 @@ private:
         NONE,
         ACTIVE,
         CONNECTED,
+        TTS_AFTER_CONNECTED,
         PLAYING_PROMPT_GREETING,
         WAITING_FOR_RECORD,
         RECORDING,
         PAUSE_AFTER_RECORD,
+        TTS_AFTER_RECORD,
         PLAYING,
         TIMEDOUT
     };

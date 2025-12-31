@@ -16,6 +16,7 @@
  */
 #include <iostream>
 #include <cstring> 
+#include <thread>
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
@@ -31,9 +32,10 @@ Bridge::Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode)
 :   _log(log),
     _clock(clock),
     _defaultMode(defaultMode),
-    _calls(_callSpace, MAX_CALLS) { 
+    _calls(_callSpace, MAX_CALLS),
+    _ttsThread(&Bridge::_tts, this) { 
     for (unsigned i = 0; i < MAX_CALLS; i++) 
-        _callSpace[i].init(&log, &clock);
+        _callSpace[i].init(&log, &clock, &_ttsQueueReq, &_ttsQueueRes);
 }
 
 void Bridge::reset() {
@@ -194,5 +196,6 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
 void Bridge::oneSecTick() {
 }
+
     }
 }

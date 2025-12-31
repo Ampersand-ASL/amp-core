@@ -18,6 +18,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <string> 
 
 #include "Message.h"
 #include "BridgeCall.h"
@@ -75,9 +76,10 @@ void BridgeCall::reset() {
     _tonePhi = 0;
     _toneLevel = 0;
 
+    _captureQueue = std::queue<PCM16Frame>();
+    _captureQueueDepth = 0;
     _playQueue = std::queue<PCM16Frame>();
     _echoQueue = std::queue<PCM16Frame>();
-    _playQueueDepth = 0;
     _parrotState = ParrotState::NONE;
     _parrotStateStartMs = 0;
     _lastUnkeyProcessedMs = 0;
@@ -107,7 +109,17 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 }
 
 void BridgeCall::consume(const Message& frame) {
-    _bridgeIn.consume(frame);       
+    if (_mode == Mode::PARROT) {
+        if (frame.getType() == Message::Type::TTS_AUDIO ||
+            frame.getType() == Message::Type::TTS_END) {
+            _processParrotTTSAudio(frame);
+        } else {
+            _bridgeIn.consume(frame);       
+        }
+    }
+    else {
+        _bridgeIn.consume(frame);       
+    }
 }
 
 void BridgeCall::audioRateTick(uint32_t tickMs) {
@@ -220,19 +232,20 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
             _log->info("Record start");
 
             _parrotState = ParrotState::RECORDING;
-            _playQueue = std::queue<PCM16Frame>(); 
-            _playQueueDepth = 0;
+            _captureQueue = std::queue<PCM16Frame>(); 
+            _captureQueueDepth = 0;
 
-            _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-            _playQueueDepth++;
+            _captureQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
+            _captureQueueDepth++;
         }
     } 
     else if (_parrotState == ParrotState::RECORDING) {
         // Limit the amount of sound that can be captured
-        if (_playQueueDepth < 1500) {
-            _playQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-            _playQueueDepth++;
+        if (_captureQueueDepth < 1500) {
+            _captureQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
+            _captureQueueDepth++;
         }
+        // #### TODO: PLAY?
         if (_echo)
             _echoQueue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
     } 
@@ -255,27 +268,30 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
         if (_clock->isPast(_parrotStateStartMs + 1500)) {
-            // Load the greeting into the play queue           
-            _loadAudioFile("parrot-connected", _playQueue);
-            _loadSilence(25, _playQueue);
 
-            if (!_sourceAddrValidated) {
-                _loadAudioFile("node-is-unregistered", _playQueue);
-                _loadSilence(25, _playQueue);
-            }
+            // Create the speech that will be sent to the caller
+            string prompt;
+            prompt = "Parrot connected, ";
 
-            if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G711_ULAW) {
-                _loadAudioFile("codec-is-8k-ulaw", _playQueue);
-                _loadSilence(25, _playQueue);
-            } else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) {
-                _loadAudioFile("codec-is-16k-linear", _playQueue);
-                _loadSilence(25, _playQueue);
-            }
+            if (!_sourceAddrValidated) 
+                prompt += "node is unregistered, ";
 
-            _loadAudioFile("ready-to-record", _playQueue);
-            // Trigger the greeting playback
-            _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
-            _log->info("Greeting start");
+            if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G711_ULAW) 
+                prompt += "CODEC is 8K mulaw, ";
+            else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) 
+                prompt += "CODEC is 16K linear, ";
+
+            prompt += "ready to record!";
+
+            // Queue a TTS request
+            Message req(Message::Type::TTS_REQ, 0, prompt.size(), (const uint8_t*)prompt.c_str(), 
+                0, 0);
+            req.setSource(_lineId, _callId);
+            req.setDest(0, 0);
+            _ttsQueueReq->push(req);
+
+            _parrotState = ParrotState::TTS_AFTER_CONNECTED;
+            _parrotStateStartMs = _clock->time();
         }
     }
     else if (_parrotState == ParrotState::PLAYING_PROMPT_GREETING) {
@@ -309,57 +325,62 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     else if (_parrotState == ParrotState::PAUSE_AFTER_RECORD) {
         if (_clock->isPast(_parrotStateStartMs + 750)) {
 
-            _log->info("Playback start");
-
-            // Pull out the recording
-            std::vector<PCM16Frame> recording;
-            while (!_playQueue.empty()) {
-                recording.push_back(_playQueue.front());
-                _playQueue.pop();
+            // Make a vector of the capture queue for analysis
+            std::vector<PCM16Frame> captureCopy;
+            while (!_captureQueue.empty()) {
+                captureCopy.push_back(_captureQueue.front());
+                _captureQueue.pop();
             }
-            _playQueue = std::queue<PCM16Frame>();
 
             // Analyze the recording for relevant stats
             float peakPower, avgPower;
-            _analyzeRecording(recording, &peakPower, &avgPower);
+            _analyzeRecording(captureCopy, &peakPower, &avgPower);
 
-            _loadAudioFile("peak", _playQueue);
-            _loadSilence(25, _playQueue);
-            
+            // Re-queue the captured frames
+            for (auto it = captureCopy.begin(); it != captureCopy.end(); it++)
+                _captureQueue.push((*it));
+
+            // Create the speech that will be sent to the caller
+            string prompt;
+            char sp[64];
+           
             // #### TODO: DO A BETTER JOB ON THE CLIPPING CASE
 
             int peakPowerInt = (int)peakPower;
-            char fn[64];
+
             if (peakPowerInt < -40) {
-                snprintf(fn, 64, "less-than-minus-40db");
+                snprintf(sp, 64, "Peak is less than minus 40db");
             } else if (peakPowerInt < 0) {                
-                snprintf(fn, 64, "minus-%ddb", abs(peakPowerInt));
+                snprintf(sp, 64, "Peak is minus %ddb", abs(peakPowerInt));
             } else {
-                snprintf(fn, 64, "0db");
+                snprintf(sp, 64, "Peak is 0db");
             }
-            _loadAudioFile(fn, _playQueue);
+            prompt += sp;
+            prompt += ", ";
 
-            _loadSilence(25, _playQueue);
-
-            _loadAudioFile("average", _playQueue);
-            _loadSilence(25, _playQueue);
+            int avgPowerInt = (int)avgPower;
 
             if (avgPower < -40) {
-                snprintf(fn, 64, "less-than-minus-40db");
-            } else if (avgPower > 0) {
-                avgPower = 0;
+                snprintf(sp, 64, "Average is less than minus 40db");
+            } else if (avgPower < 0) {
+                snprintf(sp, 64, "Average is minus %ddb", abs(avgPowerInt));
             } else {
-                snprintf(fn, 64, "minus-%ddb", (int)abs(avgPower));
+                snprintf(sp, 64, "Average is 0db");
             }
-            _loadAudioFile(fn, _playQueue);
+            prompt += sp;
+            prompt += ". ";
 
-            _loadSilence(25, _playQueue);
-            
-            _loadAudioFile("playback", _playQueue);
-            _loadSilence(25, _playQueue);
-            _loadAudio(recording, _playQueue);
+            prompt += "Playback!";
 
-            _parrotState = ParrotState::PLAYING;
+            // Queue a request for TTS
+            Message req(Message::Type::TTS_REQ, 0, prompt.size(), (const uint8_t*)prompt.c_str(), 
+                0, 0);
+            req.setSource(_lineId, _callId);
+            req.setDest(0, 0);
+            _ttsQueueReq->push(req);
+
+            // Get into the state waiting for the TTS to complete
+            _parrotState = ParrotState::TTS_AFTER_RECORD;
             _parrotStateStartMs = _clock->time();
         }
     }
@@ -374,6 +395,56 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _playQueue.pop();
         }
     }
+}
+
+void BridgeCall::_processParrotTTSAudio(const Message& frame) {
+    if (_parrotState == ParrotState::TTS_AFTER_CONNECTED) {
+        if (frame.getType() == Message::Type::TTS_AUDIO) {
+            _loadAudioMessage(frame, _playQueue);
+        } else if (frame.getType() == Message::Type::TTS_END) {
+            _log->info("Greeting start");
+            _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
+            _parrotStateStartMs = _clock->time();
+        }        
+    }
+    else if (_parrotState == ParrotState::TTS_AFTER_RECORD) {
+        if (frame.getType() == Message::Type::TTS_AUDIO) {
+            _loadAudioMessage(frame, _playQueue);
+        } else if (frame.getType() == Message::Type::TTS_END) {
+
+            _loadSilence(25, _playQueue);
+
+            // Move the recording into the playback queue
+            while (!_captureQueue.empty()) {
+                _playQueue.push(_captureQueue.front());
+                _captureQueue.pop();
+            }
+
+            _log->info("Playback start");
+            _parrotState = ParrotState::PLAYING;
+            _parrotStateStartMs = _clock->time();
+        }        
+    }
+}
+
+void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const {    
+
+    assert(msg.getType() == Message::Type::TTS_AUDIO);
+    assert(msg.size() == BLOCK_SIZE_16K * 2);
+
+    int16_t pcm16k[BLOCK_SIZE_16K];
+    const uint8_t* buffer = msg.body();
+
+    for (unsigned i = 0; i < BLOCK_SIZE_16K; i++) {
+        pcm16k[i] = unpack_int16_le((const uint8_t*)buffer);
+        buffer += 2;
+    }
+
+    amp::Resampler resampler;
+    resampler.setRates(16000, 48000);
+    int16_t pcm48k[BLOCK_SIZE_48K];
+    resampler.resample(pcm16k, BLOCK_SIZE_16K, pcm48k, BLOCK_SIZE_48K);
+    queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
 }
 
 void BridgeCall::_loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const {    

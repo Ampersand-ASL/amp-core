@@ -16,7 +16,10 @@
  */
 #pragma once
 
+#include <thread>
+
 #include "kc1fsz-tools/fixedvector.h"
+#include "kc1fsz-tools/threadsafequeue.h"
 
 #include "Runnable2.h"
 #include "MessageConsumer.h"
@@ -66,6 +69,14 @@ private:
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
+
+    // ----- Text To Speak Stuff ----------------------------------------------
+
+    std::thread _ttsThread;
+    threadsafequeue<Message> _ttsQueueReq;
+    threadsafequeue<Message> _ttsQueueRes;
+
+    void _tts();
 };
 
     }

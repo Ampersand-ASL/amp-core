@@ -35,7 +35,13 @@ public:
         AUDIO,
         AUDIO_INTERPOLATE,
         TEXT,
-        SIGNAL
+        SIGNAL,
+        // A text-to-speach request
+        TTS_REQ,
+        // Text-to-speach audio
+        TTS_AUDIO,
+        // A text-to-speach response end
+        TTS_END
     };
 
     enum SignalType {
