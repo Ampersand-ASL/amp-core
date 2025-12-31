@@ -177,10 +177,12 @@ void WebUi::_thread() {
                 _outQueue.push(msg);
             } 
             else if (data["button"] == "call") {
-                // #### TODO: CHANGE
-                string localNode = "672730";
+                json cfgDoc = _config.getCopy();
+                string localNode;
+                if (cfgDoc.contains("node"))
+                    localNode = cfgDoc["node"];
                 string targetNode = data["node"];
-                if (!targetNode.empty()) {
+                if (!localNode.empty() && !targetNode.empty()) {
                     PayloadCall payload;
                     strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
                     strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
@@ -188,6 +190,8 @@ void WebUi::_thread() {
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
                     msg.setDest(_networkDestLineId, DEST_CALL_ID);
                     _outQueue.push(msg);
+                } else {
+                    // ### TODO: ERROR MESSAGE
                 }
             } 
             else if (data["button"] == "drop") {
