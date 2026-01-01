@@ -39,15 +39,22 @@ void Bridge::_tts() {
 
     pthread_setname_np(pthread_self(), "TTS  ");
 
-    _log.info("TTS thread start");
+    _log.info("Start TTS thread");
 
-    piper_synthesizer *synth = piper_create("en_US-amy-low.onnx",
-                                            "en_US-amy-low.onnx.json",
-                                            "libpiper-aarch64/espeak-ng-data");
+    // #### TODO: ADD PRIORITY LOWER CODE
 
-    // aplay -r 22050 -c 1 -f FLOAT_LE -t raw output.raw
-    // aplay -r 16000 -c 1 -f FLOAT_LE -t raw output.raw
-    //std::ofstream audio_stream("/tmp/output.raw", std::ios::binary);
+    char path0[128];
+    snprintf(path0, 128, "%s/en_US-amy-low.onnx", getenv("AMP_PIPER_DIR"));
+    char path1[128];
+    snprintf(path1, 128, "%s/en_US-amy-low.onnx.json", getenv("AMP_PIPER_DIR"));
+    char path2[128];
+    snprintf(path2, 128, "%s/espeak-ng-data", getenv("AMP_PIPER_DIR"));
+
+    piper_synthesizer *synth = piper_create(path0, path1, path2);
+    if (synth == 0) {
+        _log.error("Failed to initialize piper TTS");
+        return;
+    }
 
     piper_synthesize_options options = piper_default_synthesize_options(synth);
     // Change options here:
@@ -57,7 +64,8 @@ void Bridge::_tts() {
     // Processing loop
     while (true) {
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // Do this to avoid high-CPU
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         // Attemp to take a TTS request off the request queue
         Message req;
@@ -112,7 +120,7 @@ void Bridge::_tts() {
 
     piper_free(synth);
 
-    _log.info("TTS thread end");
+    _log.info("End TTS thread");
 }
 
 /**
