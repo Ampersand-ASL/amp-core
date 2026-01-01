@@ -20,9 +20,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
 add_compile_options(-fstack-protector-all -Wall -Wpedantic -g -fstack-usage -Wstack-usage=8192)
 
-# Set the default install prefix (e.g., /usr/local on Linux)
-#set(CMAKE_INSTALL_PREFIX "/tmp")
-
 # ----- USB (local) Parrot ----------------------------------------------------
 
 add_executable(main-local-parrot
@@ -333,7 +330,6 @@ target_include_directories(bridge-test PRIVATE itu-g711-codec/src)
 
 add_executable(config-test
   src/tests/config-test.cpp
-  src/Config.cpp
   kc1fsz-tools-cpp/src/Common.cpp
 )
 
@@ -341,3 +337,17 @@ target_include_directories(config-test PRIVATE src)
 target_include_directories(config-test PRIVATE include)
 target_include_directories(config-test PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(config-test PRIVATE json/include)
+
+# ----- signal-1 --------------------------------------------------------
+
+add_executable(signal-1
+  src/demos/signal-1.cpp
+  src/SignalIn.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+)
+
+target_include_directories(signal-1 PRIVATE src)
+target_include_directories(signal-1 PRIVATE include)
+target_include_directories(signal-1 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(signal-1 PRIVATE json/include)
