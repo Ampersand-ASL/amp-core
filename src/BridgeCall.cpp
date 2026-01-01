@@ -233,6 +233,8 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
             _log->info("Record start");
 
             _parrotState = ParrotState::RECORDING;
+            // Synchronize with the last unkey in case we missed one
+            _lastUnkeyProcessedMs = _bridgeIn.getLastUnkeyMs();
             _captureQueue = std::queue<PCM16Frame>(); 
             _captureQueueDepth = 0;
 
@@ -272,17 +274,17 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
             // Create the speech that will be sent to the caller
             string prompt;
-            prompt = "Parrot connected, ";
+            prompt = "Parrot connected. ";
 
             if (!_sourceAddrValidated) 
-                prompt += "node is unregistered, ";
+                prompt += "Node is unregistered. ";
 
             if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G711_ULAW) 
-                prompt += "CODEC is 8K mulaw, ";
+                prompt += "CODEC is 8K mulaw. ";
             else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) 
-                prompt += "CODEC is 16K linear, ";
+                prompt += "CODEC is 16K linear. ";
 
-            prompt += "ready to record.";
+            prompt += "Ready to record.";
 
             // Queue a TTS request
             Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
@@ -510,18 +512,26 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
     float peakAvgSquare = 0;
 
     unsigned frameCount = audio.size();
-    unsigned ignoreCount = 300 / 20;
+
+    // Ignore the first 100ms of the recording to avoid distortion due to pops/clips
+    unsigned startI = 100 / 20;
     // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
     // influence of tail.
-    if (frameCount > ignoreCount)
-        frameCount -= ignoreCount;
-    else {
+    unsigned endIgnoreCount = 300 / 20;
+    unsigned endI = 0;
+    if (frameCount > endIgnoreCount)
+        endI = frameCount - endIgnoreCount;
+    else 
+        endI = 0;
+    // Look for the case where there is no audio left to analyze
+    if (endI <= startI) {
         *peakPower = -96.0;
         *avgPower = -96.0;
+        _log->info("Recording too short to analyze");
         return;
     }
 
-    for (unsigned j = 0; j < frameCount; j++) {
+    for (unsigned j = startI; j < endI; j++) {
         assert(audio.at(j).size() == BLOCK_SIZE_48K);
         for (unsigned i = 0; i < BLOCK_SIZE_48K; i += 6) {
             
