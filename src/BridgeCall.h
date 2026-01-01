@@ -137,6 +137,7 @@ private:
 
     Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
         unsigned destLineId, unsigned destCallId) const;
+    void _processTTSAudio(const Message& msg);
 
     // ----- Normal Mode Related ----------------------------------------------
 

@@ -39,6 +39,8 @@ Bridge::Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode)
 { 
     for (unsigned i = 0; i < MAX_CALLS; i++) 
         _callSpace[i].init(&log, &clock, &_ttsQueueReq, &_ttsQueueRes);
+
+    _ttsResampler.setRates(16000, 48000);
 }
 
 void Bridge::reset() {
@@ -132,6 +134,26 @@ void Bridge::consume(const Message& msg) {
             [msg](const BridgeCall& s) { return s.belongsTo(msg); }
         );
     }
+}
+
+bool Bridge::run2() { 
+
+    unsigned count = 0;
+    // Look for anything coming back from the TTS thread, route to the correct call.
+    Message m;
+    while (_ttsQueueRes.try_pop(m)) {
+        _calls.visitIf(
+            // Visitor
+            [&m](BridgeCall& call) { 
+                call.consume(m);
+                return true;
+            },
+            // Predicate
+            [&m](const BridgeCall& s) { return s.isActive() && s.belongsTo(m); }
+        );
+        count++;
+    }
+    return count > 0;
 }
 
 /**

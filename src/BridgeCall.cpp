@@ -93,6 +93,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _callId = callId; 
     _startMs = startMs;
     _lastAudioMs = 0;
+
     _bridgeIn.setCodec(codec);
     _bridgeIn.setBypassJitterBuffer(bypassJitterBuffer);
     _bridgeIn.setStartTime(startMs);
@@ -109,15 +110,10 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 }
 
 void BridgeCall::consume(const Message& frame) {
-    if (_mode == Mode::PARROT) {
-        if (frame.getType() == Message::Type::TTS_AUDIO ||
-            frame.getType() == Message::Type::TTS_END) {
-            _processParrotTTSAudio(frame);
-        } else {
-            _bridgeIn.consume(frame);       
-        }
-    }
-    else {
+    if (frame.getType() == Message::Type::TTS_AUDIO ||
+        frame.getType() == Message::Type::TTS_END) {
+        _processTTSAudio(frame);
+    } else {
         _bridgeIn.consume(frame);       
     }
 }
@@ -145,6 +141,11 @@ Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
     msg.setSource(LINE_ID, CALL_ID);
     msg.setDest(destLineId, destCallId);
     return msg;
+}
+
+void BridgeCall::_processTTSAudio(const Message& frame) {
+    if (_mode == Mode::PARROT) 
+        _processParrotTTSAudio(frame);
 }
 
 // ===== Conference Mode Related ===============================================
@@ -281,10 +282,10 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) 
                 prompt += "CODEC is 16K linear, ";
 
-            prompt += "ready to record!";
+            prompt += "ready to record.";
 
             // Queue a TTS request
-            Message req(Message::Type::TTS_REQ, 0, prompt.size(), (const uint8_t*)prompt.c_str(), 
+            Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
                 0, 0);
             req.setSource(_lineId, _callId);
             req.setDest(0, 0);
@@ -370,10 +371,10 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += sp;
             prompt += ". ";
 
-            prompt += "Playback!";
+            prompt += "Playback.";
 
             // Queue a request for TTS
-            Message req(Message::Type::TTS_REQ, 0, prompt.size(), (const uint8_t*)prompt.c_str(), 
+            Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
                 0, 0);
             req.setSource(_lineId, _callId);
             req.setDest(0, 0);
@@ -414,7 +415,7 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
 
             _loadSilence(25, _playQueue);
 
-            // Move the recording into the playback queue
+            // Move the recording to the end of the playback queue
             while (!_captureQueue.empty()) {
                 _playQueue.push(_captureQueue.front());
                 _captureQueue.pop();
@@ -430,20 +431,14 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
 void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const {    
 
     assert(msg.getType() == Message::Type::TTS_AUDIO);
-    assert(msg.size() == BLOCK_SIZE_16K * 2);
+    assert(msg.size() == BLOCK_SIZE_48K * sizeof(int16_t));
 
-    int16_t pcm16k[BLOCK_SIZE_16K];
+    int16_t pcm48k[BLOCK_SIZE_48K];
     const uint8_t* buffer = msg.body();
-
-    for (unsigned i = 0; i < BLOCK_SIZE_16K; i++) {
-        pcm16k[i] = unpack_int16_le((const uint8_t*)buffer);
+    for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+        pcm48k[i] = unpack_int16_le((const uint8_t*)buffer);
         buffer += 2;
     }
-
-    amp::Resampler resampler;
-    resampler.setRates(16000, 48000);
-    int16_t pcm48k[BLOCK_SIZE_48K];
-    resampler.resample(pcm16k, BLOCK_SIZE_16K, pcm48k, BLOCK_SIZE_48K);
     queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
 }
 

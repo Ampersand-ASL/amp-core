@@ -21,6 +21,7 @@
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
+#include "amp/Resampler.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
 #include "Message.h"
@@ -38,6 +39,7 @@ public:
 
     static const unsigned AUDIO_RATE = 48000;
     static const unsigned BLOCK_SIZE_8K = 160;
+    static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
@@ -53,7 +55,7 @@ public:
 
     // ----- Runnable2 --------------------------------------------------------
     
-    bool run2() { return false; }
+    bool run2();
     void audioRateTick(uint32_t tickMs);
     void oneSecTick();
 
@@ -72,11 +74,15 @@ private:
 
     // ----- Text To Speak Stuff ----------------------------------------------
 
+    void _tts();
+
+    Message _makeTTSAudioMsg(const Message& req, const int16_t* pcm16, unsigned pcm16Len);
+
     std::thread _ttsThread;
     threadsafequeue<Message> _ttsQueueReq;
     threadsafequeue<Message> _ttsQueueRes;
-
-    void _tts();
+    // Used for converting TTS audio to 48k
+    amp::Resampler _ttsResampler;
 };
 
     }
