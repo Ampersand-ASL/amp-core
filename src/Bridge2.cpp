@@ -27,6 +27,7 @@
 
 #include "Bridge.h"
 #include "Message.h"
+#include "ThreadUtil.h"
 
 using namespace std;
 
@@ -37,9 +38,11 @@ namespace kc1fsz {
 
 void Bridge::_tts() {
 
-    pthread_setname_np(pthread_self(), "TTS  ");
+    setThreadName("TTS");
+    lowerThreadPriority();
 
     _log.info("Start TTS thread");
+
 
     // #### TODO: ADD PRIORITY LOWER CODE
 
@@ -56,10 +59,10 @@ void Bridge::_tts() {
         return;
     }
 
-    piper_synthesize_options options = piper_default_synthesize_options(synth);
     // Change options here:
     // options.length_scale = 2;
     // options.speaker_id = 5;
+    piper_synthesize_options options = piper_default_synthesize_options(synth);
 
     // Processing loop
     while (true) {
@@ -78,7 +81,7 @@ void Bridge::_tts() {
                 memcpy(ttsReq, req.body(), size);
                 ttsReq[size] = 0;
 
-                _log.info("TTS REQ: %s", ttsReq);
+                _log.info("TTS request: \"%s\"", ttsReq);
 
                 _ttsResampler.reset();
 

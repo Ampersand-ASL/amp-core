@@ -38,6 +38,7 @@
 #include "StatsTask.h"
 #include "EventLoop.h"
 #include "ConfigPoller.h"
+#include "ThreadUtil.h"
 
 #include "service-thread.h"
 
@@ -46,7 +47,7 @@ using namespace kc1fsz;
 
 void service_thread(void* ud) {
 
-    pthread_setname_np(pthread_self(), "SVC  ");
+    setThreadName("SVC");
 
     // Pull out the thread startup arguments
     const service_thread_args* args = (service_thread_args*)ud;
@@ -54,6 +55,11 @@ void service_thread(void* ud) {
     Log& log = *(args->log);
 
     log.info("service_thread start");
+
+    // Sleep waiting to change real-time status
+    sleep(10);
+    lowerThreadPriority();
+
     StdClock clock;
 
     RegisterTask registerTask(log, clock);
@@ -80,45 +86,8 @@ void service_thread(void* ud) {
         }
     );
 
-#ifndef _WIN32
-
-    // All of this is used to reduce the priority of the service thread.
-
-    // Sleep waiting to change real-time status
-    sleep(10);
-
-    const pthread_t self_thread = pthread_self();
-    int policy;
-    struct sched_param param;
-
-    // Get current scheduling parameters
-    if (pthread_getschedparam(self_thread, &policy, &param) != 0) {
-        perror("pthread_getschedparam failed");
-        return;
-    }
-    if (policy != SCHED_OTHER) {
-        // Set the new policy to SCHED_OTHER and priority to 0 (required for SCHED_OTHER)
-        param.sched_priority = 0;
-        if (pthread_setschedparam(self_thread, SCHED_OTHER, &param) != 0) {
-            perror("pthread_setschedparam to SCHED_OTHER failed");
-            // Check for EPERM if it was previously a real-time policy and no capabilities are set
-            if (errno == EPERM) {
-                printf("Permission denied. Ensure the process has CAP_SYS_NICE if changing from a real-time policy.\n");
-            }
-            return;
-        }
-        // Get current scheduling parameters
-        if (pthread_getschedparam(self_thread, &policy, &param) != 0) {
-            perror("pthread_getschedparam failed");
-            return;
-        }
-        log.info("Thread policy: %d, priority: %d", policy, param.sched_priority);
-    }
-
-#endif
-
     // Main loop        
-    Runnable2* tasks2[] = { &registerTask, &statsTask, &cfgPoller };
+    Runnable2* tasks2[] = { &registerTask, &cfgPoller };
     EventLoop::run(log, clock, 0, 0, tasks2, std::size(tasks2));
 
     // #### TODO: NEED A CLEAN WAY TO EXIT THIS THREAD

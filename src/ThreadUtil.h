@@ -16,21 +16,12 @@
  */
 #pragma once
 
-#include <string>
-
-#include "kc1fsz-tools/Log.h"
-
-struct service_thread_args {
-    std::string cfgFileName;
-    kc1fsz::Log* log;
-};
-
-void service_thread(void* l);
-
-// Some utilitity functions
+namespace kc1fsz {
+    namespace amp {
 
 void setThreadName(const char*);
-
 void lowerThreadPriority();
 
+    }
+}
 
