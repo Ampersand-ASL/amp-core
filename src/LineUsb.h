@@ -39,7 +39,7 @@ public:
     LineUsb(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
         unsigned destBusId, unsigned destCallId);
 
-    int open(const char* alsaDeviceName, const char* hidName);
+    int open(const char* alsaDeviceName);
     void close();
 
     // ----- MessageConsumer --------------------------------------------------
@@ -50,7 +50,6 @@ public:
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
-    virtual void audioRateTick(uint32_t tickMs);
 
 protected:
 
@@ -61,15 +60,12 @@ protected:
 
 private:
 
-    void _pollHidStatus();
     void _captureIfPossible();
-
     void _playIfPossible();
 
     uint32_t _captureStartMs = 0;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
-    int _hidFd = 0;
 
     // Buffer used to capture a full audio block. This is 
     // a mono 48k PCM buffer.
@@ -84,13 +80,6 @@ private:
     unsigned _playAccumulatorSize = 0;
 
     uint32_t _captureCount = 0;
-
-    // HID controls
-    unsigned _hidCOSOffset = 0;
-    uint8_t _hidCOSMask = 0x02;
-    uint8_t _hidCOSActiveValue = 0x02;
-
-    unsigned _hidPollCount = 0;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 

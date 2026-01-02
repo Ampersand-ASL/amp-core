@@ -18,9 +18,6 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include <linux/hidraw.h>
-#include <sys/ioctl.h>
-
 #include <cmath>
 #include <cassert>
 #include <algorithm>
@@ -104,7 +101,7 @@ LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _tonePhi = 0;
 }
 
-int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
+int LineUsb::open(const char* alsaDeviceName) {
 
     close();
 
@@ -117,12 +114,6 @@ int LineUsb::open(const char* alsaDeviceName, const char* hidName) {
     if ((err = snd_pcm_open(&_captureH, alsaDeviceName, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
         _log.error("Cannot open capture device %d", err);
         snd_pcm_close(_playH);
-        return -1;
-    }
-    if ((_hidFd = ::open(hidName, O_RDWR | O_NONBLOCK)) < 0) {
-        _log.error("Cannot open HID device %d", errno);
-        snd_pcm_close(_playH);
-        snd_pcm_close(_captureH);
         return -1;
     }
 
@@ -219,9 +210,6 @@ void LineUsb::close() {
     if (_captureH)
         snd_pcm_close(_captureH);
     _captureH = 0;
-    if (_hidFd)
-        ::close(_hidFd);
-    _hidFd = 0;
 }
 
 int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
@@ -260,45 +248,29 @@ bool LineUsb::run2() {
     return false;
 }
 
-void LineUsb::audioRateTick(uint32_t tickMs) {
-    LineRadio::audioRateTick(tickMs);
-    _pollHidStatus();
-}
-
-void LineUsb::_pollHidStatus() {
-
-    if (_hidFd == 0)
-        return;
-
-    // The HID device will send status updates on the FD. We use
-    // this as a prompt to call the ioctl() to get status.
-    //
-    // This is importnant becuase it as been observer (RPi5 9-Dec-2025)
-    // that the iocl() takes about 2ms.
-    //
-    // #### TODO: The buffer itself contains the status, may not need 
-    // the iocl at all!
-
-    char buffer[32];
-    int rc = read(_hidFd, buffer, sizeof(buffer));
-    if (rc > 0 || _hidPollCount == 0) {
-
-        bool cosActive = false;
-
-        // TODO: TIME THIS
-        char hidBuf[5];
-        hidBuf[0] = 0;
-        int ret = ioctl(_hidFd, HIDIOCGINPUT(5), hidBuf);
-        if (ret == 5) {
-            // We always skip the first byte that contains the report ID
-            if ((hidBuf[1 + _hidCOSOffset] & _hidCOSMask) == _hidCOSActiveValue)
-                cosActive = true;
+void LineUsb::consume(const Message& frame) {
+    
+    if (frame.isSignal(Message::SignalType::COS_ON)) {
+        _setCosStatus(true);
+    } else if (frame.isSignal(Message::SignalType::COS_OFF)) {
+        _setCosStatus(false);
+    } else if (frame.getType() == Message::Type::AUDIO) {
+        // Detect transitions from silence to playing
+        if (!_playing) {
+            // When re-starting after a period of silence we "stuff a frame"
+            // of extra silence into the USB ALSA buffer to reduce the chances of 
+            // getting behind later due to subtle timing differences.
+            if (PLAY_ACCUMULATOR_CAPACITY - _playAccumulatorSize >= BLOCK_SIZE_48K) {
+                // Move new audio block into the play accumulator 
+                memset(&(_playAccumulator[_playAccumulatorSize]), 0,
+                    BLOCK_SIZE_48K * sizeof(int16_t));
+                _playAccumulatorSize += BLOCK_SIZE_48K;
+            }
         }
-
-        _setCosStatus(cosActive);
-        
-        _hidPollCount++;
     }
+
+    // Then go through the normal consume process
+    LineRadio::consume(frame);
 }
 
 // ===== Capture Related =========================================================
@@ -416,27 +388,6 @@ void LineUsb::_captureIfPossible() {
 
 // ===== Play Related =========================================================
 
-void LineUsb::consume(const Message& frame) {
-    
-    if (frame.getType() == Message::Type::AUDIO) {
-        // Detect transitions from silence to playing
-        if (!_playing) {
-            // When re-starting after a period of silence we "stuff a frame"
-            // of extra silence into the USB ALSA buffer to reduce the chances of 
-            // getting behind later due to subtle timing differences.
-            if (PLAY_ACCUMULATOR_CAPACITY - _playAccumulatorSize >= BLOCK_SIZE_48K) {
-                // Move new audio block into the play accumulator 
-                memset(&(_playAccumulator[_playAccumulatorSize]), 0,
-                    BLOCK_SIZE_48K * sizeof(int16_t));
-                _playAccumulatorSize += BLOCK_SIZE_48K;
-            }
-        }
-    }
-
-    // Then go through the normal consume process
-    LineRadio::consume(frame);
-}
-
 /**
  * This will be called by the base class after all decoding has happened.
  */
@@ -471,7 +422,6 @@ void LineUsb::_playIfPossible() {
     snd_pcm_status_t *status;
     snd_pcm_status_alloca(&status);
     snd_pcm_status(_playH, status);
-    //snd_pcm_state_t pcmState = snd_pcm_status_get_state(status);
 
     // Add the other stereo channel (interleaved) and convert to S16_LE.
     const int usbBufferSize = PLAY_ACCUMULATOR_CAPACITY * 2 * 2;

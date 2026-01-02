@@ -32,11 +32,7 @@ Bridge::Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode)
 :   _log(log),
     _clock(clock),
     _defaultMode(defaultMode),
-    _calls(_callSpace, MAX_CALLS)
-#ifndef _WIN32
-    , _ttsThread(&Bridge::_tts, this) 
-#endif
-{ 
+    _calls(_callSpace, MAX_CALLS) { 
     for (unsigned i = 0; i < MAX_CALLS; i++) 
         _callSpace[i].init(&log, &clock, &_ttsQueueReq, &_ttsQueueRes);
 

@@ -36,7 +36,7 @@ namespace kc1fsz {
 
 // ------ Text To Speach Thread ----------------------------------------------
 
-void Bridge::_tts() {
+void Bridge::ttsThread() {
 
     setThreadName("TTS");
     lowerThreadPriority();

@@ -47,7 +47,7 @@ using namespace kc1fsz;
 
 void service_thread(void* ud) {
 
-    setThreadName("SVC");
+    amp::setThreadName("SVC");
 
     // Pull out the thread startup arguments
     const service_thread_args* args = (service_thread_args*)ud;
@@ -58,7 +58,7 @@ void service_thread(void* ud) {
 
     // Sleep waiting to change real-time status
     sleep(10);
-    lowerThreadPriority();
+    amp::lowerThreadPriority();
 
     StdClock clock;
 

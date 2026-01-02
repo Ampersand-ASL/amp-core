@@ -49,6 +49,12 @@ public:
     unsigned getCallCount() const;
     void reset();
 
+    /**
+     * Only call this if the text-to-speech server is needed. This may not be 
+     * avaiable on all platforms.
+     */
+    void startTTSThread();
+
     // ----- MessageConsumer --------------------------------------------------
 
     void consume(const Message& frame);
@@ -73,8 +79,18 @@ private:
     fixedvector<BridgeCall> _calls;
 
     // ----- Text To Speak Stuff ----------------------------------------------
+public:
 
-    void _tts();
+    /**
+     * Start this thread to use TTS. This is built in a separate function/file
+     * to avoid unneccessary linkage to the Piper TTS library for platformss
+     * that don't support it.
+     *     
+     * std::thread ttsThread(&Bridge::ttsThread, &bridge);
+     */
+    void ttsThread();
+
+private:
 
     Message _makeTTSAudioMsg(const Message& req, const int16_t* pcm16, unsigned pcm16Len);
 
