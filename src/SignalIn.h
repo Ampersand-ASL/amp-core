@@ -16,6 +16,9 @@
  */
 #pragma once
 
+#include <cstdint>
+
+#include "Message.h"
 #include "Runnable2.h"
 
 namespace kc1fsz {
@@ -29,7 +32,8 @@ class MessageConsumer;
 class SignalIn : public Runnable2, public MessageConsumer {
 public:
 
-    SignalIn(Log& log, Clock& clock, MessageConsumer& bus);
+    SignalIn(Log& log, Clock& clock, MessageConsumer& bus, unsigned radioLineId,
+         Message::SignalType sigTypeOn, Message::SignalType sigTypeOff);
 
     int openHid(const char* hidName);
 
@@ -48,12 +52,23 @@ public:
 private:
 
     void _pollHidStatus();
+    void _processHidPacket(const uint8_t* packet, unsigned packetLen);
 
     Log& _log;
     Clock& _clock;
     MessageConsumer& _bus;
-
+    unsigned _radioLineId;
+    Message::SignalType _sigTypeOn;
+    Message::SignalType _sigTypeOff;
+    
     int _hidFd = 0;
+    bool _hidFailed = false;
+    static const unsigned MAX_HID_SIZE = 16;
+    uint8_t _hidAcc[MAX_HID_SIZE];
+    unsigned _hidAccPtr = 0;
+    unsigned _hidPacketSize = 4;
+    unsigned _hidOffset = 0;
+    uint8_t _hidMask = 0x02;
 };
 
     }

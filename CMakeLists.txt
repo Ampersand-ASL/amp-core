@@ -343,8 +343,11 @@ target_include_directories(config-test PRIVATE json/include)
 add_executable(signal-1
   src/demos/signal-1.cpp
   src/SignalIn.cpp
+  src/EventLoop.cpp
+  src/Message.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
 )
 
 target_include_directories(signal-1 PRIVATE src)
