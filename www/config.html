@@ -34,6 +34,9 @@ body {
             <label for="audioDevice">Audio Device:</label>
             <select id="audioDevice" name="audioDevice">
             </select>
+            <label for="cosSignal">COS Signal Source:</label>
+            <select id="cosSignal" name="cosSignal">
+            </select>
             <label for="iaxPort4">IAX Port (IPv4):</label>
             <input type="text" id="iaxPort4" name="iaxPort4"/>
             <span></span>
@@ -59,8 +62,29 @@ async function load_audiodevice_menu() {
         sel.replaceChildren();
         for (const i of data) {
             var opt = document.createElement('option');
-            opt.value = i["query"]
-            opt.innerHTML = i["bus"] + "/" + i["port"] + " " + i["desc"]
+            opt.value = i["value"]
+            opt.innerHTML = i["desc"]
+            sel.appendChild(opt);
+        }
+    } catch (error) {
+        console.error('Error fetching data:', error.message);
+    }
+}
+
+async function load_cossignal_menu() {
+    try {
+        const response = await fetch('hiddevice-list');
+        // Check if the request was successful (status in the 200s)
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        const sel = document.getElementById('cosSignal');
+        sel.replaceChildren();
+        for (const i of data) {
+            var opt = document.createElement('option');
+            opt.value = i["value"]
+            opt.innerHTML = i["desc"]
             sel.appendChild(opt);
         }
     } catch (error) {
@@ -75,13 +99,13 @@ async function config_load() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        console.log("config_load", data)
         // Store the entire config document 
         sessionStorage.setItem("config", JSON.stringify(data))
         // Pull out some specific values for this screen
         document.getElementById("node").setAttribute("value", data["node"]);
         document.getElementById("password").setAttribute("value", data["password"]);
         document.getElementById("audioDevice").value = data["audioDevice"];
+        document.getElementById("cosSignal").value = data["cosSignal"];
         document.getElementById("iaxPort4").setAttribute("value", data["iaxPort4"]);
     } catch (error) {
         console.error('Error fetching data:', error.message);
@@ -98,6 +122,7 @@ function config_save() {
     fullConfig["node"] = formObject["node"].trim();
     fullConfig["password"] = formObject["password"].trim();
     fullConfig["audioDevice"] = formObject["audioDevice"].trim();
+    fullConfig["cosSignal"] = formObject["cosSignal"].trim();
     fullConfig["iaxPort4"] = formObject["iaxPort4"].trim();
     console.log("Full Config + Changes", fullConfig)
     // Push back to the server
@@ -113,8 +138,9 @@ function config_save() {
 
 document.addEventListener('DOMContentLoaded', async() => {
 
-    load_audiodevice_menu();
-    config_load();
+    await load_audiodevice_menu();
+    await load_cossignal_menu();
+    await config_load();
 
     // Add a submit event listener to the form
     document.getElementById('config-form').addEventListener('submit', function (event) {

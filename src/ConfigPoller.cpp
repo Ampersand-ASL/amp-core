@@ -28,7 +28,7 @@ using json = nlohmann::json;
 namespace kc1fsz {
     namespace amp {
 
-const char* ConfigPoller::DEFAULT_CONFIG = "{\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\",\"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\",\"audioDeviceType\":\"\",\"audioDevice\":\"\",\"call\":\"\",\"iaxPort4\":\"4568\",\"lastUpdateMs\":0,\"node\":\"\",\"password\":\"\",\"privateKey\":\"\"}";
+const char* ConfigPoller::DEFAULT_CONFIG = "{\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\",\"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\",\"cosSignal\":\"\",\"audioDevice\":\"\",\"call\":\"\",\"iaxPort4\":\"4568\",\"lastUpdateMs\":0,\"node\":\"\",\"password\":\"\",\"privateKey\":\"\"}";
 
 ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb) 
 :   _log(log),

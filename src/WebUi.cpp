@@ -30,6 +30,8 @@
 #include "kc1fsz-tools/Clock.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
+#include "sound-map.h"
+
 #include "Message.h"
 #include "MessageConsumer.h"
 #include "WebUi.h"
@@ -247,20 +249,69 @@ void WebUi::_thread() {
         cf.close();
     });
     svr.Get("/audiodevice-list", [](const httplib::Request &, httplib::Response &res) {
+        
         auto a = json::array();
-        json o;
-        o["bus"] = "1";
-        o["port"] = "2";
-        o["query"] = "bus:1,port:2";
-        o["desc"] = "C-Media Electronics, Inc. USB Audio Device";
-        a.push_back(o);
-        o["bus"] = "1";
-        o["port"] = "3";
-        o["query"] = "bus:1,port:3";
-        o["desc"] = "Other";
-        a.push_back(o);
-         res.set_content(a.dump(), "application/json");
+
+        int rc = visitUSBDevices2([&a](const char* vendorName, const char* productName, 
+            const char* busId, const char* portId) {
+                // Make the value
+                string val("usb ");
+                val += "bus:";
+                val += busId;
+                val += ",";
+                val += "port:";
+                val += portId;
+                // Make the description
+                string desc("USB ");
+                desc += busId;
+                desc += "/";
+                desc += portId;
+                desc += " ";
+                desc += vendorName;
+                desc += " ";
+                desc += productName;
+                json o;
+                o["value"] = val;
+                o["desc"] = desc;
+                a.push_back(o);                
+            }
+        );
+
+        res.set_content(a.dump(), "application/json");
     });
+
+    svr.Get("/hiddevice-list", [](const httplib::Request &, httplib::Response &res) {
+        
+        auto a = json::array();
+
+        int rc = visitUSBDevices2([&a](const char* vendorName, const char* productName, 
+            const char* busId, const char* portId) {
+                // Make the value
+                string val("usb ");
+                val += "bus:";
+                val += busId;
+                val += ",";
+                val += "port:";
+                val += portId;
+                // Make the description
+                string desc("USB ");
+                desc += busId;
+                desc += "/";
+                desc += portId;
+                desc += " ";
+                desc += vendorName;
+                desc += " ";
+                desc += productName;
+                json o;
+                o["value"] = val;
+                o["desc"] = desc;
+                a.push_back(o);
+            }
+        );
+
+        res.set_content(a.dump(), "application/json");
+    });
+
 
     // OK to use this const
     svr.listen("0.0.0.0", _listenPort);
