@@ -44,7 +44,7 @@ add_executable(main-local-parrot
   itu-g711-codec/src/codec.cpp
   itu-g711-codec/src/Plc.cpp
   cmsis-dsp-mock/src/main.cpp
-  sound-map/src/sound-map.c
+  sound-map/src/sound-map.cpp
 )
 
 target_include_directories(main-local-parrot PRIVATE src)
@@ -370,3 +370,11 @@ target_include_directories(nr-log PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(nr-log PRIVATE json/include)
 target_link_libraries(nr-log -lcurl)
 
+# ----- res-test -----------------------------------------------------------
+
+add_executable(res-test
+  src/demos/res-test.cpp
+  build/index.html.o
+)
+
+target_include_directories(res-test PRIVATE src)
