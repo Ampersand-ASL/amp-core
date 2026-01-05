@@ -354,3 +354,19 @@ target_include_directories(signal-1 PRIVATE src)
 target_include_directories(signal-1 PRIVATE include)
 target_include_directories(signal-1 PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(signal-1 PRIVATE json/include)
+
+# ----- nr-log -----------------------------------------------------------
+
+add_executable(nr-log
+  src/demos/nr-log.cpp
+  src/NRLog.cpp
+  src/ThreadUtil.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(nr-log PRIVATE src)
+target_include_directories(nr-log PRIVATE include)
+target_include_directories(nr-log PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(nr-log PRIVATE json/include)
+target_link_libraries(nr-log -lcurl)
+
