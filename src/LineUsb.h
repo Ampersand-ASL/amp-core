@@ -93,6 +93,7 @@ private:
     unsigned _playAccumulatorSize = 0;
 
     uint32_t _captureCount = 0;
+    bool _inError = false;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 

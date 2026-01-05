@@ -196,9 +196,6 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
         return -1;
     }
 
-    _captureStartMs = _clock.time();
-    _captureCount = 0;
-
     // Set the mixer levevels
     char alsaDeviceName2[16];
     snprintf(alsaDeviceName2, 16, "hw:%d", cardNumber);
@@ -238,7 +235,13 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     playHolder.release();
     _playH = playH;
     captureHolder.release();
+
     _captureH = captureH;
+    _captureStartMs = _clock.time();
+    _captureCount = 0;
+    _captureErrorCount = 0;
+    _playErrorCount = 0;
+    _inError = false;
 
     // Call up to the base for signaling
     _open();
@@ -262,26 +265,29 @@ int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
     int used = 0, rc;    
 
-    if (_captureH) {
-        // We always want to be alerted about capture
-        rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
-        if (rc < 0) {
-            _log.error("FD problem 2");
-        } else {
-            used += rc;
-            fdsCapacity -= rc;
-        }
-    }
+    if (!_inError) {
 
-    // Alerts about playing are only needed when there is something 
-    // in the accumulator that needs to be swept out.
-    if (_playH && _playAccumulatorSize > 0) {
-        rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
-        if (rc < 0) {
-            _log.error("FD problem 3");
-        } else {
-            used += rc;
-            fdsCapacity -= rc;
+        if (_captureH) {
+            // We always want to be alerted about capture
+            rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
+            if (rc < 0) {
+                _log.error("FD problem 2");
+            } else {
+                used += rc;
+                fdsCapacity -= rc;
+            }
+        }
+
+        // Alerts about playing are only needed when there is something 
+        // in the accumulator that needs to be swept out.
+        if (_playH && _playAccumulatorSize > 0) {
+            rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
+            if (rc < 0) {
+                _log.error("FD problem 3");
+            } else {
+                used += rc;
+                fdsCapacity -= rc;
+            }
         }
     }
    
@@ -325,7 +331,7 @@ void LineUsb::consume(const Message& frame) {
 // 
 void LineUsb::_captureIfPossible() {  
    
-    if (!_captureH)
+    if (!_captureH || _inError)
         return;
 
     bool audioCaptureEnabled = (_cosActive && _ctcssActive) || _toneActive;
@@ -423,12 +429,12 @@ void LineUsb::_captureIfPossible() {
     // "Resource temporarily unavailable"
     else if (samplesRead == -11) {
         snd_pcm_recover(_captureH, samplesRead, 0); 
-        _captureErrorCount++;
     } 
     else if (samplesRead < 0) {
         _log.error("Audio capture error %s", snd_strerror(samplesRead));
         snd_pcm_recover(_captureH, samplesRead, 0); 
         _captureErrorCount++;
+        _inError = true;
     }
 }
 
@@ -458,7 +464,7 @@ void LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
 void LineUsb::_playIfPossible() {
 
-    if (!_playH)
+    if (!_playH || _inError)
         return;
 
     if (_playAccumulatorSize == 0)
@@ -501,6 +507,8 @@ void LineUsb::_playIfPossible() {
             } else {
                 _log.error("Write failed %d", rc);
                 snd_pcm_recover(_playH, rc, 1); 
+                _playErrorCount++;
+                _inError = true;
                 break;
             }
         } else if (rc > 0) {
