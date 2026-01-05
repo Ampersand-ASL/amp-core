@@ -79,13 +79,11 @@ Example of interacting with mixer: https://radutomuleasa.dev/2020-04-04-alsalib/
 How simple_usbradio does it: https://github.com/AllStarLink/app_rpt/blob/fa8830dec5f899d9080e1385515c636af88a80e6/res/res_usbradio.c#L160
 ALSA summary docs: https://www.volkerschatz.com/noise/alsa.html
 
-
-Important ALSA Commands
-=======================
-
 # The directory ov vendor product IDs:
 cat /var/lib/usbutils/usb.ids 
 
+Important ALSA Commands
+=======================
 lsusb -t
 aplay -l
 ls /proc/asound
@@ -102,13 +100,12 @@ sudo touch /etc/udev/rules.d/99-mydevice.rules
 # SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0d8c", ATTRS{idProduct}=="0012", MODE="0666", TAG+="uaccess"
 sudo udevadmin control --reload-rules
 sudo udevadmin trigger
+
 */
 LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
     unsigned destBusId, unsigned destCallId) 
 :   LineRadio(log, clock, captureConsumer, busId, callId, destBusId, destCallId) {
-    _toneOmega = 400.0 * 2.0 * 3.1415926 / (float)48000.0;
-    _tonePhi = 0;
 }
 
 int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel) {
@@ -118,17 +115,23 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     char alsaDeviceName[16];
     snprintf(alsaDeviceName, 16, "plughw:%d,0", cardNumber);
 
+    snd_pcm_t* playH = 0;
+    snd_pcm_t* captureH = 0;
     int err;
 
-    if ((err = snd_pcm_open(&_playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
+    if ((err = snd_pcm_open(&playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
         _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
         return -10;
     }
-    if ((err = snd_pcm_open(&_captureH, alsaDeviceName, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
-        _log.error("Cannot open capture device %d", err);
-        snd_pcm_close(_playH);
+    // Make sure this handle gets closed if we fail during the setup process
+    raiiholder<snd_pcm_t> playHolder(playH, _sndCloser);
+
+    if ((err = snd_pcm_open(&captureH, alsaDeviceName, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
+        _log.error("Cannot open capture device %s %d", alsaDeviceName, err);
         return -10;
     }
+    // Make sure this handle gets closed if we fail during the setup process
+    raiiholder<snd_pcm_t> captureHolder(captureH, _sndCloser);
 
     unsigned int audioRate = AUDIO_RATE;
     unsigned int channels = 2;
@@ -136,71 +139,60 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* play_hw_params;
     snd_pcm_hw_params_alloca(&play_hw_params);
-    snd_pcm_hw_params_any(_playH, play_hw_params);
-    snd_pcm_hw_params_set_access(_playH, play_hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    snd_pcm_hw_params_set_format(_playH, play_hw_params, SND_PCM_FORMAT_S16_LE);
-    snd_pcm_hw_params_set_rate_near(_playH, play_hw_params, &audioRate, 0);
-    snd_pcm_hw_params_set_channels_near(_playH, play_hw_params, &channels);
+    snd_pcm_hw_params_any(playH, play_hw_params);
+    snd_pcm_hw_params_set_access(playH, play_hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(playH, play_hw_params, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_rate_near(playH, play_hw_params, &audioRate, 0);
+    snd_pcm_hw_params_set_channels_near(playH, play_hw_params, &channels);
     // With this setting we're getting around 480 audio samples per
     // period, which leads to a good range of jitters.
     unsigned int periodTimeUs = 20000;
     // Request a max period
-    snd_pcm_hw_params_set_period_time(_playH, play_hw_params, periodTimeUs, 0);
+    snd_pcm_hw_params_set_period_time(playH, play_hw_params, periodTimeUs, 0);
     // Let the buffer store 8x 20ms frames of sound
     unsigned int bufferTimeUs = 20000 * 8;
-    snd_pcm_hw_params_set_buffer_time(_playH, play_hw_params, bufferTimeUs, 0);
-    if ((err = snd_pcm_hw_params(_playH, play_hw_params)) < 0) {
+    snd_pcm_hw_params_set_buffer_time(playH, play_hw_params, bufferTimeUs, 0);
+    if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
         _log.error("Play parameters %d", err);
-        snd_pcm_close(_playH);
-        snd_pcm_close(_captureH);
         return -1;
     }
 
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
     snd_pcm_hw_params_alloca(&capture_hw_params);
-    snd_pcm_hw_params_any(_captureH, capture_hw_params);
-    snd_pcm_hw_params_set_access(_captureH, capture_hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    snd_pcm_hw_params_set_format(_captureH, capture_hw_params, SND_PCM_FORMAT_S16_LE);
-    // ADDED?
-    snd_pcm_hw_params_set_subformat(_captureH, capture_hw_params, SND_PCM_SUBFORMAT_STD);
+    snd_pcm_hw_params_any(captureH, capture_hw_params);
+    snd_pcm_hw_params_set_access(captureH, capture_hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(captureH, capture_hw_params, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_subformat(captureH, capture_hw_params, SND_PCM_SUBFORMAT_STD);
     // The last paramter (sub unit direction) is for near calls. Use 1 to request a rate 
     // greater than the specified value, -1 for a rate less than the value, and 0 for a 
     // rate that is exactly the value. 
     audioRate = AUDIO_RATE;
-    snd_pcm_hw_params_set_rate_near(_captureH, capture_hw_params, &audioRate, 0);
+    snd_pcm_hw_params_set_rate_near(captureH, capture_hw_params, &audioRate, 0);
     //channels = 2;
-    snd_pcm_hw_params_set_channels(_captureH, capture_hw_params, 2);
+    snd_pcm_hw_params_set_channels(captureH, capture_hw_params, 2);
     // With this setting we're getting around 480 audio samples per
     // period, which leads to a good range of jitters.
     periodTimeUs = 5000;
     // Request a max period
-    snd_pcm_hw_params_set_period_time_max(_captureH, capture_hw_params, &periodTimeUs, 0);
+    snd_pcm_hw_params_set_period_time_max(captureH, capture_hw_params, &periodTimeUs, 0);
     // Let the buffer store 8x 20ms frames of sound
     bufferTimeUs = 20000 * 8;
-    snd_pcm_hw_params_set_buffer_time(_captureH, capture_hw_params, bufferTimeUs, 0);
+    snd_pcm_hw_params_set_buffer_time(captureH, capture_hw_params, bufferTimeUs, 0);
 
-    if ((err = snd_pcm_hw_params(_captureH, capture_hw_params)) < 0) {
+    if ((err = snd_pcm_hw_params(captureH, capture_hw_params)) < 0) {
         _log.error("Capture parameters %d", err);
-        snd_pcm_close(_playH);
-        snd_pcm_close(_captureH);
         return -1;
     }
 
     // Added to get the capture ball rolling
-    if ((err = snd_pcm_prepare(_captureH)) < 0) {
-        _log.error("Cannot prepare audio interface for use (%s)",
-	        snd_strerror (err));
-        snd_pcm_close(_playH);
-        snd_pcm_close(_captureH);
+    if ((err = snd_pcm_prepare(captureH)) < 0) {
+        _log.error("Cannot prepare audio interface for use (%s)", snd_strerror(err));
         return -1;
     }
 
-    if ((err = snd_pcm_start(_captureH)) < 0) {
-        _log.error("Cannot start audio interface for use (%s)",
-	        snd_strerror (err));
-        snd_pcm_close(_playH);
-        snd_pcm_close(_captureH);
+    if ((err = snd_pcm_start(captureH)) < 0) {
+        _log.error("Cannot start audio interface for use (%s)", snd_strerror(err));
         return -1;
     }
 
@@ -223,25 +215,30 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // by the caller.
 
     int maxPlayVolume = getMixerMax(alsaDeviceName2, playMixerName);
-    int rc1 = setMixer(alsaDeviceName2, playMixerName, 
-        maxPlayVolume * playLevelL / LEVEL_SCALE, 
-        maxPlayVolume * playLevelR / LEVEL_SCALE);
-    _log.info("Setting playback mixer level to %d/%d (max is %d)", 
-        maxPlayVolume * playLevelL / LEVEL_SCALE,
-        maxPlayVolume * playLevelR / LEVEL_SCALE,
+    int valueL = maxPlayVolume * playLevelL / LEVEL_SCALE;
+    int valueR = maxPlayVolume * playLevelR / LEVEL_SCALE;
+    int rc1 = setMixer(alsaDeviceName2, playMixerName, valueL, valueR);
+    _log.info("Setting playback mixer level to %d/%d (max is %d)", valueL, valueR, 
         maxPlayVolume);
     if (rc1 != 0) {
-        _log.error("Failed to set playback mixer leveld");
+        _log.error("Failed to set playback mixer level");
+        return -5;
     }
 
     int maxCaptureVolume = getMixerMax(alsaDeviceName2, captureMixerName);
-    int rc2 = setMixer(alsaDeviceName2, captureMixerName, 
-        maxCaptureVolume * captureLevel/ LEVEL_SCALE, maxCaptureVolume * captureLevel / LEVEL_SCALE);
-    _log.info("Setting capture mixer level to %d (max is %d)", 
-        maxCaptureVolume * captureLevel / LEVEL_SCALE, maxCaptureVolume);
+    int valueM = maxCaptureVolume * captureLevel / LEVEL_SCALE;
+    int rc2 = setMixer(alsaDeviceName2, captureMixerName, valueM, valueM);
+    _log.info("Setting capture mixer level to %d (max is %d)", valueM, maxCaptureVolume);
     if (rc2 != 0) {
-        _log.error("Failed to set capture mixer leveld");
+        _log.error("Failed to set capture mixer level");
+        return -5;
     }
+
+    // At this point we are good to go
+    playHolder.release();
+    _playH = playH;
+    captureHolder.release();
+    _captureH = captureH;
 
     // Call up to the base for signaling
     _open();
@@ -250,15 +247,15 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
 }
 
 void LineUsb::close() {
-
-    _close();
-
-    if (_playH)
-        snd_pcm_close(_playH);
-    _playH = 0;
-    if (_captureH)
-        snd_pcm_close(_captureH);
-    _captureH = 0;
+    if (_playH || _captureH) {
+        _close();
+        if (_playH)
+            snd_pcm_close(_playH);
+        _playH = 0;
+        if (_captureH)
+            snd_pcm_close(_captureH);
+        _captureH = 0;
+    }
 }
 
 int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {

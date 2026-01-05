@@ -230,23 +230,7 @@ void WebUi::_thread() {
         res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
-        cout << "/config-load" << endl;
-        cout << _config.getCopy().dump() << endl;
-
         json j = _config.getCopy();
-
-        // If there is no USB sound device selected, default to the first C-Media 
-        // device we can find.
-        if (j["aslAudioDevice"].get<std::string>().empty()) {
-            string val("usb ");
-            val += "bus:1";
-            //val += busId;
-            val += ",";
-            val += "port:2";
-            //val += portId;
-            j["aslAudioDevice"] = val;
-        }
-
          res.set_content(j.dump(), "application/json");
     });
     svr.Post("/config-save", [this](const httplib::Request &, httplib::Response &res, 
@@ -260,18 +244,15 @@ void WebUi::_thread() {
         cout << body << endl;
         json jBody = json::parse(body);
         jBody["lastUpdateMs"] = _clock.timeUs() / 1000;
-        // #### TODO: Reformat audio device selection
         ofstream cf(_configFileName);
         cf << jBody.dump() << endl;
         cf.close();
     });
     svr.Get("/config-select-options", [](const httplib::Request& req, httplib::Response &res) {
 
-        string menuName = req.get_param_value("name");
-        cout << "menu name " << menuName << endl;
-       
         auto a = json::array();
 
+        string menuName = req.get_param_value("name");      
         if (menuName == "aslAudioDevice") {
 
             json o;

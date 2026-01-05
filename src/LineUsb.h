@@ -74,6 +74,8 @@ private:
     void _captureIfPossible();
     void _playIfPossible();
 
+    static void _sndCloser(snd_pcm_t* h) { snd_pcm_close(h); }
+
     uint32_t _captureStartMs = 0;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;

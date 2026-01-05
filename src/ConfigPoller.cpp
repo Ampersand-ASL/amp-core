@@ -20,8 +20,11 @@
 #include <iostream>
 
 #include "kc1fsz-tools/Log.h"
+#include "sound-map.h"
 
 #include "ConfigPoller.h"
+
+#define CMEDIA_VENDOR_ID ("0d8c")
 
 using namespace std;
 using json = nlohmann::json;
@@ -48,16 +51,40 @@ void ConfigPoller::oneSecTick() {
             buffer << cfg.rdbuf();
             cfg.close();
             try {
-                json jBody = json::parse(buffer.str());
-                _cb(jBody);
-            } catch(...) {
-                _log.error("Invalid config file format");
+                json j = json::parse(buffer.str());
+                _populateDefaults(j);
+                // Fire the callback
+                _cb(j);
+
+            } catch(json::exception& ex) {
+                _log.error("Invalid config file format %s", ex.what());
             }
         }
-    } catch (...) {
-        _log.error("Unable to load config file %s", _fn.c_str());
+    } catch (exception& ex) {
+        _log.error("Unable to load config file %s %s", _fn.c_str(), ex.what());
     }
+}
 
+void ConfigPoller::_populateDefaults(json& j) {
+
+    // If there is no USB sound device selected, default to the first C-Media 
+    // device we can find.
+    if (j["aslAudioDevice"].get<std::string>().empty()) {
+        visitUSBDevices2([&j](
+            const char*, const char*, 
+            const char* vendorId, const char*,                 
+            const char* busId, const char* portId) {
+                if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
+                    string val("usb ");
+                    val += "bus:";
+                    val += busId;
+                    val += ",";
+                    val += "port:";
+                    val += portId;
+                    j["aslAudioDevice"] = val;
+                }
+            });
+    }
 }
 
     }

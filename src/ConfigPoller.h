@@ -48,6 +48,8 @@ public:
 
 private: 
 
+    void _populateDefaults(json& j);
+
     Log& _log;
     std::string _fn;
     std::function<void(const json& cfg)> _cb;
