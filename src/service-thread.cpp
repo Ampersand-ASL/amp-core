@@ -74,7 +74,7 @@ void service_thread(void* ud) {
                     cfg["aslRegUrl"].get<std::string>().c_str(), 
                     cfg["node"].get<std::string>().c_str(), 
                     cfg["password"].get<std::string>().c_str(), 
-                    std::stoi(cfg["iaxPort4"].get<std::string>()));
+                    std::stoi(cfg["iaxPort"].get<std::string>()));
 
                 statsTask.configure(
                     cfg["aslStatUrl"].get<std::string>().c_str(), 

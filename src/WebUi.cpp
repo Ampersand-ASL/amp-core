@@ -36,6 +36,8 @@
 #include "MessageConsumer.h"
 #include "WebUi.h"
 
+#define CMEDIA_VENDOR_ID ("0d8c")
+
 using namespace std;
 using json = nlohmann::json;
 
@@ -230,7 +232,22 @@ void WebUi::_thread() {
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
         cout << "/config-load" << endl;
         cout << _config.getCopy().dump() << endl;
-         res.set_content(_config.getCopy().dump(), "application/json");
+
+        json j = _config.getCopy();
+
+        // If there is no USB sound device selected, default to the first C-Media 
+        // device we can find.
+        if (j["aslAudioDevice"].get<std::string>().empty()) {
+            string val("usb ");
+            val += "bus:1";
+            //val += busId;
+            val += ",";
+            val += "port:2";
+            //val += portId;
+            j["aslAudioDevice"] = val;
+        }
+
+         res.set_content(j.dump(), "application/json");
     });
     svr.Post("/config-save", [this](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
@@ -248,34 +265,50 @@ void WebUi::_thread() {
         cf << jBody.dump() << endl;
         cf.close();
     });
-    svr.Get("/audiodevice-list", [](const httplib::Request &, httplib::Response &res) {
-        
+    svr.Get("/config-select-options", [](const httplib::Request& req, httplib::Response &res) {
+
+        string menuName = req.get_param_value("name");
+        cout << "menu name " << menuName << endl;
+       
         auto a = json::array();
 
-        int rc = visitUSBDevices2([&a](const char* vendorName, const char* productName, 
-            const char* busId, const char* portId) {
-                // Make the value
-                string val("usb ");
-                val += "bus:";
-                val += busId;
-                val += ",";
-                val += "port:";
-                val += portId;
-                // Make the description
-                string desc("USB ");
-                desc += busId;
-                desc += "/";
-                desc += portId;
-                desc += " ";
-                desc += vendorName;
-                desc += " ";
-                desc += productName;
-                json o;
-                o["value"] = val;
-                o["desc"] = desc;
-                a.push_back(o);                
-            }
-        );
+        if (menuName == "aslAudioDevice") {
+
+            json o;
+            o["value"] = "";
+            o["desc"] = "None";
+            a.push_back(o);
+
+            int rc = visitUSBDevices2([&a](
+                const char* vendorName, const char* productName, 
+                const char* vendorId, const char* productId,                 
+                const char* busId, const char* portId) {
+                    // Only doing C-Media
+                    if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
+                        // Make the value
+                        string val("usb ");
+                        val += "bus:";
+                        val += busId;
+                        val += ",";
+                        val += "port:";
+                        val += portId;
+                        // Make the description
+                        string desc("USB ");
+                        desc += busId;
+                        desc += "/";
+                        desc += portId;
+                        desc += " ";
+                        desc += vendorName;
+                        desc += " ";
+                        desc += productName;
+                        json o;
+                        o["value"] = val;
+                        o["desc"] = desc;
+                        a.push_back(o);                
+                    }
+                }
+            );
+        }
 
         res.set_content(a.dump(), "application/json");
     });
@@ -284,8 +317,17 @@ void WebUi::_thread() {
         
         auto a = json::array();
 
+        json o;
+        o["value"] = "";
+        o["desc"] = "None";
+        a.push_back(o);
+
         int rc = visitUSBDevices2([&a](const char* vendorName, const char* productName, 
+            const char* vendorId, const char* productId,             
             const char* busId, const char* portId) {
+                // Skip some things that aren't relevant
+                if (strstr(vendorName, "Linux Foundation") != 0)
+                    return;
                 // Make the value
                 string val("usb ");
                 val += "bus:";

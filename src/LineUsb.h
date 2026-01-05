@@ -17,6 +17,7 @@
 #pragma once
 
 #include <fstream>
+#include <cmath>
 
 // NOTE: This may be the real ALSA library or a mock, depending on the
 // platfom that we are builing for.
@@ -39,7 +40,17 @@ public:
     LineUsb(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
         unsigned destBusId, unsigned destCallId);
 
-    int open(const char* alsaDeviceName);
+    /**
+     * @param cardNumber The ALSA card number. So the device name is hd:<cardNumber>.
+     * @param playLevelL Used to set the "Speaker Playback Volume" control on the left
+     * side. Range is 0 to 100.
+     * @param playLevelR Used to set the "Speaker Playback Volume" control on the right
+     * side. Range is 0 to 100.
+     * @param captureLevel Used to set the "Mic Capture Volume" control. Range is 
+     * 0 to 100.
+     */
+    int open(int cardNumber, int playLevelL, int playLevelR, int captureLevel);
+
     void close();
 
     // ----- MessageConsumer --------------------------------------------------
@@ -88,5 +99,12 @@ private:
     unsigned _captureErrorCount = 0;
     unsigned _playErrorCount = 0;
 };
+
+int setMixer(const char* deviceName, const char *paramName, int v1, int v2);
+
+/**
+ * @returns The maximum value supported by the parameter, or -1 on error
+ */
+int getMixerMax(const char* deviceName, const char* paramName);
 
 }

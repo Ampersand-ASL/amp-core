@@ -6,12 +6,15 @@ body {
     font-family: sans-serif;
 }
 
-#config-form {
-    width: 500px;
+.form2 {
+    width: 700px;
     display: grid;
     grid-template-columns: 1fr 2fr; /* Creates two columns, the second twice as wide */
     gap: 10px; /* Adds space between rows and columns */
-    max-width: 500px; /* Optional: sets a max width for the form itself */
+    border: solid 1px black;
+    margin-bottom: 5px;
+    padding: 10px;
+    background-color: #eeeeee;
 }
 
 #config-form label {
@@ -25,20 +28,114 @@ body {
         </style>
     </head>
     <body>
-        <h1>Ampersand ASL Server</h1>
+        <h1>Ampersand Configuration</h1>
         <form id="config-form">
-            <label for="node">Node Number:</label>
-            <input type="text" id="node" name="node"/>
-            <label for="password">Password:</label>
-            <input type="text" id="password" name="password"/>
-            <label for="audioDevice">Audio Device:</label>
-            <select id="audioDevice" name="audioDevice">
-            </select>
-            <label for="cosSignal">COS Signal Source:</label>
-            <select id="cosSignal" name="cosSignal">
-            </select>
-            <label for="iaxPort4">IAX Port (IPv4):</label>
-            <input type="text" id="iaxPort4" name="iaxPort4"/>
+            <div class="form2">
+                <label for="node">Node Number:</label>
+                <input type="text" id="node" name="node"/>
+                <label for="password">Password:</label>
+                <input type="text" id="password" name="password"/>
+                <label for="iaxPort">IAX Port:</label>
+                <input type="text" id="iaxPort" name="iaxPort"/>
+            </div>
+            <div class="form2">
+                <div>Radio 0:</div><div></div>
+                <label for="setupMode">Setup Mode:</label>
+                <select id="setupMode" name="setupMode">
+                    <option value="0">C-Media CM1xx URI/UCI</option>
+                    <!--
+                    <option value="1">Ampersand Mode</option>
+                    -->
+                </select>
+                
+                <label for="aslHdwType">Hardware Type:</label>
+                <select id="aslHdwType" name="aslHdwType">
+                    <option value="0">0: USB radio interfaces designed for app_rpt</option>
+                    <option value="1">1: Dingotel/Sph interfaces</option>
+                    <option value="2">2: NHC (N1KDO) interfaces</option>
+                    <option value="3">3: Custom</option>
+                </select>
+                <label for="aslAudioDevice">USB Device:</label>
+                <select id="aslAudioDevice" name="aslAudioDevice">
+                </select>
+                <label for="aslCosFrom">Carrier From:</label>
+                <select id="aslCosFrom" name="aslCosFrom">
+                    <option value="none">None</option>
+                    <option value="usb">USB</option>
+                    <option value="usbinvert">USB Inverted (Active Low)</option>
+                </select>
+                <label for="aslCtcssFrom">CTCSS From:</label>
+                <select id="aslCtcssFrom" name="aslCtcssFrom">
+                    <option value="none">None</option>
+                    <option value="usb">USB</option>
+                    <option value="usbinvert">USB Inverted (Active Low)</option>
+                </select>
+                <label for="aslInvertPtt">Invert PTT:</label>
+                <select id="aslInvertPtt" name="aslInvertPtt">
+                    <option value="no">No (Active Low)</option>
+                    <option value="yes">Yes (Active High)</option>
+                </select>
+
+                <label for="aslTxMixASet">Transmit Mixer A (0-1000):</label>
+                <input type="text" id="aslTxMixASet" name="aslTxMixASet"/>
+                <label for="aslTxMixBSet">Transmit Mixer B (0-1000):</label>
+                <input type="text" id="aslTxMixBSet" name="aslTxMixBSet"/>
+
+                <label for="aslRxMixerSet">Receive Mixer (0-1000):</label>
+                <input type="text" id="aslRxMixerSet" name="aslRxMixerSet"/>
+               
+                <!--
+                <label for="audioDevice">Audio Device:</label>
+                <select id="audioDevice" name="audioDevice">
+                </select>
+                <label for="audioDeviceParam">Audio Device Parameters:</label>
+                <input type="text" id="audioDeviceParam" name="audioDeviceParam"/>
+
+                <label for="cosSignal">COR Signal:</label>
+                <select id="cosSignal" name="cosSignal">
+                    <option>USB HID Register</option>
+                    <option>Raspberry Pi GPIO Pin</option>
+                    <option>Parallel Port Pin</option>
+                    <option>UART RTS/DTR Pin</option>
+                    <option>CAT Command</option>
+                </select>
+                <label for="cosSignalParam">COR Signal Parameters:</label>
+                <input type="text" id="cosSignalParam" name="cosSignalParam"/>
+                <label for="ampInvertCos">Invert COR Signal:</label>
+                <select id="ampInvertCos" name="ampInvertCos">
+                    <option>No</option>
+                    <option>Yes</option>
+                </select>                
+
+                <label for="ctcssSignal">CTCSS Signal:</label>
+                <select id="ctcssSignal" name="ctcssSignal">
+                    <option>None</option>
+                </select>
+                <label for="ctcssSignalParam">CTCSS Signal Parameters:</label>
+                <input type="text" id="ctcssSignalParam" name="ctcssSignalParam"/>
+                <label for="ampInvertCtcss">Invert CTCSS Signal:</label>
+                <select id="ampInvertCtcss" name="ampInvertCtcss">
+                    <option>No</option>
+                    <option>Yes</option>
+                </select>                
+
+                <label for="ampPttSignal">PTT Signal:</label>
+                <select id="ampPttSignal" name="ampPttSignal">
+                    <option>USB HID Register</option>
+                    <option>Raspberry Pi GPIO Pin</option>
+                    <option>Parallel Port Pin</option>
+                    <option>UART RTS/DTR Pin</option>
+                    <option>CAT Command</option>
+                </select>
+                <label for="ampPttSignalParam">PTT Signal Parameters:</label>
+                <input type="text" id="ampPttSignalParam" name="ampPttSignalParam"/>
+                <label for="ampInvertPtt">Invert PTT:</label>
+                <select id="ampInvertPtt" name="ampInvertPtt">
+                    <option>No (Active Low)</option>
+                    <option>Yes (Active High)</option>
+                </select>                
+            -->
+            </div>
             <span></span>
             <input type="submit" value="Save" class="save-button"/>
         </form>
@@ -50,15 +147,25 @@ body {
     </body>
     <script>
 
-async function load_audiodevice_menu() {
+/**
+ * A utility function for populating the options on a select menu
+ * using choices provided by the back-end.
+ * 
+ * @param baseElId The ID of the base element, usually the form that contains
+ * the select meny.
+ * @param selectName The ID of the select menu and also the name argument 
+ * sent to the server.
+ */
+async function loadSelectOptions(baseElId, selectId) {
     try {
-        const response = await fetch('audiodevice-list');
-        // Check if the request was successful (status in the 200s)
+        const response = await fetch("config-select-options?name=" + selectId);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        const sel = document.getElementById('audioDevice');
+        const baseEl = document.getElementById(baseElId);
+        const sel = baseEl.querySelector("#" + selectId);
+        // Clear existing options
         sel.replaceChildren();
         for (const i of data) {
             var opt = document.createElement('option');
@@ -71,60 +178,75 @@ async function load_audiodevice_menu() {
     }
 }
 
-async function load_cossignal_menu() {
-    try {
-        const response = await fetch('hiddevice-list');
-        // Check if the request was successful (status in the 200s)
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        const sel = document.getElementById('cosSignal');
-        sel.replaceChildren();
-        for (const i of data) {
-            var opt = document.createElement('option');
-            opt.value = i["value"]
-            opt.innerHTML = i["desc"]
-            sel.appendChild(opt);
-        }
-    } catch (error) {
-        console.error('Error fetching data:', error.message);
-    }
+function loadUi(name, data, doc) {
+    if (name in data)
+        doc.getElementById(name).value = data[name]
 }
 
-async function config_load() {
+function storeUi(name, formObject, data) {
+    data[name] = formObject[name].trim();
+}
+
+async function configLoad() {
     try {
         const response = await fetch('config-load');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        // Store the entire config document 
+        // Store the entire config document so that we can merge later
         sessionStorage.setItem("config", JSON.stringify(data))
-        // Pull out some specific values for this screen
-        document.getElementById("node").setAttribute("value", data["node"]);
-        document.getElementById("password").setAttribute("value", data["password"]);
-        document.getElementById("audioDevice").value = data["audioDevice"];
-        document.getElementById("cosSignal").value = data["cosSignal"];
-        document.getElementById("iaxPort4").setAttribute("value", data["iaxPort4"]);
+
+        // ----- Top Section -----------------------------------------------------
+
+        loadUi("node", data, document)
+        loadUi("password", data, document)
+        loadUi("iaxPort", data, document)
+
+        // ----- Radio 0 Section --------------------------------------------------
+
+        loadUi("setupMode", data, document)
+        loadUi("aslHdwType", data, document)
+        loadUi("aslAudioDevice", data, document)
+        loadUi("aslCosFrom", data, document)
+        loadUi("aslCtcssFrom", data, document)
+        loadUi("aslInvertPtt", data, document)
+        loadUi("aslTxMixASet", data, document)
+        loadUi("aslTxMixBSet", data, document)
+        loadUi("aslRxMixerSet", data, document)
+
     } catch (error) {
         console.error('Error fetching data:', error.message);
     }
 }
 
-function config_save() {
+function configStore() {
+
     const form = document.getElementById('config-form');
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
+
     // Move across a few specific things 
     fullConfig = JSON.parse(sessionStorage.getItem("config"))
-    //console.log("Full Config", fullConfig);
-    fullConfig["node"] = formObject["node"].trim();
-    fullConfig["password"] = formObject["password"].trim();
-    fullConfig["audioDevice"] = formObject["audioDevice"].trim();
-    fullConfig["cosSignal"] = formObject["cosSignal"].trim();
-    fullConfig["iaxPort4"] = formObject["iaxPort4"].trim();
-    console.log("Full Config + Changes", fullConfig)
+
+    // ----- Top Section -----------------------------------------------------
+
+    storeUi("node", formObject, fullConfig)
+    storeUi("password", formObject, fullConfig)
+    storeUi("iaxPort", formObject, fullConfig)
+
+    // ----- Radio 0 Section --------------------------------------------------
+
+    storeUi("setupMode", formObject, fullConfig)
+    storeUi("aslHdwType", formObject, fullConfig)
+    storeUi("aslAudioDevice", formObject, fullConfig)
+    storeUi("aslCosFrom", formObject, fullConfig)
+    storeUi("aslCtcssFrom", formObject, fullConfig)
+    storeUi("aslInvertPtt", formObject, fullConfig)
+    storeUi("aslTxMixASet", formObject, fullConfig)
+    storeUi("aslTxMixBSet", formObject, fullConfig)
+    storeUi("aslRxMixerSet", formObject, fullConfig)
+
     // Push back to the server
     fetch('/config-save', {
         method: 'POST',
@@ -138,15 +260,14 @@ function config_save() {
 
 document.addEventListener('DOMContentLoaded', async() => {
 
-    await load_audiodevice_menu();
-    await load_cossignal_menu();
-    await config_load();
-
-    // Add a submit event listener to the form
     document.getElementById('config-form').addEventListener('submit', function (event) {
         event.preventDefault();
-        config_save();
+        configStore();
     });   
+
+    // Important that these steps are serialized
+    await loadSelectOptions("config-form", "aslAudioDevice");
+    await configLoad();
 });
     </script>
 </html>

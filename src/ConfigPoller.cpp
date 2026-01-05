@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
 #include "kc1fsz-tools/Log.h"
 
@@ -28,7 +29,7 @@ using json = nlohmann::json;
 namespace kc1fsz {
     namespace amp {
 
-const char* ConfigPoller::DEFAULT_CONFIG = "{\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\",\"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\",\"cosSignal\":\"\",\"audioDevice\":\"\",\"call\":\"\",\"iaxPort4\":\"4568\",\"lastUpdateMs\":0,\"node\":\"\",\"password\":\"\",\"privateKey\":\"\"}";
+const char* ConfigPoller::DEFAULT_CONFIG = "{ \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usbinvert\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"500\", \"aslTxMixBSet\":\"500\", \"aslRxMixerSet\":\"500\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
 
 ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb) 
 :   _log(log),

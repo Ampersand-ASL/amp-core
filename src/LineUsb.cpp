@@ -28,6 +28,7 @@
 #include <arm_math.h>
 
 #include <kc1fsz-tools/Log.h>
+#include <kc1fsz-tools/raiiholder.h>
 
 #include "IAX2Util.h"
 #include "MessageConsumer.h"
@@ -74,6 +75,11 @@ to /dev/dsp.
 
 /usr/share/alsa.conf
 
+Example of interacting with mixer: https://radutomuleasa.dev/2020-04-04-alsalib/
+How simple_usbradio does it: https://github.com/AllStarLink/app_rpt/blob/fa8830dec5f899d9080e1385515c636af88a80e6/res/res_usbradio.c#L160
+ALSA summary docs: https://www.volkerschatz.com/noise/alsa.html
+
+
 Important ALSA Commands
 =======================
 
@@ -85,6 +91,10 @@ aplay -l
 ls /proc/asound
 ls /dev/snd
 dmesg - Shows messages of connects/disconnects
+# Display the names of all controls:
+amixer -c <card> controls 
+# Display the vaues of all controls
+amixer -c <card> contents
 
 Permission Rules to allow normal users to access the HID device:
 sudo touch /etc/udev/rules.d/99-mydevice.rules
@@ -101,20 +111,23 @@ LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _tonePhi = 0;
 }
 
-int LineUsb::open(const char* alsaDeviceName) {
+int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel) {
 
     close();
+
+    char alsaDeviceName[16];
+    snprintf(alsaDeviceName, 16, "plughw:%d,0", cardNumber);
 
     int err;
 
     if ((err = snd_pcm_open(&_playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
         _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
-        return -1;
+        return -10;
     }
     if ((err = snd_pcm_open(&_captureH, alsaDeviceName, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
         _log.error("Cannot open capture device %d", err);
         snd_pcm_close(_playH);
-        return -1;
+        return -10;
     }
 
     unsigned int audioRate = AUDIO_RATE;
@@ -193,6 +206,42 @@ int LineUsb::open(const char* alsaDeviceName) {
 
     _captureStartMs = _clock.time();
     _captureCount = 0;
+
+    // Set the mixer levevels
+    char alsaDeviceName2[16];
+    snprintf(alsaDeviceName2, 16, "hw:%d", cardNumber);
+    const char* playMixerName = "Speaker Playback Volume";
+    const char* captureMixerName = "Mic Capture Volume";
+    const int LEVEL_SCALE = 1000;
+
+    // The device is queried to see what the range of volume values are.
+    // Typically this will be something like "37" which represent the maximum
+    // of a range of vaules from 0->37, which maps to an actual range of 
+    // -37dB to 0dB. 
+    //
+    // The maximum value from the control is scaled by the 0->1000 level provided
+    // by the caller.
+
+    int maxPlayVolume = getMixerMax(alsaDeviceName2, playMixerName);
+    int rc1 = setMixer(alsaDeviceName2, playMixerName, 
+        maxPlayVolume * playLevelL / LEVEL_SCALE, 
+        maxPlayVolume * playLevelR / LEVEL_SCALE);
+    _log.info("Setting playback mixer level to %d/%d (max is %d)", 
+        maxPlayVolume * playLevelL / LEVEL_SCALE,
+        maxPlayVolume * playLevelR / LEVEL_SCALE,
+        maxPlayVolume);
+    if (rc1 != 0) {
+        _log.error("Failed to set playback mixer leveld");
+    }
+
+    int maxCaptureVolume = getMixerMax(alsaDeviceName2, captureMixerName);
+    int rc2 = setMixer(alsaDeviceName2, captureMixerName, 
+        maxCaptureVolume * captureLevel/ LEVEL_SCALE, maxCaptureVolume * captureLevel / LEVEL_SCALE);
+    _log.info("Setting capture mixer level to %d (max is %d)", 
+        maxCaptureVolume * captureLevel / LEVEL_SCALE, maxCaptureVolume);
+    if (rc2 != 0) {
+        _log.error("Failed to set capture mixer leveld");
+    }
 
     // Call up to the base for signaling
     _open();
