@@ -20,6 +20,7 @@
 #include <thread>
 #include <string>
 #include <mutex>
+#include <utility>
 
 #include <curl/curl.h>
 
@@ -49,7 +50,7 @@ private:
     static void _t(NRLog* o) { o->_t2(); }
     void _t2();
     
-    void _sendMsg(CURL* curl, std::string& msg);
+    void _sendMsg(CURL* curl, std::string& level, std::string& msg);
 
     static size_t _writeCallback(void* contents, size_t size, size_t nmemb, void* userp);
     void _writeCallback2(const char* contents, size_t size);
@@ -60,7 +61,7 @@ private:
 
     std::mutex _lock;
     bool _run = true;
-    threadsafequeue<std::string> _logQueue;
+    threadsafequeue<std::pair<std::string, std::string> > _logQueue;
     std::thread _worker;
     // Here is were we accumulate the received data
     static const unsigned RESULT_AREA_SIZE = 128;

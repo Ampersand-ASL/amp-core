@@ -55,10 +55,10 @@ void NRLog::_out(const char* sev, const char* dt, const char* msg) {
     char tid[16];
     pthread_getname_np(pthread_self(), tid, sizeof(tid));
     _lock.lock();
-    std::cout << tid << " " << sev << dt << " " << msg << std::endl;
+    std::cout << tid << " " << sev << ": " << dt << " " << msg << std::endl;
     _lock.unlock();
     if (!_apiKey.empty())
-        _logQueue.push(string(msg));
+        _logQueue.push(pair<string,string>(string(sev), string(msg)));
 }
 
 void NRLog::_t2() {     
@@ -94,9 +94,9 @@ void NRLog::_t2() {
 
         // We clear everything from the queue whenever we have a chance.
         while (!_logQueue.empty()) {
-            std::string msg;
-            if (_logQueue.try_pop(msg)) {
-                _sendMsg(_curl, msg);
+            pair<string,string> item;
+            if (_logQueue.try_pop(item)) {
+                _sendMsg(_curl, item.first, item.second);
             }
         }
     }
@@ -105,7 +105,7 @@ void NRLog::_t2() {
     curl_easy_cleanup(_curl);
 }
 
-void NRLog::_sendMsg(CURL* curl, string& msg) {
+void NRLog::_sendMsg(CURL* curl, string& level, string& msg) {
 
     _resultArea[0] = 0;
     _resultAreaLen = 0;
@@ -113,6 +113,7 @@ void NRLog::_sendMsg(CURL* curl, string& msg) {
     // New Relic specific message format here
     json o;
     o["message"] = msg;
+    o["level"] = level;
     o["service"] = _serviceName;
     o["env"] = _env;
     string jsonData = o.dump();
