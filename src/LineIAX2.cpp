@@ -127,6 +127,15 @@ void LineIAX2::setAuthMode(AuthMode mode) {
 
 int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
 
+    // If the configuration is changing then ignore the request
+    if (addrFamily == _addrFamily &&
+        _iaxListenPort == listenPort &&
+        _localUser == localUser &&
+        _iaxSockFd != 0 &&
+        _dnsSockFd != 0) {
+        return 0;
+    }
+
     close();
 
     _addrFamily = addrFamily;
@@ -235,6 +244,8 @@ void LineIAX2::close() {
         ::close(_iaxSockFd);
     if (_dnsSockFd) 
         ::close(_dnsSockFd);
+    _iaxSockFd = 0;
+    _dnsSockFd = 0;
     _iaxListenPort = 0;
     _addrFamily = 0;
 } 
