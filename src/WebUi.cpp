@@ -35,6 +35,7 @@
 #include "Message.h"
 #include "MessageConsumer.h"
 #include "WebUi.h"
+#include "ThreadUtil.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
 
@@ -152,9 +153,9 @@ void WebUi::_uiThread(void* o) {
 
 void WebUi::_thread() {
 
-    pthread_setname_np(pthread_self(), "UI");
-
-    _log.info("ui_thread start %d", _listenPort);
+    amp::setThreadName("amp-ui");
+    
+    _log.info("ui_thread start (HTTP port is %d)", _listenPort);
 
     // HTTP
     httplib::Server svr;
@@ -269,13 +270,12 @@ void WebUi::_thread() {
             body.append(data, data_length);
             return true;
         });
-        cout << "/config-save" << endl;
+        _log.info("Saving configuration");
         cout << body << endl;
         json jBody = json::parse(body);
         jBody["lastUpdateMs"] = _clock.timeUs() / 1000;
         ofstream cf(_configFileName);
-        cf << jBody.dump() << endl;
-        cf.close();
+        cf << jBody.dump(4) << endl;
     });
     svr.Get("/config-select-options", [](const httplib::Request& req, httplib::Response &res) {
 

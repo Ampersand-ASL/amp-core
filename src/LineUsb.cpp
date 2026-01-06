@@ -123,8 +123,13 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     int err;
 
     if ((err = snd_pcm_open(&playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
-        _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
-        return -10;
+        if (err == -16) {
+            _log.error("Can't open sound device %s, busy", alsaDeviceName);
+            return -12;
+        } else {
+            _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
+            return -10;
+        }
     }
     // Make sure this handle gets closed if we fail during the setup process
     raiiholder<snd_pcm_t> playHolder(playH, _sndCloser);

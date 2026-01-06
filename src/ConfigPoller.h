@@ -32,7 +32,9 @@ class Log;
     namespace amp {
 
 /**
- * Fires a callback any time the system configuration is changed.
+ * Polls the congiruation file and fires a callback any time the system 
+ * configuration is changed. This should be the only thing that reads
+ * the configuration file.
  */
 class ConfigPoller : public Runnable2 {
 public:
@@ -56,6 +58,7 @@ private:
     // Initialize at the epoch
     std::filesystem::file_time_type _lastUpdate;
     bool _startup = true;
+    bool _configLoadErrorDisplayed = false;
 };
 
     }

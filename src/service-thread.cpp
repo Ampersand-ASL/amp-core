@@ -45,12 +45,11 @@
 using namespace std;
 using namespace kc1fsz;
 
-void service_thread(void* ud) {
+void service_thread(const service_thread_args* args) {
 
-    amp::setThreadName("SVC");
+    amp::setThreadName("amp-svc");
 
     // Pull out the thread startup arguments
-    const service_thread_args* args = (service_thread_args*)ud;
     const string cfgFileName = args->cfgFileName;
     Log& log = *(args->log);
 
@@ -70,6 +69,17 @@ void service_thread(void* ud) {
         // This function will be called on any update to the configuration document.
         [&log, &registerTask, &statsTask](const json& cfg) {
             try {
+                if (!cfg["aslRegUrl"].is_string())
+                    throw invalid_argument("aslRegUrl is missing/invalid");
+                if (!cfg["aslStatUrl"].is_string())
+                    throw invalid_argument("aslStatUrl is missing/invalid");
+                if (!cfg["iaxPort"].is_string())
+                    throw invalid_argument("iaxPort is missing/invalid");
+                if (!cfg["node"].is_string())
+                    throw invalid_argument("node is missing/invalid");
+                if (!cfg["password"].is_string())
+                    throw invalid_argument("password is missing/invalid");
+
                 registerTask.configure(
                     cfg["aslRegUrl"].get<std::string>().c_str(), 
                     cfg["node"].get<std::string>().c_str(), 
@@ -80,8 +90,8 @@ void service_thread(void* ud) {
                     cfg["aslStatUrl"].get<std::string>().c_str(), 
                     cfg["node"].get<std::string>().c_str());
             }
-            catch (...) {
-                log.error("Failed to load configuration");
+            catch (exception& ex) {
+                log.error("Failed to load configuration: %s", ex.what());
             }
         }
     );

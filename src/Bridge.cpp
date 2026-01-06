@@ -28,13 +28,17 @@ using namespace std;
 namespace kc1fsz {
     namespace amp {
 
-Bridge::Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode) 
+Bridge::Bridge(Log& log, Clock& clock, MessageConsumer& bus, BridgeCall::Mode defaultMode) 
 :   _log(log),
     _clock(clock),
     _defaultMode(defaultMode),
+    _sink(&bus),
     _calls(_callSpace, MAX_CALLS) { 
-    for (unsigned i = 0; i < MAX_CALLS; i++) 
+
+    for (unsigned i = 0; i < MAX_CALLS; i++) {
         _callSpace[i].init(&log, &clock, &_ttsQueueReq, &_ttsQueueRes);
+        _callSpace[i].setSink(_sink);
+    }
 
     _ttsResampler.setRates(16000, 48000);
 }
@@ -43,11 +47,11 @@ void Bridge::reset() {
     _calls.visitAll(RESET_VISITOR);
 }
 
-void Bridge::setSink(MessageConsumer* sink) {
-    _sink = sink;
-    for (unsigned i = 0; i < MAX_CALLS; i++) 
-        _callSpace[i].setSink(sink);
-}
+//void Bridge::setSink(MessageConsumer* sink) {
+//    _sink = sink;
+//    for (unsigned i = 0; i < MAX_CALLS; i++) 
+//        _callSpace[i].setSink(sink);
+//}
 
 unsigned Bridge::getCallCount() const {
     unsigned result = 0;

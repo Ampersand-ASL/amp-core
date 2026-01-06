@@ -43,10 +43,10 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    Bridge(Log& log, Clock& clock, BridgeCall::Mode defaultMode);
+    Bridge(Log& log, Clock& clock, MessageConsumer& bus, BridgeCall::Mode defaultMode);
 
-    void setSink(MessageConsumer* sink);
     unsigned getCallCount() const;
+
     void reset();
 
     /**
