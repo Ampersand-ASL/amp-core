@@ -171,6 +171,21 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         // Resample PCM data up to 48K
         _resampler.resample(pcm2, codecBlockSize(_codecType), 
             pcm48k, BLOCK_SIZE_48K);
+
+        // Look for power and decide if this is silence 
+        float rms = 0;
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            float a = pcm48k[i] / 32767.0;
+            rms += (a * a);
+        }
+        // A completely silent frame is ignored. This can happen for stations
+        // that sent continuous silent frames, like the ASL Telephone Portal.
+        if (rms == 0)
+            return;
+        //rms = sqrt(rms);
+        //if (rms > 0) {
+        //    cout << rms << endl;
+        //}
        
         // Transcode to SLIN_48K
         uint8_t slin48k[BLOCK_SIZE_48K * 2];

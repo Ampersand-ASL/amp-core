@@ -1711,6 +1711,8 @@ bool LineIAX2::_progressCall(Call& call) {
             payload.codec = call.codec;
             payload.startMs = call.localStartMs;
             payload.sourceAddrValidated = call.sourceAddrValidated;
+            strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+            strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
 
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());

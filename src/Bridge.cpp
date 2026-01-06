@@ -47,12 +47,6 @@ void Bridge::reset() {
     _calls.visitAll(RESET_VISITOR);
 }
 
-//void Bridge::setSink(MessageConsumer* sink) {
-//    _sink = sink;
-//    for (unsigned i = 0; i < MAX_CALLS; i++) 
-//        _callSpace[i].setSink(sink);
-//}
-
 unsigned Bridge::getCallCount() const {
     unsigned result = 0;
     _calls.visitIf(
@@ -193,8 +187,13 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         // audio to themselves if echo mode is enabled for that call.
         unsigned mixCount = 0;
         for (unsigned j = 0; j < MAX_CALLS; j++) {
-            if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || 
-                (!_calls[i].isEcho() && i == j))
+            // Ignore calls that are inactive or are silent
+            if (!_calls[j].isActive())
+                continue;
+            if (!_calls[j].hasInputAudio())
+                continue;
+            // Ignore ourself if echo is turned off
+            if (i == j && !_calls[j].isEcho())
                 continue;
             mixCount++;
         }
@@ -209,8 +208,13 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             int16_t mixedFrame[BLOCK_SIZE_48K];
             memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
             for (unsigned j = 0; j < MAX_CALLS; j++) {
-                if (!_calls[j].isActive() || !_calls[j].hasInputAudio() || 
-                    (!_calls[i].isEcho() && i == j))
+                // Ignore calls that are inactive or are silent
+                if (!_calls[j].isActive())
+                    continue;
+                if (!_calls[j].hasInputAudio())
+                    continue;
+                // Ignore ourself if echo is turned off
+                if (i == j && !_calls[j].isEcho())
                     continue;
                 _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale, tickMs);
             }
@@ -219,6 +223,11 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K, tickMs);
         }
     }
+
+    // Clear all contributions for this tick
+    for (unsigned j = 0; j < MAX_CALLS; j++)
+        if (_calls[j].isActive()) 
+            _calls[j].clearInputAudio();
 }
 
 void Bridge::oneSecTick() {

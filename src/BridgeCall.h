@@ -111,6 +111,11 @@ public:
     void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale, uint32_t tickMs);    
 
     /**
+     * Clear the call's contribution so that we never use it again.
+     */
+    void clearInputAudio();
+
+    /**
      * This provides the call with the mixed audio frame for the designated tick interval.
      * 
      * @param tickMs The start of the time interval for which this frame is applicable.

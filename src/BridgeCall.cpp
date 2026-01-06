@@ -181,7 +181,9 @@ void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize,
     const uint8_t* p = _stageIn.body();
     for (unsigned i = 0; i < blockSize; i++, p += 2)
         pcmBlock[i] += scale * (float)unpack_int16_le(p);
-    // Clear the staging area so that we don't contribute this frame again
+}
+
+void BridgeCall::clearInputAudio() {
     _stageIn.clear();
 }
 
