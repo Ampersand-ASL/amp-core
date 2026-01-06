@@ -200,8 +200,7 @@ private:
         PAUSE_AFTER_RECORD,
         TTS_AFTER_RECORD,
         PLAYING,
-        TIMEDOUT,
-        SWEEP_ACTIVE
+        TIMEDOUT
     };
 
     ParrotState _parrotState = ParrotState::NONE;

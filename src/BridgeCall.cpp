@@ -121,6 +121,11 @@ void BridgeCall::consume(const Message& frame) {
                 _log->info("Starting sweep");
                 _loadSweep(_playQueue);
                 _parrotState = ParrotState::PLAYING;            
+            } else if (payload->symbol == '2') {
+                _log->info("Starting tone");
+                // A 5 second tone at 440 Hz
+                _loadCw(0.5, 440, 50 * 5, _playQueue);
+                _parrotState = ParrotState::PLAYING;            
             }
         }
     } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
@@ -406,25 +411,6 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         } else {
             _bridgeOut.consume(_makeMessage(_playQueue.front(), tickMs, _lineId, _callId));
             _playQueue.pop();
-        }
-    }
-    else if (_parrotState == ParrotState::SWEEP_ACTIVE) {
-        if (_clock->isPast(_sweepTime + 1000)) {
-            _log->info("Sweep end");
-            _parrotState = ParrotState::WAITING_FOR_RECORD;
-            _parrotStateStartMs = _clock->time();
-        }
-        else {
-            // Generate audio 
-            _toneOmega = 2.0f * 3.14159f * 400.0f / 48000.0f;
-            int16_t data[BLOCK_SIZE_48K];
-            for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-                data[i] = (0.5 * cos(_tonePhi)) * 32767.0f;
-                _tonePhi += _toneOmega;
-                _tonePhi = fmod(_tonePhi, 2.0f * 3.14159f);
-            }
-            // Pass into the output pipeline for transcoding, etc.
-            _bridgeOut.consume(_makeMessage(PCM16Frame(data, BLOCK_SIZE_48K), tickMs, _lineId, _callId));
         }
     }
 }
