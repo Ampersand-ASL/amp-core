@@ -1302,14 +1302,23 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     }
     // DTMF press
     else if (frame.getType() == 12) {
-        _log.info("DTMF (12) %c", (char)frame.getSubclass());
+        _log.info("Call %u DTMF Press %c", call.localCallId, (char)frame.getSubclass());
+
+        PayloadDtmfPress payload;
+        payload.symbol = (char)frame.getSubclass();
+
+        Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+        msg.setSource(_busId, call.localCallId);
+        msg.setDest(_destLineId, DEST_CALL_ID);
+        _bus.consume(msg);
     }
-    // DTMF
+    // DTMF release
     else if (frame.getType() == 1) {
-        _log.info("DTMF (11) %c", (char)frame.getSubclass());
+        _log.info("Call %u DTMF Release %c", call.localCallId, (char)frame.getSubclass());
     }
     else {
-        _log.info("UNRECOGNIZED FRAME %d/%d", 
+        _log.info("Call %u UNRECOGNIZED FRAME %d/%d", call.localCallId,
             frame.getType(), frame.getSubclass());
         _log.infoDump("Frame", frame.buf(), frame.size());
     }
@@ -1877,8 +1886,7 @@ void LineIAX2::consume(const Message& msg) {
                 else if (msg.getType() == Message::Type::SIGNAL) {
                     if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
                         line->_hangupCall(call);
-                    }
-                    else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
+                    } else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
                         line->_log.info("Explicit unkey consumed");
                     }
                 }

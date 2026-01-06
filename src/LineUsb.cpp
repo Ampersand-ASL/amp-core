@@ -75,9 +75,12 @@ to /dev/dsp.
 
 /usr/share/alsa.conf
 
-Example of interacting with mixer: https://radutomuleasa.dev/2020-04-04-alsalib/
-How simple_usbradio does it: https://github.com/AllStarLink/app_rpt/blob/fa8830dec5f899d9080e1385515c636af88a80e6/res/res_usbradio.c#L160
-ALSA summary docs: https://www.volkerschatz.com/noise/alsa.html
+References
+==========
+* Example of interacting with mixer: https://radutomuleasa.dev/2020-04-04-alsalib/
+* How simple_usbradio does it: https://github.com/AllStarLink/app_rpt/blob/fa8830dec5f899d9080e1385515c636af88a80e6/res/res_usbradio.c#L160
+* ALSA summary docs: https://www.volkerschatz.com/noise/alsa.html
+* A good discussion on setting play/capture levels (dB vs 0-1000): https://github.com/AllStarLink/app_rpt/pull/411
 
 # The directory ov vendor product IDs:
 cat /var/lib/usbutils/usb.ids 

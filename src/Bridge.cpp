@@ -118,7 +118,9 @@ void Bridge::consume(const Message& msg) {
     else if (msg.getType() == Message::AUDIO || 
              msg.getType() == Message::AUDIO_INTERPOLATE || 
              (msg.getType() == Message::SIGNAL && 
-              msg.getFormat() == Message::SignalType::RADIO_UNKEY)) {
+              msg.getFormat() == Message::SignalType::RADIO_UNKEY) ||
+             (msg.getType() == Message::SIGNAL && 
+              msg.getFormat() == Message::SignalType::DTMF_PRESS)) {
 
         _calls.visitIf(
             // Visitor

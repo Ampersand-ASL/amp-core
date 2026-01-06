@@ -184,7 +184,8 @@ function loadUi(name, data, doc) {
 }
 
 function storeUi(name, formObject, data) {
-    data[name] = formObject[name].trim();
+    if (name in formObject)
+        data[name] = formObject[name].trim();
 }
 
 async function configLoad() {

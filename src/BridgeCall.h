@@ -36,6 +36,9 @@ class Clock;
 
 class Bridge;
 
+/**
+ * Each participant in a conference (i.e. any Line) has an instance of this class
+ */
 class BridgeCall {
 public:
 
@@ -166,6 +169,8 @@ private:
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
+    void _loadSweep(std::queue<PCM16Frame>& queue);
+    void _loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue);
 
     /**
      * Puts one 16K LE frame onto the queue provided
@@ -195,7 +200,8 @@ private:
         PAUSE_AFTER_RECORD,
         TTS_AFTER_RECORD,
         PLAYING,
-        TIMEDOUT
+        TIMEDOUT,
+        SWEEP_ACTIVE
     };
 
     ParrotState _parrotState = ParrotState::NONE;

@@ -46,6 +46,34 @@ using json = nlohmann::json;
 
 static const unsigned DEST_CALL_ID = 1;
 
+/* 
+External Resources
+------------------
+In order to simplify deployment, the static asset files (.html, .css, etc.) 
+are converted into static resources and linked directly into the binary. This 
+is done using the xxd command. Here's an example of what this looks like in a 
+typical CMake file:
+
+# Converting an html file into a .c file 
+set(RESOURCE0 "${CMAKE_CURRENT_SOURCE_DIR}/amp-core/www/index.html")
+set(OBJECT0 "${CMAKE_CURRENT_BINARY_DIR}/resource-amp-core-www-index.c")
+set(NAME0 "_amp_core_www_index_html")
+add_custom_command(
+    OUTPUT ${OBJECT0}
+    COMMAND xxd
+    ARGS 
+        -n ${NAME0}
+        -i 
+        ${RESOURCE0}
+        ${OBJECT0}
+    DEPENDS ${RESOURCE0}
+)
+*/
+extern unsigned char _amp_core_www_index_html[];
+extern unsigned int _amp_core_www_index_html_len;
+extern unsigned char _amp_core_www_config_html[];
+extern unsigned int _amp_core_www_config_html_len;
+
 namespace kc1fsz {
 
     namespace amp {
@@ -107,9 +135,6 @@ void WebUi::consume(const Message& msg) {
             });
         }
     }
-        //msg.isSignal(Message::SignalType::CALL_STATUS)) {
-        //cout << "Got signal" << endl;
-    //}
 }
 
 bool WebUi::run2() {
@@ -137,7 +162,9 @@ void WebUi::_thread() {
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        res.set_file_content("../amp-core/www/index.html");
+        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/index.html");
     });
     svr.Get("/status", [this](const httplib::Request &, httplib::Response &res) {
         json o;
@@ -227,7 +254,9 @@ void WebUi::_thread() {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        res.set_file_content("../amp-core/www/config.html");
+        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
         json j = _config.getCopy();
@@ -260,7 +289,7 @@ void WebUi::_thread() {
             o["desc"] = "None";
             a.push_back(o);
 
-            int rc = visitUSBDevices2([&a](
+            visitUSBDevices2([&a](
                 const char* vendorName, const char* productName, 
                 const char* vendorId, const char* productId,                 
                 const char* busId, const char* portId) {
@@ -303,7 +332,7 @@ void WebUi::_thread() {
         o["desc"] = "None";
         a.push_back(o);
 
-        int rc = visitUSBDevices2([&a](const char* vendorName, const char* productName, 
+        visitUSBDevices2([&a](const char* vendorName, const char* productName, 
             const char* vendorId, const char* productId,             
             const char* busId, const char* portId) {
                 // Skip some things that aren't relevant
