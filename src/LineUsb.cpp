@@ -308,6 +308,13 @@ bool LineUsb::run2() {
     return false;
 }
 
+void LineUsb::tenSecTick() {
+    if (_underrunCount != _underrunCountReported) {
+        _underrunCountReported = _underrunCount;
+        _log.info("LineUSB Underrun %u", _underrunCount);
+    }
+}
+
 void LineUsb::consume(const Message& frame) {
     
     if (frame.isSignal(Message::SignalType::COS_ON)) {

@@ -53,6 +53,8 @@ public:
 
     void close();
 
+    unsigned getUnderrunCount() const { return _underrunCount; }
+
     // ----- MessageConsumer --------------------------------------------------
 
     virtual void consume(const Message& frame);
@@ -61,6 +63,7 @@ public:
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
+    virtual void tenSecTick();
 
 protected:
 
@@ -99,6 +102,7 @@ private:
 
     unsigned _playFrameCount = 0;
     unsigned _underrunCount = 0;
+    unsigned _underrunCountReported = 0;
     unsigned _captureErrorCount = 0;
     unsigned _playErrorCount = 0;
 };
