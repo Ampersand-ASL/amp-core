@@ -80,14 +80,16 @@ namespace kc1fsz {
     namespace amp {
 
 WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
-    unsigned networkDestLineId, unsigned radioDestLineId, const char* configFileName) 
+    unsigned networkDestLineId, unsigned radioDestLineId, const char* configFileName,
+    const char* version) 
 :   _log(log), 
     _clock(clock),
     _consumer(cons),
     _listenPort(listenPort),
     _networkDestLineId(networkDestLineId),
     _radioDestLineId(radioDestLineId),
-    _configFileName(configFileName) {
+    _configFileName(configFileName),
+    _version(version) {
 
 #ifdef _WIN32
     _beginthread(_uiThread, 0, (void*)this);
