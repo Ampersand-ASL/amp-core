@@ -227,8 +227,7 @@ void WebUi::_thread() {
                 }
             } 
             else if (data["button"] == "drop") {
-                // #### TODO: CHANGE
-                string localNode = "672730";
+                string localNode = "*";
                 string targetNode = data["node"];
                 if (!targetNode.empty()) {
                     // NOTE: Drop uses the same payload as call

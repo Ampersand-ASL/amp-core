@@ -328,7 +328,7 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
         // Predicate
         [localNumber, targetNumber](const Call& call) {
             return call.remoteNumber == targetNumber && 
-              call.localNumber == localNumber && 
+              (strcmp("*", localNumber) == 0 || call.localNumber == localNumber) && 
               call.state != Call::State::STATE_TERMINATE_WAITING && 
               call.state != Call::State::STATE_TERMINATED;
         }
