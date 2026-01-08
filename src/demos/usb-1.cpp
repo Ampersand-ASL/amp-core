@@ -37,13 +37,12 @@ int main(int, const char**) {
     int rc2 = snd_ctl_open(&ctl, name, 0);
     cout << "open rc " << rc2 << endl;
 
+    // Initialize element list for this device so we can iterate across it
     snd_ctl_elem_list_t* list;
-    // Initialise list
     snd_ctl_elem_list_alloca(&list);
-    
     // Get number of elements
     snd_ctl_elem_list(ctl, list);
-    int listCount = snd_ctl_elem_list_get_count(list);
+    const int listCount = snd_ctl_elem_list_get_count(list);
     // Allocate space for identifiers.  This will need to be released using 
     // snd_ctl_elem_list_free_space() later
     snd_ctl_elem_list_alloc_space(list, listCount);
@@ -81,12 +80,13 @@ int main(int, const char**) {
             cout << "  min  " << snd_ctl_elem_info_get_min(info) << endl;
             cout << "  max  " << snd_ctl_elem_info_get_max(info) << endl;
 
-            // Check to see if TVL information is available
+            // Check to see if TVL information is available. The TLV feature is designed to 
+            // transfer data in a shape of Type/Length/Value, between a driver and any userspace 
+            // applications. The main purpose is to attach supplement information for elements 
+            // to an element set; e.g. dB range.
             if (snd_ctl_elem_info_is_tlv_readable(info)) {
-                cout << "  TLV readable" << endl;
-
-                unsigned int tlv[32];
-                unsigned int tlvSize = 32;
+                const unsigned int tlvSize = 32;
+                unsigned int tlv[tlvSize];
                 int rc6 = snd_ctl_elem_tlv_read(ctl, elem_id, tlv, tlvSize);
                 if (rc6 != 0)
                     return -1;
@@ -99,8 +99,7 @@ int main(int, const char**) {
                 int tlvInfoSize = snd_tlv_parse_dB_info(tlv, 32, &dbTlv);
                 if (tlvInfoSize > 0) {                
 
-                    // NOTE: Gains are in in 0.01dB units
-                    
+                    // NOTE: Gains are in in 0.01dB units                    
                     long dbMin, dbMax;
                     int rc7 = snd_tlv_get_dB_range(dbTlv, 
                         snd_ctl_elem_info_get_min(info),
@@ -123,12 +122,9 @@ int main(int, const char**) {
 
         cout << endl;
     }
-
-    // Do something useful with the list...
     
     // Cleanup
     snd_ctl_elem_list_free_space(list);
-
     snd_ctl_close(ctl);
 
     return 0;

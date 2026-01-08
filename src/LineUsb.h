@@ -110,11 +110,21 @@ private:
     unsigned _playErrorCount = 0;
 };
 
-int setMixer(const char* deviceName, const char *paramName, int v1, int v2);
+// ====== Utility Functions ======================================================
 
 /**
- * @returns The maximum value supported by the parameter, or -1 on error
+ * Sets the value on a mixer element
  */
-int getMixerMax(const char* deviceName, const char* paramName);
+int setMixer(const char* deviceName, const char *paramName, unsigned count, int v1, int v2);
+int setMixer1(const char* deviceName, const char *paramName, int v);
+int setMixer2(const char* deviceName, const char *paramName, int v1, int v2);
+
+/**
+ * @returns 0 if the range was obtained. -1 means that the device name was invalid. -2 means 
+ * that the parameter is not found.
+ */
+int getMixerRange(const char* deviceName, const char* paramName, int* minV, int* maxV);
+
+int getConvertMixerValueToDb(const char* deviceName, const char* paramName, int value, float* db);
 
 }

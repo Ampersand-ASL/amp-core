@@ -391,3 +391,21 @@ add_executable(usb-1
 target_include_directories(usb-1 PRIVATE src)
 target_include_directories(usb-1 PRIVATE sound-map/include)
 target_link_libraries(usb-1 -lasound -lusb-1.0)
+
+# ----- usb-2 -----------------------------------------------------------
+
+add_executable(usb-2
+  src/demos/usb-2.cpp
+  src/LineUsb2.cpp
+  sound-map/src/sound-map.cpp
+  sound-map/src/sound-map-2.cpp
+  sound-map/src/usb-dir.c
+)
+
+target_include_directories(usb-2 PRIVATE src)
+target_include_directories(usb-2 PRIVATE include)
+target_include_directories(usb-2 PRIVATE cmsis-dsp-mock/include)
+target_include_directories(usb-2 PRIVATE kc1fsz-sdrc/sw/src)
+target_include_directories(usb-2 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(usb-2 PRIVATE sound-map/include)
+target_link_libraries(usb-2 -lasound -lusb-1.0)
