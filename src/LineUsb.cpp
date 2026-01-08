@@ -512,7 +512,7 @@ void LineUsb::_playIfPossible() {
                 // come back to get things rolling with a re-write.
                 // We expect an underrun at the very beginning of a talkspurt
                 // so there is a flag to supress the message in that case.
-                if (_startOfTs)
+                if (!_startOfTs)
                     _underrunCount++;
                 snd_pcm_recover(_playH, rc, 1);
                 // Stuff some slience into the hardware since we are behind in
@@ -529,7 +529,8 @@ void LineUsb::_playIfPossible() {
                         break;
                     totalUnderrunWrite += rc3;
                 }
-                //_log.info("Play underrun detected %d", totalUnderrunWrite);
+                if (!_startOfTs)
+                    _log.info("Play underrun detected (%d)", totalUnderrunWrite);
             } else if (rc == -11) {
                 // This is the case that the card can't accept anything more. 
                 break;
