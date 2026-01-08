@@ -75,9 +75,12 @@ to /dev/dsp.
 
 /usr/share/alsa.conf
 
-Example of interacting with mixer: https://radutomuleasa.dev/2020-04-04-alsalib/
-How simple_usbradio does it: https://github.com/AllStarLink/app_rpt/blob/fa8830dec5f899d9080e1385515c636af88a80e6/res/res_usbradio.c#L160
-ALSA summary docs: https://www.volkerschatz.com/noise/alsa.html
+References
+==========
+* Example of interacting with mixer: https://radutomuleasa.dev/2020-04-04-alsalib/
+* How simple_usbradio does it: https://github.com/AllStarLink/app_rpt/blob/fa8830dec5f899d9080e1385515c636af88a80e6/res/res_usbradio.c#L160
+* ALSA summary docs: https://www.volkerschatz.com/noise/alsa.html
+* A good discussion on setting play/capture levels (dB vs 0-1000): https://github.com/AllStarLink/app_rpt/pull/411
 
 # The directory ov vendor product IDs:
 cat /var/lib/usbutils/usb.ids 
@@ -120,8 +123,13 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     int err;
 
     if ((err = snd_pcm_open(&playH, alsaDeviceName, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
-        _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
-        return -10;
+        if (err == -16) {
+            _log.error("Can't open sound device %s, busy", alsaDeviceName);
+            return -12;
+        } else {
+            _log.error("Cannot open playback device %s %d", alsaDeviceName, err);
+            return -10;
+        }
     }
     // Make sure this handle gets closed if we fail during the setup process
     raiiholder<snd_pcm_t> playHolder(playH, _sndCloser);
@@ -149,13 +157,18 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     unsigned int periodTimeUs = 20000;
     // Request a max period
     snd_pcm_hw_params_set_period_time(playH, play_hw_params, periodTimeUs, 0);
-    // Let the buffer store 8x 20ms frames of sound
-    unsigned int bufferTimeUs = 20000 * 8;
+    // Let the buffer store 16x 20ms frames of sound
+    unsigned int bufferTimeUs = 20000 * 16;
     snd_pcm_hw_params_set_buffer_time(playH, play_hw_params, bufferTimeUs, 0);
     if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
         _log.error("Play parameters %d", err);
         return -1;
     }
+
+    //unsigned int rate_num;
+    //unsigned int rate_den;
+    //int rc5 = snd_pcm_hw_params_get_rate_numden(play_hw_params, &rate_num, &rate_den);
+    //cout << rc5 << " " << rate_num << " " << rate_den << endl;
 
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
@@ -300,25 +313,19 @@ bool LineUsb::run2() {
     return false;
 }
 
+void LineUsb::tenSecTick() {
+    if (_underrunCount != _underrunCountReported) {
+        _underrunCountReported = _underrunCount;
+        //_log.info("LineUSB Underrun %u", _underrunCount);
+    }
+}
+
 void LineUsb::consume(const Message& frame) {
     
     if (frame.isSignal(Message::SignalType::COS_ON)) {
         _setCosStatus(true);
     } else if (frame.isSignal(Message::SignalType::COS_OFF)) {
         _setCosStatus(false);
-    } else if (frame.getType() == Message::Type::AUDIO) {
-        // Detect transitions from silence to playing
-        if (!_playing) {
-            // When re-starting after a period of silence we "stuff a frame"
-            // of extra silence into the USB ALSA buffer to reduce the chances of 
-            // getting behind later due to subtle timing differences.
-            if (PLAY_ACCUMULATOR_CAPACITY - _playAccumulatorSize >= BLOCK_SIZE_48K) {
-                // Move new audio block into the play accumulator 
-                memset(&(_playAccumulator[_playAccumulatorSize]), 0,
-                    BLOCK_SIZE_48K * sizeof(int16_t));
-                _playAccumulatorSize += BLOCK_SIZE_48K;
-            }
-        }
     }
 
     // Then go through the normal consume process
@@ -440,6 +447,11 @@ void LineUsb::_captureIfPossible() {
 
 // ===== Play Related =========================================================
 
+void LineUsb::_playStart() {
+    _startOfTs = true;
+    LineRadio::_playStart();
+}
+
 /**
  * This will be called by the base class after all decoding has happened.
  */
@@ -486,9 +498,11 @@ void LineUsb::_playIfPossible() {
         pack_int16_le(_playAccumulator[i], p2 + 2);
     }
 
-    // This is a loop to allow an attempt to recover after an underrun
-    for (unsigned i = 0; i < 2; i++) {
-        // Here is where we send the audio to the hardware
+    // This is a loop so that we push as much as possible into the sound buffer
+    while (_playAccumulatorSize) {
+        // Here is where we send the audio to the hardware. We attempt to write 
+        // everything in the buffer knowing that the hardware might not accept all
+        // of it.
         int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
         if (rc < 0) {
             if (rc == -EPIPE) {
@@ -496,13 +510,29 @@ void LineUsb::_playIfPossible() {
                 // us that it was underrun prior to us starting to stream again.
                 // We recover the card and then wait for the polling loop to 
                 // come back to get things rolling with a re-write.
-                _underrunCount++;
                 // We expect an underrun at the very beginning of a talkspurt
-                // so there is a flag to supress the message
-                snd_pcm_recover(_playH, rc, 1); 
+                // so there is a flag to supress the message in that case.
+                if (!_startOfTs)
+                    _underrunCount++;
+                snd_pcm_recover(_playH, rc, 1);
+                // Stuff some slience into the hardware since we are behind in
+                // sound production.
+                int totalUnderrunWrite = 0;
+                const unsigned stuffFrames = BLOCK_SIZE_48K;
+                // frames * 2 channels * 2 bytes per channel
+                const unsigned stuffBufferSize = stuffFrames * 2 * 2;
+                uint8_t stuffBuffer[stuffBufferSize];
+                memset(stuffBuffer, 0, stuffBufferSize);
+                for (unsigned i = 0; i < 8; i++) {
+                    int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
+                    if (rc3 <= 0)
+                        break;
+                    totalUnderrunWrite += rc3;
+                }
+                if (!_startOfTs)
+                    _log.info("Play underrun detected (%d)", totalUnderrunWrite);
             } else if (rc == -11) {
-                _log.info("Write full");
-                // This is the case that the card can't accept anything
+                // This is the case that the card can't accept anything more. 
                 break;
             } else {
                 _log.error("Write failed %d", rc);
@@ -511,7 +541,8 @@ void LineUsb::_playIfPossible() {
                 _inError = true;
                 break;
             }
-        } else if (rc > 0) {
+        } else if (rc > 0) {            
+            _startOfTs = false;
             if ((unsigned)rc == _playAccumulatorSize) {
                 _playAccumulatorSize = 0;
             } else {

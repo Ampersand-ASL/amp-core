@@ -32,7 +32,7 @@ using json = nlohmann::json;
 namespace kc1fsz {
     namespace amp {
 
-const char* ConfigPoller::DEFAULT_CONFIG = "{ \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usbinvert\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"500\", \"aslTxMixBSet\":\"500\", \"aslRxMixerSet\":\"500\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
+const char* ConfigPoller::DEFAULT_CONFIG = "{ \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"500\", \"aslTxMixBSet\":\"500\", \"aslRxMixerSet\":\"500\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
 
 ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb) 
 :   _log(log),
@@ -41,27 +41,33 @@ ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, std::function<void
 }
 
 void ConfigPoller::oneSecTick() {   
+
     try {
+        // Get the last update time. This also has the side-effect of 
+        // validating the location of the config file.
         auto ftime = std::filesystem::last_write_time(_fn);
+        _configLoadErrorDisplayed = false;
+
         if (_startup || ftime > _lastUpdate) {
             _lastUpdate = ftime;
             _startup = false;
-            ifstream cfg(_fn);
-            std::stringstream buffer;
-            buffer << cfg.rdbuf();
-            cfg.close();
             try {
-                json j = json::parse(buffer.str());
+                json j = json::parse(ifstream(_fn));
                 _populateDefaults(j);
-                // Fire the callback
+                // Fire the callback 
                 _cb(j);
-
             } catch(json::exception& ex) {
-                _log.error("Invalid config file format %s", ex.what());
+                _log.error("Config file format error %s", ex.what());
+            } catch (exception& ex) {
+                _log.error("Unable to load config: %s", ex.what());
             }
         }
+
     } catch (exception& ex) {
-        _log.error("Unable to load config file %s %s", _fn.c_str(), ex.what());
+        if (!_configLoadErrorDisplayed) {
+            _log.error("Unable to load config %s", ex.what());
+            _configLoadErrorDisplayed = true;
+        }
     }
 }
 

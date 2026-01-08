@@ -36,6 +36,9 @@ class Clock;
 
 class Bridge;
 
+/**
+ * Each participant in a conference (i.e. any Line) has an instance of this class
+ */
 class BridgeCall {
 public:
 
@@ -108,6 +111,11 @@ public:
     void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale, uint32_t tickMs);    
 
     /**
+     * Clear the call's contribution so that we never use it again.
+     */
+    void clearInputAudio();
+
+    /**
      * This provides the call with the mixed audio frame for the designated tick interval.
      * 
      * @param tickMs The start of the time interval for which this frame is applicable.
@@ -166,6 +174,8 @@ private:
     void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
+    void _loadSweep(std::queue<PCM16Frame>& queue);
+    void _loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue);
 
     /**
      * Puts one 16K LE frame onto the queue provided

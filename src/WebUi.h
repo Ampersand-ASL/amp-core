@@ -43,7 +43,7 @@ public:
 
     WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
         unsigned networkDestLineId, unsigned radioDestLineId,
-        const char* configFileName);
+        const char* configFileName, const char* version);
 
     void setConfig(const json& config) { _config.set(config); }
 
@@ -76,6 +76,7 @@ private:
     const unsigned _networkDestLineId;
     const unsigned _radioDestLineId;
     const std::string _configFileName;
+    const std::string _version;
 
     std::atomic<bool> _cos;
     bool _ptt = false;

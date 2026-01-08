@@ -60,7 +60,8 @@ public:
         DROP_ALL_NODES,
         // Tells an audio interface that the COS signal has been activated/deactivated
         COS_ON,
-        COS_OFF
+        COS_OFF,
+        DTMF_PRESS
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
@@ -137,6 +138,10 @@ struct PayloadCallStatus {
 struct PayloadCall {
     char localNumber[16];
     char targetNumber[16];
+};
+
+struct PayloadDtmfPress {
+    char symbol;
 };
 
 }

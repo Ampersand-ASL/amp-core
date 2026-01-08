@@ -53,6 +53,8 @@ public:
 
     void close();
 
+    unsigned getUnderrunCount() const { return _underrunCount; }
+
     // ----- MessageConsumer --------------------------------------------------
 
     virtual void consume(const Message& frame);
@@ -61,8 +63,11 @@ public:
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
+    virtual void tenSecTick();
 
 protected:
+
+    void _playStart();
 
     /**
      * This function is called to do the actual playing of the 48K PCM.
@@ -92,6 +97,7 @@ private:
     int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY];
     unsigned _playAccumulatorSize = 0;
 
+    bool _startOfTs = false;
     uint32_t _captureCount = 0;
     bool _inError = false;
 
@@ -99,6 +105,7 @@ private:
 
     unsigned _playFrameCount = 0;
     unsigned _underrunCount = 0;
+    unsigned _underrunCountReported = 0;
     unsigned _captureErrorCount = 0;
     unsigned _playErrorCount = 0;
 };

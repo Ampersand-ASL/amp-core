@@ -127,6 +127,15 @@ void LineIAX2::setAuthMode(AuthMode mode) {
 
 int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
 
+    // If the configuration is changing then ignore the request
+    if (addrFamily == _addrFamily &&
+        _iaxListenPort == listenPort &&
+        _localUser == localUser &&
+        _iaxSockFd != 0 &&
+        _dnsSockFd != 0) {
+        return 0;
+    }
+
     close();
 
     _addrFamily = addrFamily;
@@ -235,6 +244,8 @@ void LineIAX2::close() {
         ::close(_iaxSockFd);
     if (_dnsSockFd) 
         ::close(_dnsSockFd);
+    _iaxSockFd = 0;
+    _dnsSockFd = 0;
     _iaxListenPort = 0;
     _addrFamily = 0;
 } 
@@ -317,7 +328,7 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
         // Predicate
         [localNumber, targetNumber](const Call& call) {
             return call.remoteNumber == targetNumber && 
-              call.localNumber == localNumber && 
+              (strcmp("*", localNumber) == 0 || call.localNumber == localNumber) && 
               call.state != Call::State::STATE_TERMINATE_WAITING && 
               call.state != Call::State::STATE_TERMINATED;
         }
@@ -1302,14 +1313,23 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     }
     // DTMF press
     else if (frame.getType() == 12) {
-        _log.info("DTMF (12) %c", (char)frame.getSubclass());
+        _log.info("Call %u DTMF Press %c", call.localCallId, (char)frame.getSubclass());
+
+        PayloadDtmfPress payload;
+        payload.symbol = (char)frame.getSubclass();
+
+        Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+        msg.setSource(_busId, call.localCallId);
+        msg.setDest(_destLineId, DEST_CALL_ID);
+        _bus.consume(msg);
     }
-    // DTMF
+    // DTMF release
     else if (frame.getType() == 1) {
-        _log.info("DTMF (11) %c", (char)frame.getSubclass());
+        _log.info("Call %u DTMF Release %c", call.localCallId, (char)frame.getSubclass());
     }
     else {
-        _log.info("UNRECOGNIZED FRAME %d/%d", 
+        _log.info("Call %u UNRECOGNIZED FRAME %d/%d", call.localCallId,
             frame.getType(), frame.getSubclass());
         _log.infoDump("Frame", frame.buf(), frame.size());
     }
@@ -1702,6 +1722,8 @@ bool LineIAX2::_progressCall(Call& call) {
             payload.codec = call.codec;
             payload.startMs = call.localStartMs;
             payload.sourceAddrValidated = call.sourceAddrValidated;
+            strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+            strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
 
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
@@ -1877,8 +1899,7 @@ void LineIAX2::consume(const Message& msg) {
                 else if (msg.getType() == Message::Type::SIGNAL) {
                     if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
                         line->_hangupCall(call);
-                    }
-                    else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
+                    } else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
                         line->_log.info("Explicit unkey consumed");
                     }
                 }

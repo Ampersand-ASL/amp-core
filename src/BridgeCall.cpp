@@ -113,7 +113,22 @@ void BridgeCall::consume(const Message& frame) {
     if (frame.getType() == Message::Type::TTS_AUDIO ||
         frame.getType() == Message::Type::TTS_END) {
         _processTTSAudio(frame);
-    } else {
+    } else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
+        assert(frame.size() == sizeof(PayloadDtmfPress));
+        PayloadDtmfPress* payload = (PayloadDtmfPress*)frame.body();
+        if (_mode == Mode::PARROT) {
+            if (payload->symbol == '1') {
+                _log->info("Starting sweep");
+                _loadSweep(_playQueue);
+                _parrotState = ParrotState::PLAYING;            
+            } else if (payload->symbol == '2') {
+                _log->info("Starting tone");
+                // A 5 second tone at 440 Hz
+                _loadCw(0.5, 440, 50 * 5, _playQueue);
+                _parrotState = ParrotState::PLAYING;            
+            }
+        }
+    } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
         _bridgeIn.consume(frame);       
     }
 }
@@ -166,7 +181,9 @@ void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize,
     const uint8_t* p = _stageIn.body();
     for (unsigned i = 0; i < blockSize; i++, p += 2)
         pcmBlock[i] += scale * (float)unpack_int16_le(p);
-    // Clear the staging area so that we don't contribute this frame again
+}
+
+void BridgeCall::clearInputAudio() {
     _stageIn.clear();
 }
 
@@ -499,6 +516,35 @@ void BridgeCall::_loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM
         queue.push(*it);
 }
 
+void BridgeCall::_loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue) {
+    float toneOmega = 2.0f * 3.14159f * hz / 48000.0f;
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * cos(_tonePhi)) * 32767.0f;
+            _tonePhi += toneOmega;
+            _tonePhi = fmod(_tonePhi, 2.0f * 3.14159f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        queue.push(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
+
+void BridgeCall::_loadSweep(std::queue<PCM16Frame>& queue) {    
+    // Alternating intro
+    for (unsigned i = 0; i < 8; i++) {
+        _loadCw(0.5, 400, 2, queue);
+        _loadCw(0.5, 800, 2, queue);
+    }
+    unsigned upperHz = 4000;
+    if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) 
+        upperHz = 8000;
+    // Sweep
+    for (unsigned f = 0; f < upperHz; f += 100)
+        _loadCw(0.5, f, 5, queue);
+}
 
 void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio, 
     float* peakPower, float* avgPower) {

@@ -25,12 +25,6 @@ struct service_thread_args {
     kc1fsz::Log* log;
 };
 
-void service_thread(void* l);
-
-// Some utilitity functions
-
-void setThreadName(const char*);
-
-void lowerThreadPriority();
+void service_thread(const service_thread_args* args);
 
 

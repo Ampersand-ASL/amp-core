@@ -137,6 +137,9 @@ protected:
     bool _cosActive = false;
     bool _ctcssActive = true;
 
+    bool _playing = false;
+    unsigned _tsFrameCount = 0;
+
     bool _capturing = false;
     uint32_t _lastPlayedFrameMs = 0;
     uint32_t _lastCapturedFrameMs = 0;
@@ -175,8 +178,6 @@ protected:
     int16_t _clipThreshold = 32432;
     unsigned _captureClips = 0;
     unsigned _playClips = 0;
-
-    bool _playing = false;
 };
 
 }
