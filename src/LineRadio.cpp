@@ -255,6 +255,7 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
         BLOCK_SIZE_48K * 2, outBuffer, 0, idealCaptureMs);
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
+
     _captureConsumer.consume(msg);
 }
 
@@ -272,6 +273,7 @@ void LineRadio::_analyzePlayedAudio(const int16_t* frame, unsigned frameLen) {
         _playPcmValueSum += sample;
         _playPcmValueCount++;
     }
+    _tsFrameCount++;
 }
 
 void LineRadio::_captureStart() {
@@ -306,6 +308,7 @@ void LineRadio::_playStart() {
         snprintf(fname, 32, "play-%u-%06u.txt", _startTimeMs, _playRecordCounter);
         _playFile.open(fname, std::ios_base::out);
     }
+    _tsFrameCount = 0;
 }
 
 void LineRadio::_playEnd() {

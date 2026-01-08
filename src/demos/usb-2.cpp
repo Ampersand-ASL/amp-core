@@ -41,8 +41,8 @@ int main(int, const char**) {
 
     // Show in dB
     float minDb, maxDb;
-    getConvertMixerValueToDb(name, "Speaker Playback Volume", minV, &minDb);
-    getConvertMixerValueToDb(name, "Speaker Playback Volume", maxV, &maxDb);
+    convertMixerValueToDb(name, "Speaker Playback Volume", minV, &minDb);
+    convertMixerValueToDb(name, "Speaker Playback Volume", maxV, &maxDb);
     cout << "Range dB " << minDb << " " << maxDb << endl;
 
     return 0;

@@ -36,10 +36,12 @@
 #include "MessageConsumer.h"
 #include "WebUi.h"
 #include "ThreadUtil.h"
+#include "LineUsb.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
 
 using namespace std;
+using namespace kc1fsz;
 using json = nlohmann::json;
 
 // https://github.com/yhirose/cpp-httplib
@@ -256,9 +258,9 @@ void WebUi::_thread() {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
-            "text/html");
-        //res.set_file_content("../amp-core/www/config.html");
+        //res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
         json j = _config.getCopy();
@@ -283,9 +285,50 @@ void WebUi::_thread() {
         auto a = json::array();
 
         string menuName = req.get_param_value("name");      
-        cout << "menuName " << menuName << endl;
         
-        if (menuName == "aslAudioDevice") {
+        if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet" || menuName == "aslRxMixerSet") {
+            string arg = req.get_param_value("arg");      
+            if (arg.starts_with("usb ")) {
+                // Try to locate that sound device and get its volume range
+                int alsaDev;
+                string ossDev;
+                int rc = querySoundMap(arg.substr(4).c_str(), alsaDev, ossDev);
+                if (rc == 0) {
+                    // Get range, first in units and then convert to dB
+                    char name[32];
+                    snprintf(name, 32, "hw:%d", alsaDev);
+                    int rc2, minV, maxV;
+                    // The parameter name depends on whether we are talking about play or capture
+                    if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
+                        rc2 = getMixerRange(name, "Speaker Playback Volume", &minV, &maxV);
+                    }
+                    else if (menuName == "aslRxMixerSet") {
+                        rc2 = getMixerRange(name, "Mic Capture Volume", &minV, &maxV);
+                    }
+                    if (rc2 == 0) {
+                        int minDb = 0, maxDb = 0;
+                        if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
+                            convertMixerValueToDb(name, "Speaker Playback Volume", minV, &minDb);
+                            convertMixerValueToDb(name, "Speaker Playback Volume", maxV, &maxDb);
+                        }
+                        else if (menuName == "aslRxMixerSet") {
+                            convertMixerValueToDb(name, "Mic Capture Volume", minV, &minDb);
+                            convertMixerValueToDb(name, "Mic Capture Volume", maxV, &maxDb);
+                        }
+                        for (int g = maxDb; g >= minDb; g--) {
+                            json o;
+                            char t[32];
+                            snprintf(t, 32, "%d", g);
+                            o["value"] = t;
+                            snprintf(t, 32, "%ddB", g);
+                            o["desc"] = t;
+                            a.push_back(o);
+                        }
+                    }
+                }
+            }
+        }
+        else if (menuName == "aslAudioDevice") {
 
             json o;
             o["value"] = "";

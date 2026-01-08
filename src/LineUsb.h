@@ -42,12 +42,11 @@ public:
 
     /**
      * @param cardNumber The ALSA card number. So the device name is hd:<cardNumber>.
-     * @param playLevelL Used to set the "Speaker Playback Volume" control on the left
-     * side. Range is 0 to 100.
-     * @param playLevelR Used to set the "Speaker Playback Volume" control on the right
-     * side. Range is 0 to 100.
-     * @param captureLevel Used to set the "Mic Capture Volume" control. Range is 
-     * 0 to 100.
+     * @param playLevelL Used to set the "Speaker Playback Volume" control on the left.
+     * in dB.
+     * @param playLevelR Used to set the "Speaker Playback Volume" control on the right,
+     * in dB.
+     * @param captureLevel Used to set the "Mic Capture Volume" control, in dB.
      */
     int open(int cardNumber, int playLevelL, int playLevelR, int captureLevel);
 
@@ -125,6 +124,7 @@ int setMixer2(const char* deviceName, const char *paramName, int v1, int v2);
  */
 int getMixerRange(const char* deviceName, const char* paramName, int* minV, int* maxV);
 
-int getConvertMixerValueToDb(const char* deviceName, const char* paramName, int value, float* db);
+int convertMixerValueToDb(const char* deviceName, const char* paramName, int value, int* db);
+int convertMixerDbToValue(const char* deviceName, const char* paramName, int dB, int* value);
 
 }

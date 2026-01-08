@@ -76,14 +76,23 @@ body {
                     <option value="yes">Yes (Active High)</option>
                 </select>
 
+                <label for="aslTxMixASet">Transmit Mixer A:</label>
+                <select id="aslTxMixASet" name="aslTxMixASet">
+                </select>
+                <label for="aslTxMixBSet">Transmit Mixer B:</label>
+                <select id="aslTxMixBSet" name="aslTxMixBSet">
+                </select>
+                <label for="aslRxMixerSet">Receive Mixer:</label>
+                <select id="aslRxMixerSet" name="aslRxMixerSet">
+                </select>
+                <!--
                 <label for="aslTxMixASet">Transmit Mixer A (0-1000):</label>
                 <input type="text" id="aslTxMixASet" name="aslTxMixASet"/>
                 <label for="aslTxMixBSet">Transmit Mixer B (0-1000):</label>
                 <input type="text" id="aslTxMixBSet" name="aslTxMixBSet"/>
-
                 <label for="aslRxMixerSet">Receive Mixer (0-1000):</label>
                 <input type="text" id="aslRxMixerSet" name="aslRxMixerSet"/>
-               
+                -->
                 <!--
                 <label for="audioDevice">Audio Device:</label>
                 <select id="audioDevice" name="audioDevice">
@@ -157,7 +166,7 @@ body {
  * sent to the server.
  * @param args Optional arguments that can influence the list
  */
-async function loadSelectOptions(baseElId, selectId, args) {
+async function loadSelectOptions(baseElId, selectId, arg) {
     // Get the starting value
     const baseEl = document.getElementById(baseElId);
     const sel = baseEl.querySelector("#" + selectId);
@@ -166,8 +175,8 @@ async function loadSelectOptions(baseElId, selectId, args) {
     // Pull up the choices from the server
     try {
         u = "config-select-options?name=" + selectId;
-        if (args)
-            u += "&args=" + args
+        if (arg)
+            u += "&arg=" + arg
         const response = await fetch(u);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -202,12 +211,14 @@ function storeUi(name, formObject, data) {
 
 // Call this whenever the audio device selection changes so that 
 // the mixer ranges are appropirate for that device.
-function fixMixerRanges() {
+async function fixMixerRanges() {
     // Get the value of the audio device selected
-    const sel = document.getElementById("#aslAudioDevice");
-    loadSelectOptions("config-form", "aslTxMixASet", sel.value)
-    loadSelectOptions("config-form", "aslTxMixVSet", sel.value)
-    loadSelectOptions("config-form", "aslRxMixerSet", sel.value)
+    sel = document.getElementById("aslAudioDevice");
+    await Promise.all([
+        loadSelectOptions("config-form", "aslTxMixASet", sel.value),
+        loadSelectOptions("config-form", "aslTxMixBSet", sel.value),
+        loadSelectOptions("config-form", "aslRxMixerSet", sel.value)
+    ]);
 }
 
 async function configLoad() {
@@ -249,8 +260,10 @@ function configStore() {
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
 
-    // Move across a few specific things 
+    // Make a deep copy of the existing config state
     fullConfig = JSON.parse(sessionStorage.getItem("config"))
+
+    // Move across a few specific things 
 
     // ----- Top Section -----------------------------------------------------
 
@@ -291,15 +304,17 @@ document.addEventListener('DOMContentLoaded', async() => {
     // Since the mixer menus depend on the selected audio deveice we need to attach 
     // a change notification callaback
     document.getElementById("aslAudioDevice").addEventListener("change", function(event) {
-        console.log("Menu changed");
         fixMixerRanges();
     });
 
     // Important that these steps are serialized
     await loadSelectOptions("config-form", "aslAudioDevice");
     await configLoad();
-    // This depends on which option was chosen
-    fixMixerRanges();
+    // This depends on which option was chosen on the sound device
+    await fixMixerRanges();
+    // A second load to get the mixer level menus loaded properly
+    // #### TODO: Clean up this hack
+    await configLoad();
 });
     </script>
 </html>

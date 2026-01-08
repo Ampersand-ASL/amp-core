@@ -214,33 +214,37 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     snprintf(alsaDeviceName2, 16, "hw:%d", cardNumber);
     const char* playMixerName = "Speaker Playback Volume";
     const char* captureMixerName = "Mic Capture Volume";
-    const int LEVEL_SCALE = 1000;
 
-    // The device is queried to see what the range of volume values are.
-    // Typically this will be something like "37" which represent the maximum
-    // of a range of vaules from 0->37, which maps to an actual range of 
-    // -37dB to 0dB. 
-    //
-    int minPlayVolume, maxPlayVolume;
-    getMixerRange(alsaDeviceName2, playMixerName, &minPlayVolume, &maxPlayVolume);
-    int valueL = maxPlayVolume * playLevelL / LEVEL_SCALE;
-    int valueR = maxPlayVolume * playLevelR / LEVEL_SCALE;
+    int valueL, valueR;
+    int rc6 = convertMixerDbToValue(alsaDeviceName2, playMixerName, playLevelL, &valueL);
+    if (rc6 != 0) {
+        _log.error("Failed to convert mixer play value from %d dB", playLevelL);
+        return -6;
+    }
+    int rc7 = convertMixerDbToValue(alsaDeviceName2, playMixerName, playLevelR, &valueR);
+    if (rc7 != 0) {
+        _log.error("Failed to convert mixer play value from %d dB", playLevelR);
+        return -7;
+    }
+    _log.info("Setting playback mixer level to %d/%d dB (%d/%d)", 
+        playLevelL, playLevelR, valueL, valueR);
     int rc1 = setMixer2(alsaDeviceName2, playMixerName, valueL, valueR);
-    _log.info("Setting playback mixer level to %d/%d (max is %d)", valueL, valueR, 
-        maxPlayVolume);
     if (rc1 != 0) {
         _log.error("Failed to set playback mixer level");
-        return -5;
+        return -8;
     }
 
-    int minCaptureVolume, maxCaptureVolume;
-    getMixerRange(alsaDeviceName2, captureMixerName, &minCaptureVolune, &maxCaptureVolume);
-    int valueM = maxCaptureVolume * captureLevel / LEVEL_SCALE;
+    int valueM;
+    int rc8 = convertMixerDbToValue(alsaDeviceName2, captureMixerName, captureLevel, &valueM);
+    if (rc8 != 0) {
+        _log.error("Failed to convert mixer capture value from %d dB", captureLevel);
+        return -9;
+    }
+    _log.info("Setting capture mixer level to %d dB (%d)", captureLevel, valueM);
     int rc2 = setMixer1(alsaDeviceName2, captureMixerName, valueM);
-    _log.info("Setting capture mixer level to %d (max is %d)", valueM, maxCaptureVolume);
     if (rc2 != 0) {
         _log.error("Failed to set capture mixer level");
-        return -5;
+        return -10;
     }
 
     // At this point we are good to go
