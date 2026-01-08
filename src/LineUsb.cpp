@@ -316,7 +316,7 @@ bool LineUsb::run2() {
 void LineUsb::tenSecTick() {
     if (_underrunCount != _underrunCountReported) {
         _underrunCountReported = _underrunCount;
-        _log.info("LineUSB Underrun %u", _underrunCount);
+        //_log.info("LineUSB Underrun %u", _underrunCount);
     }
 }
 
