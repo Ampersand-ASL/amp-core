@@ -517,7 +517,7 @@ void LineUsb::_playIfPossible() {
                 const unsigned stuffBufferSize = stuffFrames * 2 * 2;
                 uint8_t stuffBuffer[stuffBufferSize];
                 memset(stuffBuffer, 0, stuffBufferSize);
-                for (unsigned i = 0; i < 4; i++) {
+                for (unsigned i = 0; i < 2; i++) {
                     int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
                     if (rc3 <= 0)
                         break;
@@ -526,7 +526,7 @@ void LineUsb::_playIfPossible() {
                 _log.info("Underrun write %d", totalUnderrunWrite);
             } else if (rc == -11) {
                 _log.info("Write full");
-                // This is the case that the card can't accept anything
+                // This is the case that the card can't accept anything more
                 break;
             } else {
                 _log.error("Write failed %d", rc);
