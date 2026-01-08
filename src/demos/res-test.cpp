@@ -7,8 +7,7 @@ using namespace std;
  * 
  * Convert the text file to a .o file using objcopy:
  *
- * objcopy --input binary --output-target=elf64-littleaarch64 --binary-architecture aarch64 \
- *    ../www/index.html index.html.o
+ * objcopy --input binary --output-target=elf64-littleaarch64 --binary-architecture aarch64 ../www/index.html index.html.o
  *
  * Validate the symbols:
  * 
