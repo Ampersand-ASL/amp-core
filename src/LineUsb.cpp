@@ -316,7 +316,7 @@ bool LineUsb::run2() {
 void LineUsb::tenSecTick() {
     if (_underrunCount != _underrunCountReported) {
         _underrunCountReported = _underrunCount;
-        _log.info("LineUSB Underrun %u", _underrunCount);
+        //_log.info("LineUSB Underrun %u", _underrunCount);
     }
 }
 
@@ -493,8 +493,8 @@ void LineUsb::_playIfPossible() {
         pack_int16_le(_playAccumulator[i], p2 + 2);
     }
 
-    // This is a loop to allow an attempt to recover after an underrun
-    for (unsigned i = 0; i < 2; i++) {
+    // This is a loop so that we push as much as possible into the sound buffer
+    while (_playAccumulatorSize) {
         // Here is where we send the audio to the hardware. We attempt to write 
         // everything in the buffer knowing that the hardware might not accept all
         // of it.
@@ -509,8 +509,8 @@ void LineUsb::_playIfPossible() {
                 // We expect an underrun at the very beginning of a talkspurt
                 // so there is a flag to supress the message in that case.
                 snd_pcm_recover(_playH, rc, 1);
-                // Stuff some slience into the hardware to try to get ahead of 
-                // the sound consumption.
+                // Stuff some slience into the hardware since we are behind in
+                // sound production.
                 int totalUnderrunWrite = 0;
                 const unsigned stuffFrames = 2 * BLOCK_SIZE_48K;
                 // frames * 2 channels * 2 bytes per channel
@@ -523,10 +523,10 @@ void LineUsb::_playIfPossible() {
                         break;
                     totalUnderrunWrite += rc3;
                 }
-                _log.info("Underrun write %d", totalUnderrunWrite);
+                _log.info("Play underrun detected %d", totalUnderrunWrite);
             } else if (rc == -11) {
-                _log.info("Write full");
-                // This is the case that the card can't accept anything more
+                //_log.info("Write full");
+                // This is the case that the card can't accept anything more. 
                 break;
             } else {
                 _log.error("Write failed %d", rc);
