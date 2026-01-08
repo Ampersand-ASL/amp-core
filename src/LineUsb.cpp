@@ -157,8 +157,8 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     unsigned int periodTimeUs = 20000;
     // Request a max period
     snd_pcm_hw_params_set_period_time(playH, play_hw_params, periodTimeUs, 0);
-    // Let the buffer store 8x 20ms frames of sound
-    unsigned int bufferTimeUs = 20000 * 8;
+    // Let the buffer store 16x 20ms frames of sound
+    unsigned int bufferTimeUs = 20000 * 16;
     snd_pcm_hw_params_set_buffer_time(playH, play_hw_params, bufferTimeUs, 0);
     if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
         _log.error("Play parameters %d", err);
@@ -517,7 +517,7 @@ void LineUsb::_playIfPossible() {
                 const unsigned stuffBufferSize = stuffFrames * 2 * 2;
                 uint8_t stuffBuffer[stuffBufferSize];
                 memset(stuffBuffer, 0, stuffBufferSize);
-                for (unsigned i = 0; i < 2; i++) {
+                for (unsigned i = 0; i < 4; i++) {
                     int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
                     if (rc3 <= 0)
                         break;
