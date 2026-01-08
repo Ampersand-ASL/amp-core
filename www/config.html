@@ -155,16 +155,24 @@ body {
  * the select meny.
  * @param selectName The ID of the select menu and also the name argument 
  * sent to the server.
+ * @param args Optional arguments that can influence the list
  */
-async function loadSelectOptions(baseElId, selectId) {
+async function loadSelectOptions(baseElId, selectId, args) {
+    // Get the starting value
+    const baseEl = document.getElementById(baseElId);
+    const sel = baseEl.querySelector("#" + selectId);
+    const initialValue = sel.value
+
+    // Pull up the choices from the server
     try {
-        const response = await fetch("config-select-options?name=" + selectId);
+        u = "config-select-options?name=" + selectId;
+        if (args)
+            u += "&args=" + args
+        const response = await fetch(u);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        const baseEl = document.getElementById(baseElId);
-        const sel = baseEl.querySelector("#" + selectId);
         // Clear existing options
         sel.replaceChildren();
         for (const i of data) {
@@ -172,6 +180,10 @@ async function loadSelectOptions(baseElId, selectId) {
             opt.value = i["value"]
             opt.innerHTML = i["desc"]
             sel.appendChild(opt);
+        }
+        // Get the item selected again
+        if (initialValue && initialValue != "") {
+            sel.value = initialValue
         }
     } catch (error) {
         console.error('Error fetching data:', error.message);
@@ -186,6 +198,16 @@ function loadUi(name, data, doc) {
 function storeUi(name, formObject, data) {
     if (name in formObject)
         data[name] = formObject[name].trim();
+}
+
+// Call this whenever the audio device selection changes so that 
+// the mixer ranges are appropirate for that device.
+function fixMixerRanges() {
+    // Get the value of the audio device selected
+    const sel = document.getElementById("#aslAudioDevice");
+    loadSelectOptions("config-form", "aslTxMixASet", sel.value)
+    loadSelectOptions("config-form", "aslTxMixVSet", sel.value)
+    loadSelectOptions("config-form", "aslRxMixerSet", sel.value)
 }
 
 async function configLoad() {
@@ -266,9 +288,18 @@ document.addEventListener('DOMContentLoaded', async() => {
         configStore();
     });   
 
+    // Since the mixer menus depend on the selected audio deveice we need to attach 
+    // a change notification callaback
+    document.getElementById("aslAudioDevice").addEventListener("change", function(event) {
+        console.log("Menu changed");
+        fixMixerRanges();
+    });
+
     // Important that these steps are serialized
     await loadSelectOptions("config-form", "aslAudioDevice");
     await configLoad();
+    // This depends on which option was chosen
+    fixMixerRanges();
 });
     </script>
 </html>

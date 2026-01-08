@@ -221,13 +221,11 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // of a range of vaules from 0->37, which maps to an actual range of 
     // -37dB to 0dB. 
     //
-    // The maximum value from the control is scaled by the 0->1000 level provided
-    // by the caller.
-
-    int maxPlayVolume = getMixerMax(alsaDeviceName2, playMixerName);
+    int minPlayVolume, maxPlayVolume;
+    getMixerRange(alsaDeviceName2, playMixerName, &minPlayVolume, &maxPlayVolume);
     int valueL = maxPlayVolume * playLevelL / LEVEL_SCALE;
     int valueR = maxPlayVolume * playLevelR / LEVEL_SCALE;
-    int rc1 = setMixer(alsaDeviceName2, playMixerName, valueL, valueR);
+    int rc1 = setMixer2(alsaDeviceName2, playMixerName, valueL, valueR);
     _log.info("Setting playback mixer level to %d/%d (max is %d)", valueL, valueR, 
         maxPlayVolume);
     if (rc1 != 0) {
@@ -235,9 +233,10 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
         return -5;
     }
 
-    int maxCaptureVolume = getMixerMax(alsaDeviceName2, captureMixerName);
+    int minCaptureVolume, maxCaptureVolume;
+    getMixerRange(alsaDeviceName2, captureMixerName, &minCaptureVolune, &maxCaptureVolume);
     int valueM = maxCaptureVolume * captureLevel / LEVEL_SCALE;
-    int rc2 = setMixer(alsaDeviceName2, captureMixerName, valueM, valueM);
+    int rc2 = setMixer1(alsaDeviceName2, captureMixerName, valueM);
     _log.info("Setting capture mixer level to %d (max is %d)", valueM, maxCaptureVolume);
     if (rc2 != 0) {
         _log.error("Failed to set capture mixer level");

@@ -283,6 +283,8 @@ void WebUi::_thread() {
         auto a = json::array();
 
         string menuName = req.get_param_value("name");      
+        cout << "menuName " << menuName << endl;
+        
         if (menuName == "aslAudioDevice") {
 
             json o;
