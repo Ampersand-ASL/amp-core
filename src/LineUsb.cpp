@@ -326,21 +326,6 @@ void LineUsb::consume(const Message& frame) {
         _setCosStatus(true);
     } else if (frame.isSignal(Message::SignalType::COS_OFF)) {
         _setCosStatus(false);
-    } else if (frame.getType() == Message::Type::AUDIO) {
-        /*
-        // Detect transitions from silence to playing
-        if (!_playing) {
-            // When re-starting after a period of silence we "stuff a frame"
-            // of extra silence into the USB ALSA buffer to reduce the chances of 
-            // getting behind later due to subtle timing differences.
-            if (PLAY_ACCUMULATOR_CAPACITY - _playAccumulatorSize >= BLOCK_SIZE_48K) {
-                // Move new audio block into the play accumulator 
-                memset(&(_playAccumulator[_playAccumulatorSize]), 0,
-                    BLOCK_SIZE_48K * sizeof(int16_t));
-                _playAccumulatorSize += BLOCK_SIZE_48K;
-            }
-        }
-        */
     }
 
     // Then go through the normal consume process
@@ -526,13 +511,19 @@ void LineUsb::_playIfPossible() {
                 snd_pcm_recover(_playH, rc, 1);
                 // Stuff some slience into the hardware to try to get ahead of 
                 // the sound consumption.
+                int totalUnderrunWrite = 0;
                 const unsigned stuffFrames = 2 * BLOCK_SIZE_48K;
                 // frames * 2 channels * 2 bytes per channel
                 const unsigned stuffBufferSize = stuffFrames * 2 * 2;
                 uint8_t stuffBuffer[stuffBufferSize];
                 memset(stuffBuffer, 0, stuffBufferSize);
-                int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
-                _log.info("Underrun write %d", rc3);
+                for (unsigned i = 0; i < 4; i++) {
+                    int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
+                    if (rc3 <= 0)
+                        break;
+                    totalUnderrunWrite += rc3;
+                }
+                _log.info("Underrun write %d", totalUnderrunWrite);
             } else if (rc == -11) {
                 _log.info("Write full");
                 // This is the case that the card can't accept anything
