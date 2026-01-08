@@ -258,9 +258,9 @@ void WebUi::_thread() {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/config.html");
+        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
         json j = _config.getCopy();
@@ -349,9 +349,9 @@ void WebUi::_thread() {
                         val += "port:";
                         val += portId;
                         // Make the description
-                        string desc("USB ");
+                        string desc("USB bus");
                         desc += busId;
-                        desc += "/";
+                        desc += "/port";
                         desc += portId;
                         desc += " ";
                         desc += vendorName;
