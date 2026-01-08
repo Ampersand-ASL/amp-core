@@ -165,6 +165,11 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
         return -1;
     }
 
+    //unsigned int rate_num;
+    //unsigned int rate_den;
+    //int rc5 = snd_pcm_hw_params_get_rate_numden(play_hw_params, &rate_num, &rate_den);
+    //cout << rc5 << " " << rate_num << " " << rate_den << endl;
+
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
     snd_pcm_hw_params_alloca(&capture_hw_params);
@@ -322,6 +327,7 @@ void LineUsb::consume(const Message& frame) {
     } else if (frame.isSignal(Message::SignalType::COS_OFF)) {
         _setCosStatus(false);
     } else if (frame.getType() == Message::Type::AUDIO) {
+        /*
         // Detect transitions from silence to playing
         if (!_playing) {
             // When re-starting after a period of silence we "stuff a frame"
@@ -334,6 +340,7 @@ void LineUsb::consume(const Message& frame) {
                 _playAccumulatorSize += BLOCK_SIZE_48K;
             }
         }
+        */
     }
 
     // Then go through the normal consume process
@@ -503,7 +510,9 @@ void LineUsb::_playIfPossible() {
 
     // This is a loop to allow an attempt to recover after an underrun
     for (unsigned i = 0; i < 2; i++) {
-        // Here is where we send the audio to the hardware
+        // Here is where we send the audio to the hardware. We attempt to write 
+        // everything in the buffer knowing that the hardware might not accept all
+        // of it.
         int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
         if (rc < 0) {
             if (rc == -EPIPE) {
@@ -513,8 +522,17 @@ void LineUsb::_playIfPossible() {
                 // come back to get things rolling with a re-write.
                 _underrunCount++;
                 // We expect an underrun at the very beginning of a talkspurt
-                // so there is a flag to supress the message
-                snd_pcm_recover(_playH, rc, 1); 
+                // so there is a flag to supress the message in that case.
+                snd_pcm_recover(_playH, rc, 1);
+                // Stuff some slience into the hardware to try to get ahead of 
+                // the sound consumption.
+                const unsigned stuffFrames = 2 * BLOCK_SIZE_48K;
+                // frames * 2 channels * 2 bytes per channel
+                const unsigned stuffBufferSize = stuffFrames * 2 * 2;
+                uint8_t stuffBuffer[stuffBufferSize];
+                memset(stuffBuffer, 0, stuffBufferSize);
+                int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
+                _log.info("Underrun write %d", rc3);
             } else if (rc == -11) {
                 _log.info("Write full");
                 // This is the case that the card can't accept anything
