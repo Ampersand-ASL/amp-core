@@ -316,7 +316,7 @@ bool LineUsb::run2() {
 void LineUsb::tenSecTick() {
     if (_underrunCount != _underrunCountReported) {
         _underrunCountReported = _underrunCount;
-        //_log.info("LineUSB Underrun %u", _underrunCount);
+        _log.info("LineUSB Underrun %u", _underrunCount);
     }
 }
 
@@ -447,6 +447,11 @@ void LineUsb::_captureIfPossible() {
 
 // ===== Play Related =========================================================
 
+void LineUsb::_playStart() {
+    _startOfTs = true;
+    LineRadio::_playStart();
+}
+
 /**
  * This will be called by the base class after all decoding has happened.
  */
@@ -505,27 +510,27 @@ void LineUsb::_playIfPossible() {
                 // us that it was underrun prior to us starting to stream again.
                 // We recover the card and then wait for the polling loop to 
                 // come back to get things rolling with a re-write.
-                _underrunCount++;
                 // We expect an underrun at the very beginning of a talkspurt
                 // so there is a flag to supress the message in that case.
+                if (_startOfTs)
+                    _underrunCount++;
                 snd_pcm_recover(_playH, rc, 1);
                 // Stuff some slience into the hardware since we are behind in
                 // sound production.
                 int totalUnderrunWrite = 0;
-                const unsigned stuffFrames = 2 * BLOCK_SIZE_48K;
+                const unsigned stuffFrames = BLOCK_SIZE_48K;
                 // frames * 2 channels * 2 bytes per channel
                 const unsigned stuffBufferSize = stuffFrames * 2 * 2;
                 uint8_t stuffBuffer[stuffBufferSize];
                 memset(stuffBuffer, 0, stuffBufferSize);
-                for (unsigned i = 0; i < 4; i++) {
+                for (unsigned i = 0; i < 8; i++) {
                     int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
                     if (rc3 <= 0)
                         break;
                     totalUnderrunWrite += rc3;
                 }
-                _log.info("Play underrun detected %d", totalUnderrunWrite);
+                //_log.info("Play underrun detected %d", totalUnderrunWrite);
             } else if (rc == -11) {
-                //_log.info("Write full");
                 // This is the case that the card can't accept anything more. 
                 break;
             } else {
@@ -535,7 +540,8 @@ void LineUsb::_playIfPossible() {
                 _inError = true;
                 break;
             }
-        } else if (rc > 0) {
+        } else if (rc > 0) {            
+            _startOfTs = false;
             if ((unsigned)rc == _playAccumulatorSize) {
                 _playAccumulatorSize = 0;
             } else {

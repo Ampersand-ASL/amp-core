@@ -67,6 +67,8 @@ public:
 
 protected:
 
+    void _playStart();
+
     /**
      * This function is called to do the actual playing of the 48K PCM.
      */
@@ -95,6 +97,7 @@ private:
     int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY];
     unsigned _playAccumulatorSize = 0;
 
+    bool _startOfTs = false;
     uint32_t _captureCount = 0;
     bool _inError = false;
 
