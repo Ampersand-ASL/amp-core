@@ -378,3 +378,16 @@ add_executable(res-test
 )
 
 target_include_directories(res-test PRIVATE src)
+
+# ----- usb-1 -----------------------------------------------------------
+
+add_executable(usb-1
+  src/demos/usb-1.cpp
+  sound-map/src/sound-map.cpp
+  sound-map/src/sound-map-2.cpp
+  sound-map/src/usb-dir.c
+)
+
+target_include_directories(usb-1 PRIVATE src)
+target_include_directories(usb-1 PRIVATE sound-map/include)
+target_link_libraries(usb-1 -lasound -lusb-1.0)
