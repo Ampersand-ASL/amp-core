@@ -54,7 +54,12 @@ public:
 
     BridgeIn();
 
-    void init(Log* log, Clock* clock) { _log = log; _clock = clock; }
+    void init(Log* log, Log* traceLog, Clock* clock) { 
+        _log = log; 
+        _traceLog = traceLog;
+        _clock = clock; 
+        _jitBuf.setTraceLog(traceLog);
+    }
 
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
 
@@ -116,6 +121,7 @@ private:
     void _handleJitBufOut(const Message& msg);
 
     Log* _log; 
+    Log* _traceLog; 
     Clock* _clock;
     std::function<void(const Message& msg)> _sink = nullptr;
     // This is the input CODEC of the user

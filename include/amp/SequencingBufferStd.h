@@ -53,6 +53,8 @@ public:
         reset();
     }
 
+    void setTraceLog(Log* l) { _traceLog = l; }
+
     void lockDelay() {
         _delayLocked = true;
     }
@@ -172,7 +174,6 @@ public:
 
     virtual bool consume(Log& log, const T& payload) {
 
-        // #### TODO: IF THIS IS A SIGNAL THAN CLEAR ROOM
         if (!_buffer.hasCapacity()) {
             _overflowCount++;
             log.info("OF orig=%6d cursor=%6d", payload.getOrigMs(), _originCursor);
@@ -183,6 +184,10 @@ public:
         }
 
         _buffer.insert(payload);     
+
+        if (_traceLog)
+            _traceLog->info("RXV, %u, %u", payload.getOrigMs(), _originCursor);
+
         if (_newestOrigMs < payload.getOrigMs())
             _newestOrigMs = payload.getOrigMs();
 
@@ -294,6 +299,9 @@ public:
                 
                 sink->play(frame, localMs);
 
+                if (_traceLog)
+                    _traceLog->info("POV, %u, %lld", frame.getOrigMs(), frame.getRxMs());
+
                 voiceFramePlayed = true;
                 _lastPlayedLocal = localMs;
                 _lastPlayedOrigMs = _originCursor;
@@ -332,9 +340,13 @@ public:
             // If no voice was generated on this tick (for whatever reason)
             // then request an interpolation.
             if (!voiceFramePlayed) {
+
                 sink->interpolate(_originCursor, localMs, _voiceTickSize);
+
+                if (_traceLog)
+                    _traceLog->info("POI, %u", _originCursor);
+
                 _interpolatedVoiceFrameCount++;
-                //log.info("Interpolated %u, size %d", _originCursor, size());
             }
 
             // Has the talkspurt timed out yet?
@@ -408,6 +420,8 @@ private:
     const float _beta = 5.0f;
     // The number of ms of silence before we delcare a talkspurt ended.
     uint32_t _talkspurtTimeoutInteval = 60;   
+
+    Log* _traceLog = 0;
 
     // A 64-entry buffer provides room to track 1 second of audio
     // plus some extra for control frames that may be interspersed.

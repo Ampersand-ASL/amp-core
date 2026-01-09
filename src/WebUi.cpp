@@ -37,6 +37,7 @@
 #include "WebUi.h"
 #include "ThreadUtil.h"
 #include "LineUsb.h"
+#include "TraceLog.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
 
@@ -83,7 +84,7 @@ namespace kc1fsz {
 
 WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
     unsigned networkDestLineId, unsigned radioDestLineId, const char* configFileName,
-    const char* version) 
+    const char* version, TraceLog& traceLog) 
 :   _log(log), 
     _clock(clock),
     _consumer(cons),
@@ -91,7 +92,8 @@ WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
     _networkDestLineId(networkDestLineId),
     _radioDestLineId(radioDestLineId),
     _configFileName(configFileName),
-    _version(version) {
+    _version(version),
+    _traceLog(traceLog) {
 
 #ifdef _WIN32
     _beginthread(_uiThread, 0, (void*)this);
@@ -249,8 +251,11 @@ void WebUi::_thread() {
                 msg.setDest(_networkDestLineId, DEST_CALL_ID);
                 _outQueue.push(msg);
             }
-            else if (data["button"] == "exit") {
-                exit(0);
+            else if (data["button"] == "capture") {
+                ofstream trace("./capture.txt");
+                _traceLog.visitAll([&trace](const string& str) {
+                    trace << str << endl;
+                });
             }
         }
     });

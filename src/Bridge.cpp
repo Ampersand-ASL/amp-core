@@ -28,17 +28,17 @@ using namespace std;
 namespace kc1fsz {
     namespace amp {
 
-Bridge::Bridge(Log& log, Clock& clock, MessageConsumer& bus, BridgeCall::Mode defaultMode) 
+Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
+    BridgeCall::Mode defaultMode) 
 :   _log(log),
+    _traceLog(traceLog),
     _clock(clock),
     _defaultMode(defaultMode),
     _sink(&bus),
     _calls(_callSpace, MAX_CALLS) { 
 
-    for (unsigned i = 0; i < MAX_CALLS; i++) {
-        _callSpace[i].init(&log, &clock, &_ttsQueueReq, &_ttsQueueRes);
-        _callSpace[i].setSink(_sink);
-    }
+    for (unsigned i = 0; i < MAX_CALLS; i++)
+        _callSpace[i].init(&log, &traceLog, &clock, &_ttsQueueReq, &_ttsQueueRes, _sink);
 
     _ttsResampler.setRates(16000, 48000);
 }

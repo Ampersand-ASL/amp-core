@@ -32,6 +32,7 @@ namespace kc1fsz {
 class Log;
 class Clock;
 class MessageConsumer; 
+class TraceLog;
 
     namespace amp {
 
@@ -43,7 +44,7 @@ public:
 
     WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
         unsigned networkDestLineId, unsigned radioDestLineId,
-        const char* configFileName, const char* version);
+        const char* configFileName, const char* version, TraceLog& traceLog);
 
     void setConfig(const json& config) { _config.set(config); }
 
@@ -77,6 +78,7 @@ private:
     const unsigned _radioDestLineId;
     const std::string _configFileName;
     const std::string _version;
+    TraceLog& _traceLog;
 
     std::atomic<bool> _cos;
     bool _ptt = false;

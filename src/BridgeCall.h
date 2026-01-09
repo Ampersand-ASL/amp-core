@@ -62,17 +62,17 @@ public:
     /**
      * One-time initialization. Connects the call to the outside world.
      */
-    void init(Log* log, Clock* clock, threadsafequeue<Message>* ttsQueueReq,
-        threadsafequeue<Message>* ttsQueueRes) {
+    void init(Log* log, Log* traceLog, Clock* clock, 
+        threadsafequeue<Message>* ttsQueueReq,
+        threadsafequeue<Message>* ttsQueueRes, MessageConsumer* sink) {
         _log = log;
+        _traceLog = traceLog;
         _clock = clock;
         _ttsQueueReq = ttsQueueReq;
         _ttsQueueRes = ttsQueueRes;
-        _bridgeIn.init(_log, _clock);
-    }
-
-    void setSink(MessageConsumer* sink) {
         _sink = sink;
+        _bridgeIn.init(_log, _traceLog, _clock);
+        
     }
 
     void reset();
@@ -125,6 +125,7 @@ public:
 private:
 
     Log* _log;
+    Log* _traceLog;
     Clock* _clock;
     MessageConsumer* _sink;
     threadsafequeue<Message>* _ttsQueueReq;

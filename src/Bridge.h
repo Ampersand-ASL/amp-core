@@ -43,7 +43,7 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    Bridge(Log& log, Clock& clock, MessageConsumer& bus, BridgeCall::Mode defaultMode);
+    Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, BridgeCall::Mode defaultMode);
 
     unsigned getCallCount() const;
 
@@ -70,6 +70,7 @@ private:
     static constexpr auto RESET_VISITOR = [](BridgeCall& s) { s.reset(); return true; };
 
     Log& _log;
+    Log& _traceLog;
     Clock& _clock;
     const BridgeCall::Mode _defaultMode;
     MessageConsumer* _sink = 0;
