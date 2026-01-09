@@ -67,8 +67,10 @@ void LineRadio::consume(const Message& msg) {
     if (!_toneActive && msg.getType() == Message::Type::AUDIO) {
 
         // Detect transitions from silence to playing
+        bool leadingEdge = false;
         if (!_playing) {
             _playStart();
+            leadingEdge = true;
         }
 
         assert(msg.size() == BLOCK_SIZE_48K * 2);
@@ -82,6 +84,17 @@ void LineRadio::consume(const Message& msg) {
         // Here is where statistical analysis and/or local recording can take 
         // place for diagnostic purposes.
         _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+
+        // Apply a cross-fade to the start of the block if this is the first frame
+        // after silence.
+        if (leadingEdge) {
+            const unsigned fadeSamples = BLOCK_SIZE_48K / 4;
+            for (unsigned i = 0; i < fadeSamples; i++) {
+                float scale = (float)i / (float)fadeSamples;
+                float n = pcm48k_2[i] * scale;
+                pcm48k_2[i] = n;
+            }
+        }
 
         // Call down to do the actual play on the hardware
         _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
