@@ -71,9 +71,10 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
     return (ts / tick) * tick;
 }
 
-LineIAX2::LineIAX2(Log& log, Clock& clock, int busId,
+LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg, unsigned destLineId)
 :   _log(log),
+    _traceLog(traceLog),
     _clock(clock),
     _busId(busId),
     _bus(bus),
@@ -1170,6 +1171,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         unkeyMsg.setSource(_busId, call.localCallId);
         unkeyMsg.setDest(_destLineId, DEST_CALL_ID);
         _bus.consume(unkeyMsg);
+
+        _traceLog.info("UNK", frame.getTimeStamp());
     }
     // LAGRQ
     // 6.7.4.  LAGRQ Lag Request Message

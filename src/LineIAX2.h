@@ -87,7 +87,7 @@ public:
      * @param privateKeyHex The server's private ED25519 seed in ASCII/Hex
      * representation. This should be exactly 64 characters long.
      */
-    LineIAX2(Log& log, Clock& clock, int lineId, MessageConsumer& consumer,
+    LineIAX2(Log& log, Log& traceLog, Clock& clock, int lineId, MessageConsumer& consumer,
         CallValidator* destValidator, LocalRegistry* locReg, 
         unsigned destLineId);
 
@@ -342,6 +342,7 @@ private:
     friend class Call;
 
     Log& _log;
+    Log& _traceLog;
     Clock& _clock;
     unsigned _busId;
     MessageConsumer& _bus;

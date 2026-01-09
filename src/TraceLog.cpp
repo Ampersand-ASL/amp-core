@@ -34,7 +34,7 @@ void TraceLog::visitAll(std::function<void(const std::string& msg)> visitor) {
 void TraceLog::_out(const char* sev, const char* dt, const char* msg) {
     std::lock_guard<std::mutex> lock(_lock);
     char line[80];
-    snprintf(line, 80, "%ld: %s", _clock.timeUs(), msg);
+    snprintf(line, 80, "%ld, %s", _clock.timeUs(), msg);
     _queue.push(string(line));
 }
 
