@@ -299,9 +299,6 @@ public:
                 
                 sink->play(frame, localMs);
 
-                if (_traceLog)
-                    _traceLog->info("POV, %u, %lld", frame.getOrigMs(), frame.getRxMs());
-
                 voiceFramePlayed = true;
                 _lastPlayedLocal = localMs;
                 _lastPlayedOrigMs = _originCursor;
@@ -323,6 +320,9 @@ public:
                 }
 
                 _buffer.pop();
+
+                if (_traceLog)
+                    _traceLog->info("POV, %u, %lld, %d", frame.getOrigMs(), frame.getRxMs(), margin);
 
                 // We can only play one frame per tick, so break out of the loop
                 break;
