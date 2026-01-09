@@ -28,7 +28,7 @@ namespace kc1fsz {
 
 BridgeIn::BridgeIn() {
     // #### TODO: FIGURE OUT WHERE TO MOVE THIS
-    _jitBuf.setInitialMargin(20 * 6);
+    _jitBuf.setInitialMargin(20 * 10);
 }
 
 void BridgeIn::setCodec(CODECType codecType) {
