@@ -372,12 +372,12 @@ target_link_libraries(nr-log -lcurl)
 
 # ----- res-test -----------------------------------------------------------
 
-add_executable(res-test
-  src/demos/res-test.cpp
-  build/index.html.o
-)
+#add_executable(res-test
+#  src/demos/res-test.cpp
+#  build/index.html.o
+#)
 
-target_include_directories(res-test PRIVATE src)
+#target_include_directories(res-test PRIVATE src)
 
 # ----- usb-1 -----------------------------------------------------------
 
@@ -409,3 +409,16 @@ target_include_directories(usb-2 PRIVATE kc1fsz-sdrc/sw/src)
 target_include_directories(usb-2 PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(usb-2 PRIVATE sound-map/include)
 target_link_libraries(usb-2 -lasound -lusb-1.0)
+
+# ----- trace-log -----------------------------------------------------------
+
+add_executable(trace-log
+  src/tests/trace-log.cpp
+  src/TraceLog.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+)
+
+target_include_directories(trace-log PRIVATE src)
+target_include_directories(trace-log PRIVATE kc1fsz-tools-cpp/include)
+
