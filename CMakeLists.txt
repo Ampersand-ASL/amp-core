@@ -422,3 +422,14 @@ add_executable(trace-log
 target_include_directories(trace-log PRIVATE src)
 target_include_directories(trace-log PRIVATE kc1fsz-tools-cpp/include)
 
+# ----- hello-usb-serial -----------------------------------------------------------
+
+add_executable(hello-usb-serial
+  src/demos/hello-usb-serial.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+)
+
+target_include_directories(hello-usb-serial PRIVATE src)
+target_include_directories(hello-usb-serial PRIVATE kc1fsz-tools-cpp/include)
+
