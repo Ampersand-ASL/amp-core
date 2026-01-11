@@ -532,8 +532,8 @@ void LineUsb::_playIfPossible() {
                         break;
                     totalUnderrunWrite += rc3;
                 }
-                if (!_startOfTs)
-                    _log.info("Play underrun detected (%d)", totalUnderrunWrite);
+                //if (!_startOfTs)
+                //    _log.info("Play underrun detected (%d)", totalUnderrunWrite);
             } else if (rc == -11) {
                 // This is the case that the card can't accept anything more. 
                 break;
