@@ -1761,13 +1761,8 @@ bool LineIAX2::_progressCall(Call& call) {
     // Doesn't matter whether we called or was called for these tasks.
 
     if (call.state == Call::State::STATE_TERMINATE_WAITING) {
-
-        PayloadCallEnd payload;
-        strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
-        strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
-        
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());            
+            0, 0, 0, _clock.time());            
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, DEST_CALL_ID);
         _bus.consume(msg);
@@ -2112,8 +2107,6 @@ void LineIAX2::oneSecTick() {
         // (Even the terminated ones)
         [this](Call& call) {
             PayloadCallStatus status;
-            strcpyLimited(status.localNumber, call.localNumber.c_str(), sizeof(status.localNumber));
-            strcpyLimited(status.remoteNumber, call.remoteNumber.c_str(), sizeof(status.remoteNumber));
             status.lastRxMs = call.lastRxVoiceFrameMs;
             status.lastTxMs = call.lastTxVoiceFrameMs;
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_STATUS, sizeof(status),

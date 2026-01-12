@@ -59,11 +59,19 @@ public:
 private:
 
     struct Peer { 
+        unsigned lineId = 0;
+        unsigned callId = 0;
+        std::string localNumber;
         std::string remoteNumber;
         // #### TODO CHANGE TO 64
         uint32_t startMs = 0;
         uint64_t lastRxMs = 0;
         uint64_t lastTxMs = 0;
+        // Levels
+        int rx0Db = 0;
+        int rx1Db = 0;
+        int tx0Db = 0;
+        int tx1Db = 0;
     };
 
     static void _uiThread(void*);

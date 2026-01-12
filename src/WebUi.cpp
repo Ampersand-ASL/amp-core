@@ -116,31 +116,41 @@ void WebUi::consume(const Message& msg) {
     } else if (msg.isSignal(Message::SignalType::CALL_START)) {
         assert(msg.size() == sizeof(PayloadCallStart));
         const PayloadCallStart* payload = (const PayloadCallStart*)msg.body();
-        string remoteNumber = payload->remoteNumber;
-        if (!remoteNumber.empty()) {
-            _status.manipulateUnderLock([&remoteNumber, payload](std::vector<Peer>& v) {
-                Peer peer;
-                peer.remoteNumber = remoteNumber;
-                // #### TODO: NEED TO MAKE THIS 64-bit!
-                peer.startMs = payload->startMs;
-                v.push_back(peer);
-            });
-        }
+        _status.manipulateUnderLock([msg, payload](std::vector<Peer>& v) {
+            Peer peer;
+            peer.lineId = msg.getSourceBusId();
+            peer.callId = msg.getSourceCallId();
+            peer.localNumber = payload->localNumber;
+            peer.remoteNumber = payload->remoteNumber;
+            // #### TODO: NEED TO MAKE THIS 64-bit!
+            peer.startMs = payload->startMs;
+            v.push_back(peer);
+        });
     } else if (msg.isSignal(Message::SignalType::CALL_END)) {
-        assert(msg.size() == sizeof(PayloadCallEnd));
-        const PayloadCallEnd* payload = (const PayloadCallEnd*)msg.body();
-        string remoteNumber = payload->remoteNumber;
-        if (!remoteNumber.empty()) {
-            _status.manipulateUnderLock([remoteNumber, payload](std::vector<Peer>& v) {
-                v.erase(
-                    std::remove_if(v.begin(), v.end(),
-                        [remoteNumber](Peer& p) { 
-                            return p.remoteNumber == remoteNumber; 
-                        }
-                    ), 
-                    v.end());                 
-            });
-        }
+        _status.manipulateUnderLock([msg](std::vector<Peer>& v) {
+            v.erase(
+                std::remove_if(v.begin(), v.end(),
+                    [msg](Peer& p) { 
+                        return p.lineId == msg.getSourceBusId() &&
+                            p.callId == msg.getSourceCallId(); 
+                    }
+                ), 
+                v.end());                 
+        });
+    }
+    else if (msg.isSignal(Message::SignalType::CALL_LEVELS)) {
+        assert(msg.size() == sizeof(PayloadCallLevels));
+        _status.manipulateUnderLock([msg](std::vector<Peer>& v) {
+            const PayloadCallLevels* payload = (const PayloadCallLevels*)msg.body();
+            for (Peer& p : v) 
+                if (p.lineId == msg.getSourceBusId() &&
+                    p.callId == msg.getSourceCallId()) {
+                    p.rx0Db = payload->rx0Db;
+                    p.tx0Db = payload->tx0Db;
+                    p.rx1Db = payload->rx1Db;
+                    p.tx1Db = payload->tx1Db;
+                }
+        });
     }
 }
 
@@ -166,23 +176,51 @@ void WebUi::_thread() {
     // HTTP
     httplib::Server svr;
 
+    // ------ Common -----------------------------------------------------------
+
+    svr.Get("/main.css", [](const httplib::Request &, httplib::Response &res) {
+        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+        //    "text/css");
+        res.set_file_content("../amp-core/www/main.css");
+    });
+
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-            "text/html");
-        //res.set_file_content("../amp-core/www/index.html");
+        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/index.html");
     });
     svr.Get("/status", [this](const httplib::Request &, httplib::Response &res) {
+
         json o;
+        o["usb-rx-meter"] = -99;
+        o["usb-tx-meter"] = -99;
+        o["net-rx-meter"] = -99;
+        o["net-tx-meter"] = -99;
+
+        vector<Peer> peerList = _status.getCopy();
+        // Find the radio and pull out some stats
+        for (auto peer : peerList) {
+            if (peer.remoteNumber == "Radio") {
+                o["usb-rx-meter"] = peer.rx0Db;
+                o["usb-tx-meter"] = peer.tx0Db;
+                o["net-rx-meter"] = peer.rx1Db;
+                o["net-tx-meter"] = peer.tx1Db;
+            }
+        }
+
         o["cos"] = _cos.load();
         o["ptt"] = _ptt;
+
         // Build the list of nodes that we are connected to 
         auto a = json::array();
-        vector<Peer> list = _status.getCopy();
-        for (Peer l : list) {
+        for (Peer peer : peerList) {
+            if (peer.remoteNumber == "Radio")
+                continue;
             json o2;
-            o2["node"] = l.remoteNumber;
+            o2["localNode"] = peer.localNumber;
+            o2["remoteNode"] = peer.remoteNumber;
             auto b = json::array();
             // #### TODO: NEED TO ADD CONNECTIONS
             o2["connections"] = b;
@@ -263,9 +301,9 @@ void WebUi::_thread() {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
-            "text/html");
-        //res.set_file_content("../amp-core/www/config.html");
+        //res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
         json j = _config.getCopy();

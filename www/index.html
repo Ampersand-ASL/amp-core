@@ -1,10 +1,27 @@
+<!--
+Ampersand ASL Server Project
+Copyright (C) 2026, Bruce MacKinnon KC1FSZ
+-->
 <html>
     <head>
         <title>Ampersand Home Page</title>
         <style>
-/* https://www.color-hex.com/color-palette/98179)             */
 body {
     font-family: sans-serif;
+    background-color: #1e1e1e;
+    color: white;
+}
+
+input[type="submit"] {
+  border: 2px solid white;
+}
+
+h1 {
+    font-size: 20px;
+}
+
+a {
+  color: white;
 }
 
 .fav-button {
@@ -46,17 +63,55 @@ table, th, td {
   border: 1px solid black; /* Sets a visible border */
 }
 
-table {
-  border-collapse: collapse; /* Merges adjacent borders */
+.no-border-table, .no-border-table th, .no-border-table td {
+  border: none;
+  border-collapse: collapse;
 }
 
-td {
-    padding: 5px;
+.led-table td {
+    padding: 2px;
+}
+
+.led-table tr.legend td {
+    font-size: 6px;
+    text-align: center;
+    border-top: 1px solid white;
+}
+
+.led {
+  width: 10px; 
+  height: 10px; 
+  border-radius: 2px; 
+  visibility: hidden;
+}
+
+.led-table tr td:first-child {
+    text-align: right;
+    font-size: 10px;
+}
+
+.ledgr {
+  background-color: green;  
+}
+
+.ledyl {
+  background-color: yellow;  
+}
+
+.ledrd {
+  background-color: red;
+}
+
+.bottom-row {
+    display: flex;
+    gap: 20px;
 }
         </style>
     </head>
     <body>
-        <h1>Ampersand ASL Server</h1>
+        <div class="title-row">
+            <h1>Ampersand ASL Server</h1>
+        </div>
         <form id="status-form">
             <input class="fav-button" name="fav1" type="submit" value="ASL Parrot"/>
             <input class="fav-button" name="fav0" type="submit" value="TX Parrot"/>
@@ -74,6 +129,7 @@ td {
             <table>
                 <thead>
                     <th>Node</th>
+                    <th>Remote Node</th>
                     <th>Connections</th>
                 </thead>
                 <tbody id="connection-table-body">
@@ -86,6 +142,11 @@ td {
             <input id="capture-button" name="capture" type="submit" value="Capture"/>
             <br/>
             <br/>
+    <br/>
+    <!-- Organizes the DTMF pad and the Level meters -->
+    <div class="bottom-row">
+        <!-- Left Side-->
+        <div>
             <table>
                 <tr>
                     <td><input id="dtmf1-button" name="dtmf1" type="submit" value="1"/></td>
@@ -112,6 +173,115 @@ td {
                     <td><input id="dtmfD-button" name="dtmfD" type="submit" value="D"/></td>
                 </tr>
             </table>
+        </div>
+        <!-- Right Side-->
+         <div>
+            <table class="no-border-table led-table">
+                <tr class="usb-rx-meter">
+                    <td>USB RX</td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                </tr>
+                <tr class="usb-tx-meter">
+                    <td>USB TX</td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                </tr>
+                <tr class="net-rx-meter">
+                    <td>NET RX</td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                </tr>
+                <tr class="net-tx-meter">
+                    <td>NET TX</td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledgr"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledyl"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                    <td><div class="led ledrd"></div></td>
+                </tr>
+                <tr class="legend">
+                    <td></td>
+                    <td>-50</td>
+                    <td>-40</td>
+                    <td>-36</td>
+                    <td>-32</td>
+                    <td>-28</td>
+                    <td>-24</td>
+                    <td>-16</td>
+                    <td>-14</td>
+                    <td>-12</td>
+                    <td>-10</td>
+                    <td>-8</td>
+                    <td>-6</td>
+                    <td>-4</td>
+                    <td>-3</td>
+                    <td>-2</td>
+                    <td>-1</td>
+                    <td>0</td>
+                </tr>
+            </table>
+         </div>
+    </div>
+
+
         </form>
         <hr/>
         <a href="config">Configuration</a>
@@ -121,10 +291,63 @@ td {
     </body>
     <script>
 
+// This array establishes the top power for each LED
+const audioLevels = [
+    { top: -50 },
+    { top: -40 },
+    { top: -36 },
+    { top: -32 },
+    { top: -28 },
+    { top: -24 },
+    { top: -16 },
+    { top: -14 },
+    { top: -12 }, 
+    { top: -10 },
+    { top:  -8 },
+    { top:  -6 },
+    { top:  -4 },
+    { top:  -3 },
+    { top:  -2 },
+    { top:  -1 },
+    { top:   0 }
+];
+
+/**
+ * Renders the level meter by turning on the correct number of LEDs
+ * based on the level provided.
+ * 
+ * @param meterClass The class name of the parent container of the LEDs that 
+ * are being controlled.
+ */
+function setAudioLevel(meterClass, levelDb) {
+    const container = document.querySelector("." + meterClass);
+    if (container) {
+        leds = container.querySelectorAll(".led")
+        count = 0
+        if (levelDb > -60) {
+            count = 1
+            while (count < audioLevels.length && levelDb != -Infinity && 
+                levelDb >= audioLevels[count].top)
+                count++;
+        }
+        leds.forEach((el, index) => 
+            el.style.visibility = (index < count) ? "visible" : "hidden"
+        );
+    }
+}
+
 async function status_update() {
     const response = await fetch('status');
     if (response.ok) {
+
         const data = await response.json();
+
+        setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
+        setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
+        setAudioLevel("net-rx-meter", data["net-rx-meter"]);
+        setAudioLevel("net-tx-meter", data["net-tx-meter"]);
+        
+        // #### CLEAN UP
         if (data["cos"]) {
             document.getElementById("cos-active").hidden = false
             document.getElementById("cos-inactive").hidden = true
@@ -141,21 +364,32 @@ async function status_update() {
         tbody = document.getElementById("connection-table-body")
         tbody.replaceChildren();
         for (c of data["connections"]) {
+
             var tr = document.createElement('tr');
             var td0 = document.createElement('td');
             var td1 = document.createElement('td');
+            var td2 = document.createElement('td');
+
             tr.appendChild(td0);
             tr.appendChild(td1);
-            var a = document.createElement('a');
-            a.innerHTML = c["node"];
-            a.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["node"]);
-            td0.appendChild(a);
+            tr.appendChild(td2);
+            
+            var a0 = document.createElement('a');
+            a0.innerHTML = c["localNode"];
+            a0.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["localNode"]);
+            td0.appendChild(a0);
+
+            var a1 = document.createElement('a');
+            a1.innerHTML = c["remoteNode"];
+            a1.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["remoteNode"]);
+            td1.appendChild(a1);
+
             var first = true;
             for (c1 of c["connections"]) {
                 if (!first) {
                     var s = document.createElement("span");
                     s.innerHTML = "&nbsp;"
-                    td1.appendChild(s);
+                    td2.appendChild(s);
                 }
                 var s = document.createElement("a");
                 s.innerHTML = c1;
@@ -197,11 +431,19 @@ function status_save(buttonName) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+
     document.getElementById("cos-active").hidden = true
-    // Install a fast timer to get updates
+    setAudioLevel("usb-rx-meter", -99);
+    setAudioLevel("usb-tx-meter", -99);
+    setAudioLevel("net-rx-meter", -99);
+    setAudioLevel("net-tx-meter", -99);
+
+    // Fast timer to get live updates from the server
     setInterval(async () => {
         status_update();
     }, 500);
+
+    // Handler for push buttons
     document.getElementById('status-form').addEventListener('submit', function (event) {
         event.preventDefault();
         status_save(event.submitter.name);

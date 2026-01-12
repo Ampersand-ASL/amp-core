@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <cstring>
 #include <iostream>
 #include <cmath>
 #include <cassert>
@@ -142,17 +143,32 @@ void LineRadio::_generateToneFrame() {
 
 void LineRadio::oneSecTick() {
 
-    // Stats
+    int radioRxDb = -99;
+    int radioTxDb = -99;
+
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
         _log.info("TXLEVEL %6u %5.1f %5.1f", _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg));
+        radioRxDb = dbVfs(_capturePcmValueMax);
     }
-    /*
     if (_playPcmValueCount) {
-        uint32_t avg = _playPcmValueSum / _playPcmValueCount;
-        _log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
+        //uint32_t avg = _playPcmValueSum / _playPcmValueCount;
+        //_log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
+        radioTxDb = dbVfs(_playPcmValueMax);
     }
-    */
+
+    PayloadCallLevels payload;
+    payload.rx0Db = radioRxDb;
+    payload.rx1Db = -99;
+    payload.tx0Db = radioTxDb;
+    payload.tx1Db = -99;
+
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_LEVELS, 
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
+
     resetStatistics();
 }
 
@@ -191,7 +207,7 @@ void LineRadio::_open(bool echo) {
     payload.echo = echo;
     payload.startMs = _clock.time();
     payload.localNumber[0] = 0;
-    payload.remoteNumber[0] = 0;
+    strcpy(payload.remoteNumber, "Radio");
     payload.originated = true;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
@@ -201,13 +217,8 @@ void LineRadio::_open(bool echo) {
 }
 
 void LineRadio::_close() {
-    // Generate the same kind of call start message that would
-    // come from the IAX2Line after a new connection.
-    PayloadCallEnd payload;
-    payload.localNumber[0] = 0;
-    payload.remoteNumber[0] = 0;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+        0, 0, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);

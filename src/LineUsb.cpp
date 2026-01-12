@@ -165,11 +165,6 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
         return -1;
     }
 
-    //unsigned int rate_num;
-    //unsigned int rate_den;
-    //int rc5 = snd_pcm_hw_params_get_rate_numden(play_hw_params, &rate_num, &rate_den);
-    //cout << rc5 << " " << rate_num << " " << rate_den << endl;
-
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
     snd_pcm_hw_params_alloca(&capture_hw_params);
@@ -177,7 +172,7 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     snd_pcm_hw_params_set_access(captureH, capture_hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
     snd_pcm_hw_params_set_format(captureH, capture_hw_params, SND_PCM_FORMAT_S16_LE);
     snd_pcm_hw_params_set_subformat(captureH, capture_hw_params, SND_PCM_SUBFORMAT_STD);
-    // The last paramter (sub unit direction) is for near calls. Use 1 to request a rate 
+    // The last parameter (sub unit direction) is for near calls. Use 1 to request a rate 
     // greater than the specified value, -1 for a rate less than the value, and 0 for a 
     // rate that is exactly the value. 
     audioRate = AUDIO_RATE;
@@ -281,29 +276,26 @@ int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
     int used = 0, rc;    
 
-    if (!_inError) {
-
-        if (_captureH) {
-            // We always want to be alerted about capture
-            rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
-            if (rc < 0) {
-                _log.error("FD problem 2");
-            } else {
-                used += rc;
-                fdsCapacity -= rc;
-            }
+    if (!_inError && _captureH) {
+        // We always want to be alerted about capture
+        rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
+        if (rc < 0) {
+            _log.error("FD problem 2");
+        } else {
+            used += rc;
+            fdsCapacity -= rc;
         }
+    }
 
-        // Alerts about playing are only needed when there is something 
-        // in the accumulator that needs to be swept out.
-        if (_playH && _playAccumulatorSize > 0) {
-            rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
-            if (rc < 0) {
-                _log.error("FD problem 3");
-            } else {
-                used += rc;
-                fdsCapacity -= rc;
-            }
+    // Alerts about playing are only needed when there is something 
+    // in the accumulator that needs to be swept out.
+    if (!_inError && _playH && _playAccumulatorSize > 0) {
+        rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
+        if (rc < 0) {
+            _log.error("FD problem 3");
+        } else {
+            used += rc;
+            fdsCapacity -= rc;
         }
     }
    
@@ -459,6 +451,9 @@ void LineUsb::_playStart() {
  * This will be called by the base class after all decoding has happened.
  */
 void LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
+
+    if (_inError)
+        return;
 
     // Check to make sure we actually have room in the accumulator
     if (_playAccumulatorSize + BLOCK_SIZE_48K > PLAY_ACCUMULATOR_CAPACITY) {

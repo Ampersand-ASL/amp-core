@@ -29,7 +29,7 @@ namespace kc1fsz {
  */
 class Message {
 public:
-
+    
     enum Type {
         NONE,
         AUDIO,
@@ -48,6 +48,7 @@ public:
         SIGNALTYPE_NONE = 0,
         CALL_START,
         CALL_END,
+        CALL_LEVELS,
         // Sent out periodically by the line that "owns" the call to provide
         // and update on the status of teh call.
         CALL_STATUS,
@@ -67,6 +68,8 @@ public:
     // Message needs to be large enough for 20ms of PCM16 at 48K 
     // (This is 1920 bytes)
     static const unsigned MAX_SIZE = 160 * 6 * 2;
+    // Constant used for line/call
+    static const unsigned BROADCAST = 0;
 
     Message();
     Message(Type type, unsigned format, unsigned size, const uint8_t* body,
@@ -123,14 +126,7 @@ struct PayloadCallStart {
     bool sourceAddrValidated = false;
 };
 
-struct PayloadCallEnd {
-    char localNumber[16];
-    char remoteNumber[16];
-};
-
 struct PayloadCallStatus {
-    char localNumber[16];
-    char remoteNumber[16];
     uint64_t lastRxMs;
     uint64_t lastTxMs;
 };
@@ -142,6 +138,13 @@ struct PayloadCall {
 
 struct PayloadDtmfPress {
     char symbol;
+};
+
+struct PayloadCallLevels {
+    int rx0Db;
+    int tx0Db;
+    int rx1Db;
+    int tx1Db;
 };
 
 }
