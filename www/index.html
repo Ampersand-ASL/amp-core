@@ -5,35 +5,14 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 <html>
     <head>
         <title>Ampersand Home Page</title>
+        <link rel="stylesheet" href="main.css">
         <style>
-body {
-    font-family: sans-serif;
-    background-color: #1e1e1e;
-    color: white;
-}
-
-input[type="submit"] {
-  border: 2px solid white;
-}
-
-h1 {
-    font-size: 20px;
-}
-
-a {
-  color: white;
-}
-
-.fav-button {
-    background-color: #38dc38;
+#node {
+    margin-right: 10px;
 }
 
 #connect-button {
-    background-color: #38dc38;
-}
-
-.disconnect-button {
-    background-color: #ff5c5c;
+    margin-right: 10px;
 }
 
 #cos-active {
@@ -59,13 +38,9 @@ a {
     background-color: green;
 }
 
-table, th, td {
-  border: 1px solid black; /* Sets a visible border */
-}
-
-.no-border-table, .no-border-table th, .no-border-table td {
-  border: none;
-  border-collapse: collapse;
+.dtmf-button {
+    width: 30px;
+    height: 30px;
 }
 
 .led-table td {
@@ -110,184 +85,195 @@ table, th, td {
     </head>
     <body>
         <div class="title-row">
-            <h1>Ampersand ASL Server</h1>
+            <span class="title-span">Ampersand ASL Server</span>
         </div>
-        <form id="status-form">
-            <input class="fav-button" name="fav1" type="submit" value="ASL Parrot"/>
-            <input class="fav-button" name="fav0" type="submit" value="TX Parrot"/>
-            <input class="fav-button" name="fav2" type="submit" value="East Cost Reflector"/>
-            <br/>
-            <br/>
-            <input id="node" name="node" type="text" placeholder="Node Number"/>
-            <input id="connect-button" name="call" type="submit" value="Connect"/>
-            <input class="disconnect-button" id="drop-button" name="drop" type="submit" value="Disconnect"/>
-            <br/>
-            <br/>
-            <input class="disconnect-button" id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
-            <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
-            <p>Connections:</p>
-            <table>
-                <thead>
-                    <th>Node</th>
-                    <th>Remote Node</th>
-                    <th>Connections</th>
-                </thead>
-                <tbody id="connection-table-body">
-                </tbody>
-            </table>
-            <br/>
-            <input id="ptt-button" name="ptt" type="submit" value="PTT"/>
-            <br/>
-            <br/>
-            <input id="capture-button" name="capture" type="submit" value="Capture"/>
-            <br/>
-            <br/>
-    <br/>
-    <!-- Organizes the DTMF pad and the Level meters -->
-    <div class="bottom-row">
-        <!-- Left Side-->
-        <div>
-            <table>
-                <tr>
-                    <td><input id="dtmf1-button" name="dtmf1" type="submit" value="1"/></td>
-                    <td><input id="dtmf2-button" name="dtmf2" type="submit" value="2"/></td>
-                    <td><input id="dtmf3-button" name="dtmf3" type="submit" value="3"/></td>
-                    <td><input id="dtmfA-button" name="dtmfA" type="submit" value="A"/></td>
-                </tr>
-                <tr>
-                    <td><input id="dtmf4-button" name="dtmf4" type="submit" value="4"/></td>
-                    <td><input id="dtmf5-button" name="dtmf5" type="submit" value="5"/></td>
-                    <td><input id="dtmf6-button" name="dtmf6" type="submit" value="6"/></td>
-                    <td><input id="dtmfB-button" name="dtmfB" type="submit" value="B"/></td>
-                </tr>
-                <tr>
-                    <td><input id="dtmf7-button" name="dtmf7" type="submit" value="7"/></td>
-                    <td><input id="dtmf8-button" name="dtmf8" type="submit" value="8"/></td>
-                    <td><input id="dtmf9-button" name="dtmf9" type="submit" value="9"/></td>
-                    <td><input id="dtmfc-button" name="dtmfC" type="submit" value="C"/></td>
-                </tr>
-                <tr>
-                    <td><input id="dtmfstar-button" name="dtmf*" type="submit" value="*"/></td>
-                    <td><input id="dtmf0-button" name="dtmf0" type="submit" value="0"/></td>
-                    <td><input id="dtmfpound-button" name="dtmf#" type="submit" value="#"/></td>
-                    <td><input id="dtmfD-button" name="dtmfD" type="submit" value="D"/></td>
-                </tr>
-            </table>
+        <div class="tab-row" role="tablist">
+            <div class="tab" role="tab" aria-selected="true">
+                <a href="/">Home</a>
+            </div>
+            <div class="tab" role="tab" aria-selected="false">
+                <a href="config">Configuration</a>
+            </div>
+            <div class="tab" role="tab" aria-selected="false">
+                <a href="log">Log</a>
+            </div>
         </div>
-        <!-- Right Side-->
-         <div>
-            <table class="no-border-table led-table">
-                <tr class="usb-rx-meter">
-                    <td>USB RX</td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                </tr>
-                <tr class="usb-tx-meter">
-                    <td>USB TX</td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                </tr>
-                <tr class="net-rx-meter">
-                    <td>NET RX</td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                </tr>
-                <tr class="net-tx-meter">
-                    <td>NET TX</td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledgr"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledyl"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                    <td><div class="led ledrd"></div></td>
-                </tr>
-                <tr class="legend">
-                    <td></td>
-                    <td>-50</td>
-                    <td>-40</td>
-                    <td>-36</td>
-                    <td>-32</td>
-                    <td>-28</td>
-                    <td>-24</td>
-                    <td>-16</td>
-                    <td>-14</td>
-                    <td>-12</td>
-                    <td>-10</td>
-                    <td>-8</td>
-                    <td>-6</td>
-                    <td>-4</td>
-                    <td>-3</td>
-                    <td>-2</td>
-                    <td>-1</td>
-                    <td>0</td>
-                </tr>
-            </table>
-         </div>
-    </div>
-
-
-        </form>
-        <hr/>
-        <a href="config">Configuration</a>
-        <br/>
-        <br/>
-        <span><i>Bruce MacKinnon KC1FSZ bruce@mackinnon.com</i></span>
+        <div class="content-row" role="tabpanel">
+            <form id="status-form">
+                <input class="green-button" name="fav1" type="submit" value="ASL Parrot"/>
+                <input class="green-button" name="fav0" type="submit" value="TX Parrot"/>
+                <input class="green-button" name="fav2" type="submit" value="East Cost Reflector"/>
+                <br/>
+                <br/>
+                <input id="node" name="node" type="text" placeholder="Node Number"/>
+                <input class="green-button" id="connect-button" name="call" type="submit" value="Connect"/>
+                <input class="red-button" id="drop-button" name="drop" type="submit" value="Disconnect"/>
+                <br/>
+                <br/>
+                <input class="red-button" id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
+                <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
+                <p>Connections:</p>
+                <table>
+                    <thead>
+                        <th>Node</th>
+                        <th>Remote Node</th>
+                        <th>Connections</th>
+                    </thead>
+                    <tbody id="connection-table-body">
+                    </tbody>
+                </table>
+                <br/>
+                <input class="grey-button" id="ptt-button" name="ptt" type="submit" value="PTT"/>
+                <br/>
+                <br/>
+                <input class="grey-button" id="capture-button" name="capture" type="submit" value="Capture"/>
+                <br/>
+                <br/>
+                <br/>
+                <!-- Organizes the DTMF pad and the Level meters -->
+                <div class="bottom-row">
+                    <!-- Left Side-->
+                    <div>
+                        <table>
+                            <tr>
+                                <td><input class="grey-button dtmf-button" id="dtmf1-button" name="dtmf1" type="submit" value="1"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf2-button" name="dtmf2" type="submit" value="2"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf3-button" name="dtmf3" type="submit" value="3"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfA-button" name="dtmfA" type="submit" value="A"/></td>
+                            </tr>
+                            <tr>
+                                <td><input class="grey-button dtmf-button" id="dtmf4-button" name="dtmf4" type="submit" value="4"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf5-button" name="dtmf5" type="submit" value="5"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf6-button" name="dtmf6" type="submit" value="6"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfB-button" name="dtmfB" type="submit" value="B"/></td>
+                            </tr>
+                            <tr>
+                                <td><input class="grey-button dtmf-button" id="dtmf7-button" name="dtmf7" type="submit" value="7"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf8-button" name="dtmf8" type="submit" value="8"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf9-button" name="dtmf9" type="submit" value="9"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfc-button" name="dtmfC" type="submit" value="C"/></td>
+                            </tr>
+                            <tr>
+                                <td><input class="grey-button dtmf-button" id="dtmfstar-button" name="dtmf*" type="submit" value="*"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf0-button" name="dtmf0" type="submit" value="0"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfpound-button" name="dtmf#" type="submit" value="#"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfD-button" name="dtmfD" type="submit" value="D"/></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <!-- Right Side-->
+                    <div>
+                        <table class="no-border-table led-table">
+                            <tr class="usb-rx-meter">
+                                <td>USB RX</td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                            </tr>
+                            <tr class="usb-tx-meter">
+                                <td>USB TX</td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                            </tr>
+                            <!--
+                            <tr class="net-rx-meter">
+                                <td>NET RX</td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                            </tr>
+                            <tr class="net-tx-meter">
+                                <td>NET TX</td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledgr"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledyl"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                                <td><div class="led ledrd"></div></td>
+                            </tr>
+                            -->
+                            <tr class="legend">
+                                <td></td>
+                                <td>-50</td>
+                                <td>-40</td>
+                                <td>-36</td>
+                                <td>-32</td>
+                                <td>-28</td>
+                                <td>-24</td>
+                                <td>-16</td>
+                                <td>-14</td>
+                                <td>-12</td>
+                                <td>-10</td>
+                                <td>-8</td>
+                                <td>-6</td>
+                                <td>-4</td>
+                                <td>-3</td>
+                                <td>-2</td>
+                                <td>-1</td>
+                                <td>0</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </form>
+        </div> <!-- /content-row -->
+        <div class="footer-row">
+            <span><i><a href="https://www.qrz.com/db/KC1FSZ">Bruce MacKinnon KC1FSZ bruce@mackinnon.com</a></i></span>
+        </div> <!-- /footer-row -->
     </body>
     <script>
 

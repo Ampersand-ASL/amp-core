@@ -1,20 +1,17 @@
 <html>
     <head>
         <title>Ampersand Configuration</title>
+        <link rel="stylesheet" href="main.css">
         <style>
-body {
-    font-family: sans-serif;
-}
-
 .form2 {
     width: 700px;
     display: grid;
     grid-template-columns: 1fr 2fr; /* Creates two columns, the second twice as wide */
     gap: 10px; /* Adds space between rows and columns */
-    border: solid 1px black;
+    border: solid 1px white;
     margin-bottom: 5px;
     padding: 10px;
-    background-color: #eeeeee;
+    background-color: #3e3e42;
 }
 
 #config-form label {
@@ -22,131 +19,143 @@ body {
 }
 
 .save-button {
-    background-color: #38dc38;
     width: 100px;
 }
         </style>
     </head>
     <body>
-        <h1>Ampersand Configuration</h1>
-        <form id="config-form">
-            <div class="form2">
-                <label for="node">Node Number:</label>
-                <input type="text" id="node" name="node"/>
-                <label for="password">Password:</label>
-                <input type="text" id="password" name="password"/>
-                <label for="iaxPort">IAX Port:</label>
-                <input type="text" id="iaxPort" name="iaxPort"/>
+        <div class="title-row">
+            <span class="title-span">Ampersand ASL Server</span>
+        </div>
+        <div class="tab-row" role="tablist">
+            <div class="tab" role="tab" aria-selected="false">
+                <a href="/">Home</a>
             </div>
-            <div class="form2">
-                <div>Radio 0:</div><div></div>
-                <label for="setupMode">Setup Mode:</label>
-                <select id="setupMode" name="setupMode">
-                    <option value="0">C-Media CM1xx URI/UCI</option>
-                    <!--
-                    <option value="1">Ampersand Mode</option>
+            <div class="tab tab" role="tab" aria-selected="true">
+                <a href="config">Configuration</a>
+            </div>
+            <div class="tab" role="tab" aria-selected="false">
+                <a href="log">Log</a>
+            </div>
+        </div>
+        <div class="content-row" role="tabpanel">
+            <form id="config-form">
+                <div class="form2">
+                    <label for="node">Node Number:</label>
+                    <input type="text" id="node" name="node"/>
+                    <label for="password">Password:</label>
+                    <input type="text" id="password" name="password"/>
+                    <label for="iaxPort">IAX Port:</label>
+                    <input type="text" id="iaxPort" name="iaxPort"/>
+                </div>
+                <div class="form2">
+                    <div>Radio 0:</div><div></div>
+                    <label for="setupMode">Setup Mode:</label>
+                    <select id="setupMode" name="setupMode">
+                        <option value="0">C-Media CM1xx URI/UCI</option>
+                        <!--
+                        <option value="1">Ampersand Mode</option>
+                        -->
+                    </select>
+                    
+                    <label for="aslHdwType">Hardware Type:</label>
+                    <select id="aslHdwType" name="aslHdwType">
+                        <option value="0">0: USB radio interfaces designed for app_rpt</option>
+                        <!--
+                        <option value="1">1: Dingotel/Sph interfaces</option>
+                        <option value="2">2: NHC (N1KDO) interfaces</option>
+                        <option value="3">3: Custom</option>
                     -->
-                </select>
-                
-                <label for="aslHdwType">Hardware Type:</label>
-                <select id="aslHdwType" name="aslHdwType">
-                    <option value="0">0: USB radio interfaces designed for app_rpt</option>
+                    </select>
+                    <label for="aslAudioDevice">Audio Device:</label>
+                    <select id="aslAudioDevice" name="aslAudioDevice">
+                    </select>
+                    <label for="aslCosFrom">Carrier From:</label>
+                    <select id="aslCosFrom" name="aslCosFrom">
+                        <option value="none">None</option>
+                        <option value="usb">USB</option>
+                        <option value="usbinvert">USB Inverted (Active Low)</option>
+                    </select>
+                    <label for="aslCtcssFrom">CTCSS From:</label>
+                    <select id="aslCtcssFrom" name="aslCtcssFrom" disabled>
+                        <option value="none">None</option>
+                        <option value="usb">USB</option>
+                        <option value="usbinvert">USB Inverted (Active Low)</option>
+                    </select>
+                    <label for="aslInvertPtt">Invert PTT:</label>
+                    <select id="aslInvertPtt" name="aslInvertPtt" disabled>
+                        <option value="no">No (Active Low)</option>
+                        <option value="yes">Yes (Active High)</option>
+                    </select>
+
+                    <label for="aslTxMixASet">Transmit Mixer A:</label>
+                    <select id="aslTxMixASet" name="aslTxMixASet">
+                    </select>
+                    <label for="aslTxMixBSet">Transmit Mixer B:</label>
+                    <select id="aslTxMixBSet" name="aslTxMixBSet">
+                    </select>
+                    <label for="aslRxMixerSet">Receive Mixer:</label>
+                    <select id="aslRxMixerSet" name="aslRxMixerSet">
+                    </select>
                     <!--
-                    <option value="1">1: Dingotel/Sph interfaces</option>
-                    <option value="2">2: NHC (N1KDO) interfaces</option>
-                    <option value="3">3: Custom</option>
+                    <label for="audioDevice">Audio Device:</label>
+                    <select id="audioDevice" name="audioDevice">
+                    </select>
+                    <label for="audioDeviceParam">Audio Device Parameters:</label>
+                    <input type="text" id="audioDeviceParam" name="audioDeviceParam"/>
+
+                    <label for="cosSignal">COR Signal:</label>
+                    <select id="cosSignal" name="cosSignal">
+                        <option>USB HID Register</option>
+                        <option>Raspberry Pi GPIO Pin</option>
+                        <option>Parallel Port Pin</option>
+                        <option>UART RTS/DTR Pin</option>
+                        <option>CAT Command</option>
+                    </select>
+                    <label for="cosSignalParam">COR Signal Parameters:</label>
+                    <input type="text" id="cosSignalParam" name="cosSignalParam"/>
+                    <label for="ampInvertCos">Invert COR Signal:</label>
+                    <select id="ampInvertCos" name="ampInvertCos">
+                        <option>No</option>
+                        <option>Yes</option>
+                    </select>                
+
+                    <label for="ctcssSignal">CTCSS Signal:</label>
+                    <select id="ctcssSignal" name="ctcssSignal">
+                        <option>None</option>
+                    </select>
+                    <label for="ctcssSignalParam">CTCSS Signal Parameters:</label>
+                    <input type="text" id="ctcssSignalParam" name="ctcssSignalParam"/>
+                    <label for="ampInvertCtcss">Invert CTCSS Signal:</label>
+                    <select id="ampInvertCtcss" name="ampInvertCtcss">
+                        <option>No</option>
+                        <option>Yes</option>
+                    </select>                
+
+                    <label for="ampPttSignal">PTT Signal:</label>
+                    <select id="ampPttSignal" name="ampPttSignal">
+                        <option>USB HID Register</option>
+                        <option>Raspberry Pi GPIO Pin</option>
+                        <option>Parallel Port Pin</option>
+                        <option>UART RTS/DTR Pin</option>
+                        <option>CAT Command</option>
+                    </select>
+                    <label for="ampPttSignalParam">PTT Signal Parameters:</label>
+                    <input type="text" id="ampPttSignalParam" name="ampPttSignalParam"/>
+                    <label for="ampInvertPtt">Invert PTT:</label>
+                    <select id="ampInvertPtt" name="ampInvertPtt">
+                        <option>No (Active Low)</option>
+                        <option>Yes (Active High)</option>
+                    </select>                
                 -->
-                </select>
-                <label for="aslAudioDevice">Audio Device:</label>
-                <select id="aslAudioDevice" name="aslAudioDevice">
-                </select>
-                <label for="aslCosFrom">Carrier From:</label>
-                <select id="aslCosFrom" name="aslCosFrom">
-                    <option value="none">None</option>
-                    <option value="usb">USB</option>
-                    <option value="usbinvert">USB Inverted (Active Low)</option>
-                </select>
-                <label for="aslCtcssFrom">CTCSS From:</label>
-                <select id="aslCtcssFrom" name="aslCtcssFrom" disabled>
-                    <option value="none">None</option>
-                    <option value="usb">USB</option>
-                    <option value="usbinvert">USB Inverted (Active Low)</option>
-                </select>
-                <label for="aslInvertPtt">Invert PTT:</label>
-                <select id="aslInvertPtt" name="aslInvertPtt" disabled>
-                    <option value="no">No (Active Low)</option>
-                    <option value="yes">Yes (Active High)</option>
-                </select>
-
-                <label for="aslTxMixASet">Transmit Mixer A:</label>
-                <select id="aslTxMixASet" name="aslTxMixASet">
-                </select>
-                <label for="aslTxMixBSet">Transmit Mixer B:</label>
-                <select id="aslTxMixBSet" name="aslTxMixBSet">
-                </select>
-                <label for="aslRxMixerSet">Receive Mixer:</label>
-                <select id="aslRxMixerSet" name="aslRxMixerSet">
-                </select>
-                <!--
-                <label for="audioDevice">Audio Device:</label>
-                <select id="audioDevice" name="audioDevice">
-                </select>
-                <label for="audioDeviceParam">Audio Device Parameters:</label>
-                <input type="text" id="audioDeviceParam" name="audioDeviceParam"/>
-
-                <label for="cosSignal">COR Signal:</label>
-                <select id="cosSignal" name="cosSignal">
-                    <option>USB HID Register</option>
-                    <option>Raspberry Pi GPIO Pin</option>
-                    <option>Parallel Port Pin</option>
-                    <option>UART RTS/DTR Pin</option>
-                    <option>CAT Command</option>
-                </select>
-                <label for="cosSignalParam">COR Signal Parameters:</label>
-                <input type="text" id="cosSignalParam" name="cosSignalParam"/>
-                <label for="ampInvertCos">Invert COR Signal:</label>
-                <select id="ampInvertCos" name="ampInvertCos">
-                    <option>No</option>
-                    <option>Yes</option>
-                </select>                
-
-                <label for="ctcssSignal">CTCSS Signal:</label>
-                <select id="ctcssSignal" name="ctcssSignal">
-                    <option>None</option>
-                </select>
-                <label for="ctcssSignalParam">CTCSS Signal Parameters:</label>
-                <input type="text" id="ctcssSignalParam" name="ctcssSignalParam"/>
-                <label for="ampInvertCtcss">Invert CTCSS Signal:</label>
-                <select id="ampInvertCtcss" name="ampInvertCtcss">
-                    <option>No</option>
-                    <option>Yes</option>
-                </select>                
-
-                <label for="ampPttSignal">PTT Signal:</label>
-                <select id="ampPttSignal" name="ampPttSignal">
-                    <option>USB HID Register</option>
-                    <option>Raspberry Pi GPIO Pin</option>
-                    <option>Parallel Port Pin</option>
-                    <option>UART RTS/DTR Pin</option>
-                    <option>CAT Command</option>
-                </select>
-                <label for="ampPttSignalParam">PTT Signal Parameters:</label>
-                <input type="text" id="ampPttSignalParam" name="ampPttSignalParam"/>
-                <label for="ampInvertPtt">Invert PTT:</label>
-                <select id="ampInvertPtt" name="ampInvertPtt">
-                    <option>No (Active Low)</option>
-                    <option>Yes (Active High)</option>
-                </select>                
-            -->
-            </div>
-            <span></span>
-            <input type="submit" value="Save" class="save-button"/>
-        </form>
-        <hr/>
-        <a href="/">Home</a>
-        <br/>
-        <br/>
-        <span><i>Bruce MacKinnon KC1FSZ bruce@mackinnon.com</i></span>
+                </div>
+                <span></span>
+                <input type="submit" value="Save" class="green-button save-button"/>
+            </form>
+        </div> <!-- /content-row -->
+        <div class="footer-row">
+            <span><i><a href="https://www.qrz.com/db/KC1FSZ">Bruce MacKinnon KC1FSZ bruce@mackinnon.com</a></i></span>
+        </div> <!-- /footer-row -->
     </body>
     <script>
 
