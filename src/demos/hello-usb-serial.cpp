@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include <iostream>
+#include <cmath>
 
 #include "kc1fsz-tools/linux/StdClock.h"
 #include "kc1fsz-tools/StdPollTimer.h"
@@ -77,28 +78,36 @@ int main(int, const char**) {
 
     Log log;
     StdClock clock;
-    StdPollTimer timer(clock, 1000 * 1000);
+    StdPollTimer timer(clock, 8 * 1000);
     int recCount = 0;
     char read_buf[256];
+
+    float phi = 0;
+    float omega = 2.0f * 3.1415926f * 800.0f / 8000.0f;
 
     while (true) {
 
         if (timer.poll()) {
-            if (count > 0) 
-                prettyHexDump((const uint8_t*)read_buf, recCount, cout);
+            //if (count > 0) 
+            //    prettyHexDump((const uint8_t*)read_buf, recCount, cout);
 
-            // Make a message to encode            
+            // Make a PCM tone
             uint8_t msg[128 + 4];
-            msg[0] = count++;
-            for (unsigned i = 1; i < 128 + 4; i++)
-                msg[i] = i;
+            uint8_t* p = msg;
+            for (unsigned i = 0; i < 64; i++, p += 2) {
+                float v = 0.5 * std::cos(phi);
+                phi += omega;
+                int16_t pcm = v * 32767.0f;
+                pack_int16_le(pcm, p);
+            }
+            phi = fmod(phi, 2.0f * 3.1415926f);
+            // TODO: EXTRA 4 BYTES!
 
             // Header
             packet[0] = 0;
             cobsEncode(msg, 128 + 4, packet + 1, 128 + 4 + 1);
             int rc1 = write(serial_port, packet, 134);
 
-            log.info("Start");
             recCount = 0;
             memset(read_buf, 0, 256);
         }
@@ -108,7 +117,6 @@ int main(int, const char**) {
         }
         else {
             recCount += rc2;
-            //log.info("rc2=%d, %d", rc2, recCount);
             if (recCount == 0)
                 log.info("   %d", (int)read_buf[0]);
         }
