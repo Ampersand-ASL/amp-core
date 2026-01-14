@@ -428,6 +428,8 @@ add_executable(hello-usb-serial
   src/demos/hello-usb-serial.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/CobsCodec.cpp
 )
 
 target_include_directories(hello-usb-serial PRIVATE src)

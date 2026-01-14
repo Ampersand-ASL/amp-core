@@ -4,10 +4,18 @@
 #include <errno.h> // Error integer and strerror() function
 #include <termios.h> // Contains POSIX terminal control definitions
 #include <errno.h>
+#include <cstring>
 
 #include <iostream>
 
+#include "kc1fsz-tools/linux/StdClock.h"
+#include "kc1fsz-tools/StdPollTimer.h"
+#include "kc1fsz-tools/Log.h"
+#include "kc1fsz-tools/Common.h"
+#include "kc1fsz-tools/CobsCodec.h"
+
 using namespace std;
+using namespace kc1fsz;
 
 // https://blog.mbedded.ninja/programming/operating-systems/linux/linux-serial-ports-using-c-cpp/
 
@@ -58,16 +66,51 @@ int main(int, const char**) {
         printf("Error %i from tcsetattr\n", errno);
     }
 
-    unsigned char msg[] = { 6, 'H', 'e', 'l', 'l', 'o', '\r' };
-    int rc1 = write(serial_port, msg, sizeof(msg));
-    cout << "RC1 = " << rc1 << endl;
-
+    // Switch into streaming mode
+    uint8_t packet[135];
+    packet[0] = 'a';
+    int rc0 = write(serial_port, packet, 1);
+    cout << "RC0 = " << rc0 << endl;
     sleep(1);
 
-    char read_buf [256];
-    // Read bytes. The behaviour of read() (e.g. does it block?,
-    // how long does it block for?) depends on the configuration
-    // settings above, specifically VMIN and VTIME
-    int rc2 = read(serial_port, read_buf, sizeof(read_buf));
-    cout << "RC2 = " << rc2 << endl;
+    int count = 1;
+
+    Log log;
+    StdClock clock;
+    StdPollTimer timer(clock, 1000 * 1000);
+    int recCount = 0;
+    char read_buf[256];
+
+    while (true) {
+
+        if (timer.poll()) {
+            if (count > 0) 
+                prettyHexDump((const uint8_t*)read_buf, recCount, cout);
+
+            // Make a message to encode            
+            uint8_t msg[128 + 4];
+            msg[0] = count++;
+            for (unsigned i = 1; i < 128 + 4; i++)
+                msg[i] = i;
+
+            // Header
+            packet[0] = 0;
+            cobsEncode(msg, 128 + 4, packet + 1, 128 + 4 + 1);
+            int rc1 = write(serial_port, packet, 134);
+
+            log.info("Start");
+            recCount = 0;
+            memset(read_buf, 0, 256);
+        }
+
+        int rc2 = read(serial_port, read_buf + recCount, 256);
+        if (rc2 == 0) {
+        }
+        else {
+            recCount += rc2;
+            //log.info("rc2=%d, %d", rc2, recCount);
+            if (recCount == 0)
+                log.info("   %d", (int)read_buf[0]);
+        }
+    }
 }

@@ -24,6 +24,7 @@
 #include "kc1fsz-tools/copyableatomic.h"
 
 #include "Runnable2.h"
+#include "MessageConsumer.h"
 
 using json = nlohmann::json;
 
