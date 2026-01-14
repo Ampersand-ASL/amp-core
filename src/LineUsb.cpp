@@ -410,10 +410,10 @@ void LineUsb::_captureIfPossible() {
                     _captureStart();
                 }
                 _lastCapturedFrameMs = _clock.time();
-                
+
                 // Here is where statistics and possibly recording happens
                 _analyzeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
-
+                
                 // Here is where the actual processing of the new block happens
                 _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, nowMs, idealNowMs);
             }

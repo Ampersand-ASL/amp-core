@@ -77,6 +77,8 @@ extern unsigned char _amp_core_www_index_html[];
 extern unsigned int _amp_core_www_index_html_len;
 extern unsigned char _amp_core_www_config_html[];
 extern unsigned int _amp_core_www_config_html_len;
+extern unsigned char _amp_core_www_main_css[];
+extern unsigned int _amp_core_www_main_css_len;
 
 namespace kc1fsz {
 
@@ -179,17 +181,17 @@ void WebUi::_thread() {
     // ------ Common -----------------------------------------------------------
 
     svr.Get("/main.css", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-        //    "text/css");
-        res.set_file_content("../amp-core/www/main.css");
+        res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
+            "text/css");
+        //res.set_file_content("../amp-core/www/main.css");
     });
 
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/index.html");
+        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/index.html");
     });
     svr.Get("/status", [this](const httplib::Request &, httplib::Response &res) {
 
@@ -301,9 +303,9 @@ void WebUi::_thread() {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/config.html");
+        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
         json j = _config.getCopy();
