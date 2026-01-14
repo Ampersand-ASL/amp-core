@@ -143,13 +143,12 @@ void LineRadio::_generateToneFrame() {
 
 void LineRadio::oneSecTick() {
 
-    int radioRxDb = -99;
+    int radioRxDb = dbVfs(_capturePcmValueMax);
     int radioTxDb = -99;
-
+    
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
         _log.info("TXLEVEL %6u %5.1f %5.1f", _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg));
-        radioRxDb = dbVfs(_capturePcmValueMax);
     }
     if (_playPcmValueCount) {
         //uint32_t avg = _playPcmValueSum / _playPcmValueCount;

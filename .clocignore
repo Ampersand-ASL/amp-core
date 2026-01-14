@@ -1,0 +1,7 @@
+alsa-mock
+python
+# 3rd party
+json/
+# Unit tests
+src/tests
+src/demos
