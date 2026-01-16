@@ -10,17 +10,40 @@
 #include <cmath>
 #include <cassert>
 
+#include <termios.h>
+#include <linux/serial.h>
+#include  <sys/ioctl.h>
+
 #include "kc1fsz-tools/linux/StdClock.h"
 #include "kc1fsz-tools/StdPollTimer.h"
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Common.h"
+
+#include "crc.h"
 #include "cobs.h"
 
-#define NETWORK_BAUD (1152000)
+/* 
+[1230981.502074] usb 1-2: new full-speed USB device number 26 using xhci-hcd
+[1230981.660464] usb 1-2: New USB device found, idVendor=067b, idProduct=23a3, bcdDevice= 1.05
+[1230981.660471] usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[1230981.660473] usb 1-2: Product: USB-Serial Controller
+[1230981.660475] usb 1-2: Manufacturer: Prolific Technology Inc.
+[1230981.660476] usb 1-2: SerialNumber: CIBYb137X02
+[1230981.667574] pl2303 1-2:1.0: pl2303 converter detected
+[1230981.667690] usb 1-2: pl2303 converter now attached to ttyUSB0
+*/
+
+// https://www.prolific.com.tw/wp-content/uploads/2025/07/DS-23181003_PL2303GT_V1.0.2.pdf
+
+//#define NETWORK_BAUD (B1152000)
+#define NETWORK_BAUD (B460800)
 #define BLOCK_SIZE (160)
+
 #define COBS_OVERHEAD (2)
-// Fixed size, 1 header null + audio + 2 COBS overhead
-#define NETWORK_MESSAGE_SIZE (1 + (BLOCK_SIZE * 2) + COBS_OVERHEAD)
+#define CRC_LEN (2)
+#define PAYLOAD_SIZE (160 * 2)
+// Fixed size, 1 header null + audio + CRC + COBS overhead
+#define NETWORK_MESSAGE_SIZE (1 + PAYLOAD_SIZE + CRC_LEN + COBS_OVERHEAD)
 
 using namespace std;
 using namespace kc1fsz;
@@ -29,8 +52,12 @@ using namespace kc1fsz;
 
 int main(int, const char**) {
 
-    int serial_port = open("/dev/ttyUSB0", O_RDWR | O_NONBLOCK);
+    int serial_port = open("/dev/ttyUSB0", O_RDWR | O_NONBLOCK | O_NOCTTY);
     cout << serial_port << endl;
+
+    Log log;
+    StdClock clock;
+    StdPollTimer timer(clock, 20 * 1000);
 
     // Create new termios struct, we call it 'tty' for convention
     // No need for "= {0}" at the end as we'll immediately write the existing
@@ -44,6 +71,9 @@ int main(int, const char**) {
     if (tcgetattr(serial_port, &tty) != 0) {
         printf("Error %i from tcgetattr\n", errno);
     }
+    cout << "Speed " << (int)cfgetospeed(&tty) << endl;
+    cout << "? " << (int)B1152000 << endl;
+
     tty.c_cflag &= ~PARENB;
     tty.c_cflag &= ~CSTOPB;
     tty.c_cflag &= ~CSIZE; 
@@ -65,20 +95,42 @@ int main(int, const char**) {
     tty.c_cc[VTIME] = 0;
     tty.c_cc[VMIN] = 0;
 
-    // Specifying a custom baud rate when using GNU C
-    cfsetispeed(&tty, NETWORK_BAUD);
-    cfsetospeed(&tty, NETWORK_BAUD);
+    // Configure port to use custom speed instead of 38400
+    /*
+    int speed = 1152000;
+    serial_struct ss;
+    ioctl(serial_port, TIOCGSERIAL, &ss);
+    ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
+    ss.custom_divisor = (ss.baud_base + (speed / 2)) / speed;
+    int closestSpeed = ss.baud_base / ss.custom_divisor;
+    cout << "B_B " << ss.baud_base << endl;
 
+    if (closestSpeed < speed * 98 / 100 || closestSpeed > speed * 102 / 100) {
+        fprintf(stderr, "Cannot set serial port speed to %d. Closest possible is %d\n", speed, closestSpeed);
+    }
+    ioctl(serial_port, TIOCSSERIAL, &ss);
+    cfsetispeed(&tty, B38400);
+    cfsetospeed(&tty, B38400);
+    */
+    
+    // Specifying a custom baud rate when using GNU C
+    if (cfsetispeed(&tty, NETWORK_BAUD) != 0)
+        log.error("Invalid baud %d", NETWORK_BAUD);
+    if (cfsetospeed(&tty, NETWORK_BAUD) != 0)
+        log.error("Invalid baud %d", NETWORK_BAUD);
+    
     if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
         printf("Error %i from tcsetattr\n", errno);
     }
 
-    uint8_t packet[NETWORK_MESSAGE_SIZE];
-    Log log;
-    StdClock clock;
-    StdPollTimer timer(clock, 20 * 1000);
+    //if (tcgetattr(serial_port, &tty) != 0) {
+    //    printf("Error %i from tcgetattr\n", errno);
+    //}
+    //cout << "Speed " << (int)cfgetospeed(&tty) << endl;
+    //cout << "? " << (int)B230400 << endl;
 
     // Switch into streaming mode
+    uint8_t packet[NETWORK_MESSAGE_SIZE];
     packet[0] = 'a';
     int rc0 = write(serial_port, packet, 1);
     if (rc0 != 1) {
@@ -88,18 +140,19 @@ int main(int, const char**) {
     sleep(1);
 
     int sendCount = 0;
-    char read_buf[256];
-    //float phi = 0;
-    //float omega = 2.0f * 3.1415926f * 800.0f / 8000.0f;
+    char read_buf[1024];
+    float phi = 0;
+    float omega = 2.0f * 3.1415926f * 800.0f / 8000.0f;
     int recBytes = 0;
+
+    timer.reset();
 
     while (true) {
 
-        if (timer.poll()) {
+        if (timer.poll() && sendCount < 50) {
 
             // Make a PCM tone in 20ms increments, phase continuous
-            uint8_t msg[BLOCK_SIZE * 2];
-            /*
+            uint8_t msg[PAYLOAD_SIZE + CRC_LEN];
             uint8_t* p = msg;
             for (unsigned i = 0; i < BLOCK_SIZE; i++, p += 2) {
                 float v = 0.5 * std::cos(phi);
@@ -108,26 +161,27 @@ int main(int, const char**) {
                 pack_int16_le(pcm, p);
             }
             phi = fmod(phi, 2.0f * 3.1415926f);
-            */
-            for (unsigned i = 0; i < BLOCK_SIZE * 2; i++) {
-                msg[i] = sendCount;
-            }
 
-            if (sendCount < 3) {
-                // Header
-                packet[0] = 0;
-                // Last byte in case we don't use it in the encoding
-                packet[NETWORK_MESSAGE_SIZE - 1] = 1;
-                cobs_encode_result re = cobs_encode(packet + 1, NETWORK_MESSAGE_SIZE - 1, 
-                    msg, BLOCK_SIZE * 2);
-                assert(re.status == COBS_ENCODE_OK);
-                assert(re.out_len <= BLOCK_SIZE * 2 + COBS_OVERHEAD);
-                int rc1 = write(serial_port, packet, NETWORK_MESSAGE_SIZE);
-                if (rc1 != NETWORK_MESSAGE_SIZE)
-                    log.error("Write failed %d", rc1);
+            int16_t crc = crcSlow(msg, PAYLOAD_SIZE);
+            pack_int16_le(crc, msg + PAYLOAD_SIZE);
+
+            // #### TODO Add CRC
+            //msg[PAYLOAD_SIZE] = 'a';
+            //msg[PAYLOAD_SIZE + 1] = 'b';
+
+            // Header
+            packet[0] = 0;
+            cobs_encode_result re = cobs_encode(packet + 1, NETWORK_MESSAGE_SIZE - 1, 
+                msg, sizeof(msg));
+            assert(re.status == COBS_ENCODE_OK);
+            assert(re.out_len <= PAYLOAD_SIZE + CRC_LEN + COBS_OVERHEAD);
+
+            int rc1 = write(serial_port, packet, NETWORK_MESSAGE_SIZE);
+            if (rc1 != NETWORK_MESSAGE_SIZE)
+                log.error("Write failed %d", rc1);
+            else {
+                log.info("Sent %d", sendCount);
                 sendCount++;
-                //log.info("Sending");
-                //prettyHexDump((const uint8_t*)packet, NETWORK_MESSAGE_SIZE, cout);
             }
         }
 
@@ -138,7 +192,7 @@ int main(int, const char**) {
             log.error("Read error %d", rc2);
         } else {
             recBytes += rc2;
-            //prettyHexDump((const uint8_t*)read_buf, rc2, cout);
+            prettyHexDump((const uint8_t*)read_buf, rc2, cout);
             log.info("Bytes %d", recBytes);
         }
     }
