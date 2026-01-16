@@ -72,7 +72,7 @@ int main(int, const char**) {
         printf("Error %i from tcgetattr\n", errno);
     }
     cout << "Speed " << (int)cfgetospeed(&tty) << endl;
-    cout << "? " << (int)B1152000 << endl;
+    cout << "? " << NETWORK_BAUD << endl;
 
     tty.c_cflag &= ~PARENB;
     tty.c_cflag &= ~CSTOPB;
