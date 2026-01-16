@@ -3,6 +3,8 @@ of the code lives here.
 
 [Most of the documentation is here](https://mackinnon.info/ampersand/).
 
+PRs are considered on onto the develop branch.
+
 Code Metrics
 ============
 
