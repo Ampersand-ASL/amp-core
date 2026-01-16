@@ -17,9 +17,10 @@
 #include "cobs.h"
 
 #define NETWORK_BAUD (1152000)
-// Fixed size, 1 header null + audio + 2 COBS overhead
-#define NETWORK_MESSAGE_SIZE (1 + (160 * 2) + 2)
 #define BLOCK_SIZE (160)
+#define COBS_OVERHEAD (2)
+// Fixed size, 1 header null + audio + 2 COBS overhead
+#define NETWORK_MESSAGE_SIZE (1 + (BLOCK_SIZE * 2) + COBS_OVERHEAD)
 
 using namespace std;
 using namespace kc1fsz;
@@ -87,21 +88,18 @@ int main(int, const char**) {
     sleep(1);
 
     int sendCount = 0;
-    int recPtr = 0;
     char read_buf[256];
-    float phi = 0;
-    float omega = 2.0f * 3.1415926f * 800.0f / 8000.0f;
+    //float phi = 0;
+    //float omega = 2.0f * 3.1415926f * 800.0f / 8000.0f;
+    int recBytes = 0;
 
     while (true) {
 
         if (timer.poll()) {
 
-            if (recPtr > 0) 
-                log.info("Received frame %d", recPtr);
-            //    prettyHexDump((const uint8_t*)read_buf, recCount, cout);
-
             // Make a PCM tone in 20ms increments, phase continuous
             uint8_t msg[BLOCK_SIZE * 2];
+            /*
             uint8_t* p = msg;
             for (unsigned i = 0; i < BLOCK_SIZE; i++, p += 2) {
                 float v = 0.5 * std::cos(phi);
@@ -110,31 +108,38 @@ int main(int, const char**) {
                 pack_int16_le(pcm, p);
             }
             phi = fmod(phi, 2.0f * 3.1415926f);
+            */
+            for (unsigned i = 0; i < BLOCK_SIZE * 2; i++) {
+                msg[i] = sendCount;
+            }
 
-            if (sendCount < 100) {
+            if (sendCount < 3) {
                 // Header
                 packet[0] = 0;
+                // Last byte in case we don't use it in the encoding
+                packet[NETWORK_MESSAGE_SIZE - 1] = 1;
                 cobs_encode_result re = cobs_encode(packet + 1, NETWORK_MESSAGE_SIZE - 1, 
                     msg, BLOCK_SIZE * 2);
                 assert(re.status == COBS_ENCODE_OK);
-                assert(re.out_len <= NETWORK_MESSAGE_SIZE - 1);
+                assert(re.out_len <= BLOCK_SIZE * 2 + COBS_OVERHEAD);
                 int rc1 = write(serial_port, packet, NETWORK_MESSAGE_SIZE);
                 if (rc1 != NETWORK_MESSAGE_SIZE)
                     log.error("Write failed %d", rc1);
                 sendCount++;
+                //log.info("Sending");
+                //prettyHexDump((const uint8_t*)packet, NETWORK_MESSAGE_SIZE, cout);
             }
-
-            recPtr = 0;
-            memset(read_buf, 0, 256);
         }
 
-        int rc2 = read(serial_port, read_buf + recPtr, 256);
+        int rc2 = read(serial_port, read_buf, 256);
         if (rc2 == 0) {
         }
         else if (rc2 < 0) {
             log.error("Read error %d", rc2);
         } else {
-            recPtr += rc2;
+            recBytes += rc2;
+            //prettyHexDump((const uint8_t*)read_buf, rc2, cout);
+            log.info("Bytes %d", recBytes);
         }
     }
 }
