@@ -128,7 +128,7 @@ int compareSeqWrap(uint8_t a, uint8_t b) {
 bool codecSupported(CODECType type) {
     if (type == CODECType::IAX2_CODEC_G711_ULAW)
         return true;
-    else if (type == CODECType::IAX2_CODEC_SLIN)
+    else if (type == CODECType::IAX2_CODEC_SLIN_8K)
         return true;
     else if (type == CODECType::IAX2_CODEC_SLIN_16K)
         return true;
@@ -139,7 +139,7 @@ bool codecSupported(CODECType type) {
 unsigned maxVoiceFrameSize(CODECType type) {
     if (type == CODECType::IAX2_CODEC_G711_ULAW)
         return 160;
-    else if (type == CODECType::IAX2_CODEC_SLIN)
+    else if (type == CODECType::IAX2_CODEC_SLIN_8K)
         return 160 * 2;
     else if (type == CODECType::IAX2_CODEC_SLIN_16K)
         return 160 * 2 * 2;
@@ -150,7 +150,7 @@ unsigned maxVoiceFrameSize(CODECType type) {
 unsigned codecSampleRate(CODECType type) {
     if (type == CODECType::IAX2_CODEC_G711_ULAW)
         return 8000;
-    else if (type == CODECType::IAX2_CODEC_SLIN)
+    else if (type == CODECType::IAX2_CODEC_SLIN_8K)
         return 8000;
     else if (type == CODECType::IAX2_CODEC_SLIN_16K)
         return 16000;

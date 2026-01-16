@@ -25,6 +25,7 @@
 #include "Transcoder_G711_ULAW.h"
 #include "Transcoder_SLIN_48K.h"
 #include "Transcoder_SLIN_16K.h"
+#include "Transcoder_SLIN_8K.h"
 
 namespace kc1fsz {
 
@@ -62,6 +63,7 @@ private:
     Transcoder_SLIN_48K _transcoder0;
     Transcoder_G711_ULAW _transcoder1a;
     Transcoder_SLIN_16K _transcoder1c;
+    Transcoder_SLIN_8K _transcoder1d;
     amp::Resampler _resampler;
 };
 

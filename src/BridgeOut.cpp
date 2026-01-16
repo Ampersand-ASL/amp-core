@@ -42,7 +42,8 @@ void BridgeOut::consume(const Message& frame) {
         assert(frame.size() == BLOCK_SIZE_48K * 2);
  
         if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
-            _codecType == CODECType::IAX2_CODEC_SLIN_16K) {             
+            _codecType == CODECType::IAX2_CODEC_SLIN_16K ||
+            _codecType == CODECType::IAX2_CODEC_SLIN_8K) {             
             
             Transcoder* t1 = 0;
             unsigned codeSize = maxVoiceFrameSize(_codecType);
@@ -51,6 +52,10 @@ void BridgeOut::consume(const Message& frame) {
                 t1 = &_transcoder1a;
             else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K)
                 t1 = &_transcoder1c;
+            else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
+                t1 = &_transcoder1d;
+            else 
+                assert(false);
 
             // Make PCM data
             int16_t pcm48k[BLOCK_SIZE_48K];
