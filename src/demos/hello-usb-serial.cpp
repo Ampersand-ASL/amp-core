@@ -19,6 +19,8 @@
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Common.h"
 
+#include "DigitalAudioPortRxHandler.h"
+
 #include "crc.h"
 #include "cobs.h"
 

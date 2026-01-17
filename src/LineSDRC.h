@@ -18,11 +18,8 @@
 
 #include <functional>
 
-//#include "kc1fsz-tools/fixedstring.h"
-//#include "kc1fsz-tools/fixedqueue.h"
-
-//#include "amp/SequencingBufferStd.h"
-//#include "amp/RetransmissionBufferStd.h"
+// SDRC stuff
+#include "DigitalAudioPortRxHandler.h"
 
 #include "Line.h"
 #include "IAX2Util.h"
@@ -36,7 +33,7 @@ class Clock;
 
 /**
  * An implementation of the Line interface that communicates with
- * the Software Defined Repeater Controller platform.
+ * the Software Defined Repeater Controller (SDRC) platform.
  */
 class LineSDRC : public Line {
 public:
@@ -58,7 +55,7 @@ public:
      * Opens the network connection for in/out traffic for this line.
      * @returns 0 if the open was successful.
      */
-    int open();
+    int open(const char* serialDevice);
 
     void close();
 
@@ -89,6 +86,12 @@ public:
 
 private:
 
+    /**
+     * Called whenever there is inbound data available on the socket. Doesn't 
+     * hurt to call it when there is no data.
+     */
+    bool _rxIfPossible();
+
     Log& _log;
     Log& _traceLog;
     Clock& _clock;
@@ -99,6 +102,16 @@ private:
     const unsigned _destLineId;
 
     int _fd = -1;
+
+    // Must be a power-of-two size!
+    static const unsigned RX_BUF_SIZE = 512;
+    uint8_t _rxBuf[RX_BUF_SIZE];
+    // Mask used to make the buffer circular
+    const unsigned _rxBufPtrMask;
+    // The next write position in a circular buffer
+    unsigned _rxBufWrPtr = 0;
+    // Manager for the receive buffer
+    DigitalAudioPortRxHandler _rxBufHandler;
 };
 
 }

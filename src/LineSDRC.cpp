@@ -53,14 +53,16 @@ LineSDRC::LineSDRC(Log& log, Log& traceLog, Clock& clock, unsigned lineId, unsig
     _lineId(lineId),
     _callId(callId),
     _bus(bus),
-    _destLineId(destLineId) {
+    _destLineId(destLineId),
+    _rxBufPtrMask(sizeToBitMask(RX_BUF_SIZE)),
+    _rxBufHandler(_rxBuf, RX_BUF_SIZE) {
 }
 
-int LineSDRC::open() {
+int LineSDRC::open(const char* serialDevice) {
 
     close();
 
-    _fd = ::open("/dev/ttyUSB0", O_RDWR | O_NONBLOCK | O_NOCTTY);
+    _fd = ::open(serialDevice, O_RDWR | O_NONBLOCK | O_NOCTTY);
 
     // Create new termios struct, we call it 'tty' for convention
     // No need for "= {0}" at the end as we'll immediately write the existing
@@ -115,7 +117,7 @@ int LineSDRC::open() {
     payload.echo = false;
     payload.startMs = _clock.time();
     payload.localNumber[0] = 0;
-    strcpy(payload.remoteNumber, "SDRC");
+    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "sdrc-%d", _lineId);
     payload.originated = true;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
@@ -131,6 +133,11 @@ void LineSDRC::close() {
         ::close(_fd);
         _fd = -1;
     }
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
+        0, 0, 0, _clock.time());
+    msg.setSource(_lineId, _callId);
+    msg.setDest(_destLineId, Message::BROADCAST);
+    _bus.consume(msg);
 } 
 
 int LineSDRC::getPolls(pollfd* fds, unsigned fdsCapacity) {
@@ -142,10 +149,6 @@ int LineSDRC::getPolls(pollfd* fds, unsigned fdsCapacity) {
         used++;
     }
     return used;
-}
-
-bool LineSDRC::run2() {   
-    return false;
 }
 
 #define CRC_LEN (2)
@@ -194,6 +197,50 @@ void LineSDRC::oneSecTick() {
 }
 
 void LineSDRC::tenSecTick() {
+}
+
+bool LineSDRC::run2() {   
+    // Pull from socket if possible
+    bool r = _rxIfPossible();
+    if (r) {
+        // Check to see if we've got a full audio message. If so, package
+        // up a Message and send out on the bus.
+        _rxBufHandler.processRxBuf(_rxBufWrPtr,
+            // Callback fired when a full/valid message is received
+            // from the network.
+            [this](const uint8_t* frame, unsigned frameLen) {
+                assert(frameLen == BLOCK_SIZE_8K * 2);
+                // Make an audio message and send it to the listeners for 
+                // processing. This is convenient because the audio comes in 
+                // from the SDRC in 16-bit linear format LE already.
+                Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K,
+                    frameLen, frame, 0, _clock.time());
+                msg.setSource(_lineId, _callId);
+                msg.setDest(_destLineId, Message::BROADCAST);
+                _bus.consume(msg);
+            }
+        );
+    }
+    return r;
+}
+
+bool LineSDRC::_rxIfPossible() {
+    if (_fd == -1)
+        return false;
+    // Read as much as possible without running off the end 
+    unsigned linearSpaceAvailable = RX_BUF_SIZE - _rxBufWrPtr;
+    int rc2 = ::read(_fd, _rxBuf, linearSpaceAvailable);
+    if (rc2 == 0) {
+        return false;
+    }
+    else if (rc2 < 0) {
+        _log.error("Read error %d", rc2);
+        return false;
+    } else {
+        // Move the write pointer forward and wrap
+        _rxBufWrPtr = (_rxBufWrPtr + rc2) & _rxBufPtrMask;
+        return true;
+    }
 }
 
 }

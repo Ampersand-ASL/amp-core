@@ -430,11 +430,15 @@ add_executable(hello-usb-serial
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
   kc1fsz-tools-cpp/src/StdPollTimer.cpp
   kc1fsz-tools-cpp/src/crc/crc.c
+  kc1fsz-sdrc/src/DigitalAudioPortRxHandler.cpp
   cobs-c/cobs.c
+
 )
 
 target_include_directories(hello-usb-serial PRIVATE src)
 target_include_directories(hello-usb-serial PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(hello-usb-serial PRIVATE kc1fsz-tools-cpp/include/kc1fsz-tools/crc)
 target_include_directories(hello-usb-serial PRIVATE cobs-c)
+target_include_directories(hello-usb-serial PRIVATE kc1fsz-sdrc/sw/src)
+
 
