@@ -41,12 +41,6 @@
 #define NETWORK_BAUD (B460800)
 #define BLOCK_SIZE (160)
 
-#define COBS_OVERHEAD (2)
-#define CRC_LEN (2)
-#define PAYLOAD_SIZE (160 * 2)
-// Fixed size, 1 header null + audio + CRC + COBS overhead
-#define NETWORK_MESSAGE_SIZE (1 + PAYLOAD_SIZE + CRC_LEN + COBS_OVERHEAD)
-
 using namespace std;
 using namespace kc1fsz;
 
@@ -133,7 +127,7 @@ int main(int, const char**) {
 
     // Switch into streaming mode
     uint8_t packet[NETWORK_MESSAGE_SIZE];
-    packet[0] = 'a';
+    packet[0] = 4;
     int rc0 = write(serial_port, packet, 1);
     if (rc0 != 1) {
         log.error("Failed to send switch command");
@@ -154,7 +148,7 @@ int main(int, const char**) {
         if (timer.poll() && sendCount < 50) {
 
             // Make a PCM tone in 20ms increments, phase continuous
-            uint8_t msg[PAYLOAD_SIZE + CRC_LEN];
+            uint8_t msg[PAYLOAD_SIZE];
             uint8_t* p = msg;
             for (unsigned i = 0; i < BLOCK_SIZE; i++, p += 2) {
                 float v = 0.5 * std::cos(phi);
@@ -164,20 +158,9 @@ int main(int, const char**) {
             }
             phi = fmod(phi, 2.0f * 3.1415926f);
 
-            int16_t crc = crcSlow(msg, PAYLOAD_SIZE);
-            pack_int16_le(crc, msg + PAYLOAD_SIZE);
-
-            // #### TODO Add CRC
-            //msg[PAYLOAD_SIZE] = 'a';
-            //msg[PAYLOAD_SIZE + 1] = 'b';
-
-            // Header
-            packet[0] = 0;
-            cobs_encode_result re = cobs_encode(packet + 1, NETWORK_MESSAGE_SIZE - 1, 
-                msg, sizeof(msg));
-            assert(re.status == COBS_ENCODE_OK);
-            assert(re.out_len <= PAYLOAD_SIZE + CRC_LEN + COBS_OVERHEAD);
-
+            DigitalAudioPortRxHandler::encodeMsg(msg, PAYLOAD_SIZE,
+                packet, NETWORK_MESSAGE_SIZE);
+                
             int rc1 = write(serial_port, packet, NETWORK_MESSAGE_SIZE);
             if (rc1 != NETWORK_MESSAGE_SIZE)
                 log.error("Write failed %d", rc1);

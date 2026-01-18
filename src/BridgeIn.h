@@ -27,8 +27,9 @@
 #include "IAX2Util.h"
 #include "MessageConsumer.h"
 #include "Transcoder_G711_ULAW.h"
-#include "Transcoder_SLIN_48K.h"
+#include "Transcoder_SLIN_8K.h"
 #include "Transcoder_SLIN_16K.h"
+#include "Transcoder_SLIN_48K.h"
 
 namespace kc1fsz {
 
@@ -141,6 +142,7 @@ private:
     std::queue<Message> _bypassedFrames;
 
     Transcoder_G711_ULAW _transcoder0a;
+    Transcoder_SLIN_8K _transcoder0b;
     Transcoder_SLIN_16K _transcoder0c;
     Transcoder_SLIN_48K _transcoder0d;
 

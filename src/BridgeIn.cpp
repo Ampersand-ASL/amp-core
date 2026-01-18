@@ -41,6 +41,10 @@ void BridgeIn::setCodec(CODECType codecType) {
         _plc.setSampleRate(8000);
     else if (rate == 16000)
         _plc.setSampleRate(16000);
+    else if (rate == 48000) {
+        // #### TODO: SETUP THE PLC FOR THIS CASE
+    }
+    else assert(false);
 }
 
 void BridgeIn::consume(const Message& frame) {    
@@ -123,18 +127,31 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         int16_t pcm48k[BLOCK_SIZE_48K];
         int16_t pcm2[BLOCK_SIZE_48K];
 
-        if (_codecType == CODECType::IAX2_CODEC_G711_ULAW) {
+        // #### TODO: REORGANIZE TO ELIMINATE REPEATED CODE. EX:
+        // #### ALLOW THE PLC TO DEAL WITH 48K SMOOTHLY TO ELIMINATE
+        // #### THE SPECIAL CASE.
+
+        if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
+            _codecType == CODECType::IAX2_CODEC_SLIN_8K) {
             if (frame.getType() == Message::Type::AUDIO) {
                 int16_t pcm1[BLOCK_SIZE_8K];
+                Transcoder* tc = 0;
+                if (_codecType == CODECType::IAX2_CODEC_G711_ULAW)
+                    tc = &_transcoder0a;
+                else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
+                    tc = &_transcoder0b;
+                else 
+                    assert(false);
                 // Transcode
-                _transcoder0a.decode(frame.body(), frame.size(), 
-                    pcm1, codecBlockSize(_codecType));            
-                // Pass audio through the PLC mechanism
+                tc->decode(frame.body(), frame.size(), pcm1, codecBlockSize(_codecType));            
+                // Pass audio through the PLC mechanism. 
+                // PLC operates on 10ms blocks so there are two calls
                 _plc.goodFrame(pcm1, pcm2, BLOCK_SIZE_8K / 2);
                 _plc.goodFrame(pcm1 + BLOCK_SIZE_8K / 2, pcm2 + BLOCK_SIZE_8K / 2, 
                     BLOCK_SIZE_8K / 2);
             } else {
                 // Ask PLC to fill in the missing frame (in two 10ms sections).  
+                // PLC operates on 10ms blocks so there are two calls
                 _plc.badFrame(pcm2, BLOCK_SIZE_8K / 2);
                 _plc.badFrame(pcm2 + BLOCK_SIZE_8K / 2, BLOCK_SIZE_8K / 2);
             }
@@ -146,11 +163,13 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
                 _transcoder0c.decode(frame.body(), frame.size(), 
                     pcm1, codecBlockSize(_codecType));            
                 // Pass audio through the PLC mechanism
+                // PLC operates on 10ms blocks so there are two calls
                 _plc.goodFrame(pcm1, pcm2, BLOCK_SIZE_16K / 2);
                 _plc.goodFrame(pcm1 + BLOCK_SIZE_16K / 2, pcm2 + BLOCK_SIZE_16K / 2, 
                     BLOCK_SIZE_16K / 2);
             } else {
                 // Ask PLC to fill in the missing frame (in two 10ms sections).  
+                // PLC operates on 10ms blocks so there are two calls
                 _plc.badFrame(pcm2, BLOCK_SIZE_16K / 2);
                 _plc.badFrame(pcm2 + BLOCK_SIZE_16K / 2, BLOCK_SIZE_16K / 2);
             }
@@ -182,10 +201,6 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         // that sent continuous silent frames, like the ASL Telephone Portal.
         if (rms == 0)
             return;
-        //rms = sqrt(rms);
-        //if (rms > 0) {
-        //    cout << rms << endl;
-        //}
        
         // Transcode to SLIN_48K
         uint8_t slin48k[BLOCK_SIZE_48K * 2];

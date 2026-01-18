@@ -112,6 +112,9 @@ private:
     unsigned _rxBufWrPtr = 0;
     // Manager for the receive buffer
     DigitalAudioPortRxHandler _rxBufHandler;
+    // Origin timestamp counter for audio packets received off 
+    // the network. 
+    uint32_t _originMsCounter = 100;
 };
 
 }

@@ -113,7 +113,7 @@ int LineSDRC::open(const char* serialDevice) {
     // come from the IAX2Line after a new connection.
     PayloadCallStart payload;
     payload.codec = CODECType::IAX2_CODEC_SLIN_8K;
-    payload.bypassJitterBuffer = true;
+    payload.bypassJitterBuffer = false;
     payload.echo = false;
     payload.startMs = _clock.time();
     payload.localNumber[0] = 0;
@@ -124,6 +124,19 @@ int LineSDRC::open(const char* serialDevice) {
     msg.setSource(_lineId, _callId);
     msg.setDest(_destLineId, Message::BROADCAST);
     _bus.consume(msg);
+
+    // Send the magic code to enter audio-streaming mode
+    uint8_t cmd[1] = { 4 };
+    int rc1 = write(_fd, cmd, 1);
+    if (rc1 != 1) {
+        _log.error("SDRC write failed %d", rc1);
+        ::close(_fd);
+        _fd = -1;
+    } else {
+        _log.info("LineSDRC %d/%d opened on %s", _lineId, _callId, serialDevice);
+    }
+
+    _originMsCounter = 100;
 
     return 0;
 }
@@ -151,11 +164,6 @@ int LineSDRC::getPolls(pollfd* fds, unsigned fdsCapacity) {
     return used;
 }
 
-#define CRC_LEN (2)
-#define PAYLOAD_SIZE (160 * 2)
-#define COBS_OVERHEAD (2)
-#define NETWORK_MESSAGE_SIZE (1 + PAYLOAD_SIZE + CRC_LEN + COBS_OVERHEAD)
-
 /**
  * This function gets called when an audio/text message is available.
  */
@@ -169,20 +177,9 @@ void LineSDRC::consume(const Message& frame) {
         assert(frame.size() == BLOCK_SIZE_8K * 2);
         assert(frame.getFormat() == CODECType::IAX2_CODEC_SLIN_8K);
 
-        uint8_t msg[BLOCK_SIZE_8K * 2 + CRC_LEN];
-        memcpy(msg, frame.body(), BLOCK_SIZE_8K * 2);
-        // Add CRC to body
-        int16_t crc = crcSlow(msg, PAYLOAD_SIZE);
-        pack_int16_le(crc, msg + PAYLOAD_SIZE);
-
-        // Header
         uint8_t packet[NETWORK_MESSAGE_SIZE];
-        packet[0] = 0;
-        cobs_encode_result re = cobs_encode(packet + 1, NETWORK_MESSAGE_SIZE - 1, 
-            msg, sizeof(msg));
-        assert(re.status == COBS_ENCODE_OK);
-        assert(re.out_len <= PAYLOAD_SIZE + CRC_LEN + COBS_OVERHEAD);
-
+        DigitalAudioPortRxHandler::encodeMsg(frame.body(), frame.size(),
+            packet, NETWORK_MESSAGE_SIZE);
         int rc1 = write(_fd, packet, NETWORK_MESSAGE_SIZE);
         if (rc1 != NETWORK_MESSAGE_SIZE) {
             _log.error("SDRC write failed %d", rc1);
@@ -191,6 +188,8 @@ void LineSDRC::consume(const Message& frame) {
 }
 
 void LineSDRC::audioRateTick(uint32_t tickMs) {
+    // Make these audio frames perfectly spaced
+    _originMsCounter += 20;
 }
 
 void LineSDRC::oneSecTick() { 
@@ -214,7 +213,7 @@ bool LineSDRC::run2() {
                 // processing. This is convenient because the audio comes in 
                 // from the SDRC in 16-bit linear format LE already.
                 Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K,
-                    frameLen, frame, 0, _clock.time());
+                    frameLen, frame, _originMsCounter, _clock.time());
                 msg.setSource(_lineId, _callId);
                 msg.setDest(_destLineId, Message::BROADCAST);
                 _bus.consume(msg);
@@ -229,7 +228,7 @@ bool LineSDRC::_rxIfPossible() {
         return false;
     // Read as much as possible without running off the end 
     unsigned linearSpaceAvailable = RX_BUF_SIZE - _rxBufWrPtr;
-    int rc2 = ::read(_fd, _rxBuf, linearSpaceAvailable);
+    int rc2 = ::read(_fd, _rxBuf + _rxBufWrPtr, linearSpaceAvailable);
     if (rc2 == 0) {
         return false;
     }
