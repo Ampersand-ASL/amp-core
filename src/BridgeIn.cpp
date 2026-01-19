@@ -29,6 +29,11 @@ namespace kc1fsz {
 BridgeIn::BridgeIn() {
     // #### TODO: FIGURE OUT WHERE TO MOVE THIS
     _jitBuf.setInitialMargin(20 * 10);
+
+    // Kerchunk filter just passes through
+    _kerchunkFilter.setSink(
+        [this](const Message& frame) { _sink(frame); }
+    );
 }
 
 void BridgeIn::setCodec(CODECType codecType) {
@@ -109,6 +114,9 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
         JBOutAdaptor adaptor([this](const Message& msg) { this->_handleJitBufOut(msg); });
         _jitBuf.playOut(*_log, _clock->time(), &adaptor);
     }
+
+    // Let the kerchunk filter contribute output if necessary
+    _kerchunkFilter.audioRateTick(tickMs);
 }
 
 /**
@@ -211,7 +219,8 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
         outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 
-        _sink(outFrame);
+        _kerchunkFilter.consume(outFrame);
+        //_sink(outFrame);
     }
     else {
         assert(false);

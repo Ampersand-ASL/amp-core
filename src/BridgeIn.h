@@ -30,6 +30,7 @@
 #include "Transcoder_SLIN_8K.h"
 #include "Transcoder_SLIN_16K.h"
 #include "Transcoder_SLIN_48K.h"
+#include "KerchunkFilter.h"
 
 namespace kc1fsz {
 
@@ -60,6 +61,7 @@ public:
         _traceLog = traceLog;
         _clock = clock; 
         _jitBuf.setTraceLog(traceLog);
+        _kerchunkFilter.init(log, clock);
     }
 
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
@@ -89,6 +91,7 @@ public:
         _transcoder0d.reset(); 
         _transcoder1.reset(); 
         _resampler.reset(); 
+        _kerchunkFilter.reset();
     }
 
     // Statistics
@@ -158,6 +161,8 @@ private:
     // This is used at the end to convert to the "bus format"
     // that is passed around internally.
     Transcoder_SLIN_48K _transcoder1;
+
+    KerchunkFilter _kerchunkFilter;
 };
 
     }

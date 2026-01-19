@@ -72,7 +72,6 @@ public:
         _ttsQueueRes = ttsQueueRes;
         _sink = sink;
         _bridgeIn.init(_log, _traceLog, _clock);
-        
     }
 
     void reset();
