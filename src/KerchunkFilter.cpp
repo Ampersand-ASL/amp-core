@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <cmath>
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
@@ -86,9 +87,38 @@ void KerchunkFilter::audioRateTick(uint32_t tickMs) {
     }
 }
 
+float KerchunkFilter::_framePower(const Message& frame) {
+    float sumSquare = 0;
+    unsigned count = 0;
+    const uint8_t* p = frame.body();
+    for (unsigned i = 0; i < BLOCK_SIZE_48K; i += 6, p += 12) {
+        int16_t pcm = unpack_int16_le(p);
+        float v = (float)pcm / 32767.0f;
+        sumSquare += (v * v);
+        count++;
+    }
+    sumSquare /= (float)count;
+    return 10.0 * std::log10(sumSquare);
+}
+
 void KerchunkFilter::consume(const Message& frame) {
 
+    int vadPowerThreshold = -40;
+
     if (frame.isVoice()) {
+
+        // Level 1 - Discard leading frames that don't appear 
+        // to contain valid audio.
+
+        bool isLeadingFrame = _clock->isPast(_lastFrameMs + 10 * 1000);
+        if (isLeadingFrame) {
+            int power = _framePower(frame);
+            if (power < vadPowerThreshold) {
+                return;
+            }
+        }
+
+        // Level 2 - 
 
         // Detect leading edge of activity
         if (!_isActive) {

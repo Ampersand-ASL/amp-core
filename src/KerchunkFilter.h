@@ -42,6 +42,8 @@ class Clock;
 class KerchunkFilter : public MessageConsumer, public Runnable2 {
 public:
 
+    static const unsigned BLOCK_SIZE_48K = 160 * 6;
+
     KerchunkFilter();
 
     void init(Log* log, Clock* clock);
@@ -62,6 +64,7 @@ public:
 private:
 
     void _saveAndDiscard(std::queue<Message>& q);
+    static float _framePower(const Message& frame);
 
     enum State { 
         PASSING, 
@@ -87,7 +90,7 @@ private:
     // kerchunk has happened.
     unsigned _evaluationIntervalMs = 1500;
     // The amount of time that a channel remains trusted.
-    unsigned _trustIntervalMs = 2 * 60 * 1000;
+    unsigned _trustIntervalMs = 1 * 60 * 1000;
     // Used for detecting the trailing edge of activity
     unsigned _debounceIntervalMs = 250;
 
