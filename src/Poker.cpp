@@ -17,6 +17,7 @@
 #include <netinet/in.h>
 #include <arpa/nameser.h>
 #include <resolv.h>
+#include <arpa/inet.h>
 
 #include <cassert>
 #include <cstring>
@@ -189,7 +190,7 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* bindAddr,
     strcpyLimited(r.addr4, dottedAddr, sizeof(r.addr4));
     r.port = iaxPort;
     r.pokeTimeMs = (endTimeUs - startTimeUs) / 1000;
-
+    
     return r;
 }
 

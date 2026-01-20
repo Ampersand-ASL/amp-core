@@ -45,7 +45,7 @@ int main(int, const char**) {
     }
     // Demonstrate a bad bind
     {
-        Poker::Result r = Poker::poke(log, clock, "1.0.0.0", "6105799", 5);
+        Poker::Result r = Poker::poke(log, clock, "1.0.0.0", "61057", 5);
         cout << "code " << r.code << endl;
         cout << "time " << r.pokeTimeMs << endl;
         cout << "addr " << r.addr4 << endl;

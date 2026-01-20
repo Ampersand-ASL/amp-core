@@ -449,6 +449,7 @@ add_executable(hello-poker
   src/IAX2FrameFull.cpp
   src/IAX2Util.cpp
   src/Message.cpp
+  src/ThreadUtil.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
   kc1fsz-tools-cpp/src/MicroDNS.cpp
@@ -468,6 +469,7 @@ add_executable(hello-poker-async
   src/MultiRouter.cpp
   src/Message.cpp
   src/EventLoop.cpp
+  src/ThreadUtil.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
   kc1fsz-tools-cpp/src/MicroDNS.cpp

@@ -44,7 +44,7 @@ int main(int, const char**) {
 
     std::thread t0(Poker::loop, &log, &clock, &reqQueue, &respQueue, &runFlag);
 
-    Poker::Request req = { .nodeNumber = "61057", .timeoutMs = 250};
+    Poker::Request req = { .bindAddr = "0.0.0.0", .nodeNumber = "61057", .timeoutMs = 250};
     Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
         sizeof(Poker::Request),  (const uint8_t*)&req, 0, 0);
     reqQueue.push(msg);
