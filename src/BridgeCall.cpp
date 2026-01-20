@@ -136,9 +136,10 @@ void BridgeCall::consume(const Message& frame) {
         _bridgeIn.consume(frame);       
     }
     else if (frame.getType() == Message::Type::NET_DIAG_1_RES) {
-        _log->info("BridgeCall got a network diagnostic response");
         assert(frame.size() == sizeof(_netTestResult));
         memcpy(&_netTestResult, frame.body(), sizeof(_netTestResult));
+        _log->info("Got a network diagnostic response %d",
+            _netTestResult.code);
         _parrotState = ParrotState::READY_FOR_GREETING;
         _parrotStateStartMs = _clock->time();
     }

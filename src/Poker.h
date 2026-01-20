@@ -33,6 +33,7 @@ class Poker {
 public:
 
     struct Request {
+        char bindAddr[32] = { 0 };
         char nodeNumber[16] = { 0 };
         unsigned timeoutMs = 250;
     };
@@ -56,8 +57,8 @@ public:
      * Sends a POKE message to the designated node and waits for 
      * the corresponding PONG.
      */
-    static Result poke(Log& log, Clock& clock, const char* nodeNumber, 
-        unsigned timeoutMs = 250);
+    static Result poke(Log& log, Clock& clock, const char* bindAddr,
+        const char* nodeNumber, unsigned timeoutMs = 250);
  
     static Result poke(Log& log, Clock& clock, Request req);
 

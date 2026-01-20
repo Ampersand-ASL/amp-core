@@ -38,16 +38,17 @@ using namespace std;
 namespace kc1fsz {
 
 Poker::Result Poker::poke(Log& log, Clock& clock, Poker::Request req) {
-    return poke(log, clock, req.nodeNumber, req.timeoutMs);
+    return poke(log, clock, req.bindAddr, req.nodeNumber, req.timeoutMs);
 }
 
-Poker::Result Poker::poke(Log& log, Clock& clock, const char* nodeNumber,
-    unsigned timeoutMs) {
+Poker::Result Poker::poke(Log& log, Clock& clock, const char* bindAddr,
+    const char* nodeNumber, unsigned timeoutMs) {
 
     unsigned char answer[128];
     int answerLen;
 
-    log.info("Network test requested for node %s", nodeNumber);
+    log.info("Network test requested for node %s using interface %s", 
+        nodeNumber, bindAddr);
 
     // Query the SRV record
     char dname[64];
@@ -112,10 +113,8 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* nodeNumber,
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.ss_family = addrFamily;
     if (addrFamily == AF_INET) {
-        // Bind to all interfaces
-        // Or, specify a particular IP address: servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-        // TODO: Allow this to bec controlled
-        ((sockaddr_in&)servaddr).sin_addr.s_addr = INADDR_ANY;
+        // Bind to a specific interface
+        ((sockaddr_in&)servaddr).sin_addr.s_addr = inet_addr(bindAddr);
         ((sockaddr_in&)servaddr).sin_port = htons(0);
     }
     else if (addrFamily == AF_INET6) {
