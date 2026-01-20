@@ -198,8 +198,8 @@ void Poker::loop(Log* log, Clock* clock,
     threadsafequeue<Message>* reqQueue,
     threadsafequeue<Message>* respQueue, std::atomic<bool>* runFlag) {
 
-    setThreadName("NetDiag");
-    lowerThreadPriority();
+    amp::setThreadName("NetDiag");
+    amp::lowerThreadPriority();
 
     log->info("Start network diagnostic thread");
 
