@@ -64,11 +64,15 @@ public:
      * One-time initialization. Connects the call to the outside world.
      */
     void init(Log* log, Log* traceLog, Clock* clock, 
-        MessageConsumer* sink, unsigned ttsLineId, unsigned netTestLineId) {
+        MessageConsumer* sink, 
+        unsigned bridgeLineId, unsigned bridgeCallId, 
+        unsigned ttsLineId, unsigned netTestLineId) {
         _log = log;
         _traceLog = traceLog;
         _clock = clock;
         _sink = sink;
+        _bridgeLineId = bridgeLineId;
+        _bridgeCallId = bridgeCallId;
         _ttsLineId = ttsLineId;
         _netTestLineId = netTestLineId;
         _bridgeIn.init(_log, _traceLog, _clock);
@@ -93,7 +97,9 @@ public:
     }
 
     bool belongsTo(const Message& msg) const {
-        return _active && msg.getSourceBusId() == _lineId && msg.getSourceCallId() == _callId;
+        return _active && 
+            ((msg.getSourceBusId() == _lineId && msg.getSourceCallId() == _callId) ||
+             (msg.getDestBusId() == _bridgeLineId && msg.getDestCallId() == _bridgeCallId));
     }
 
     bool isEcho() const { return _echo; }
@@ -128,6 +134,8 @@ private:
     Log* _traceLog;
     Clock* _clock;
     MessageConsumer* _sink;
+    unsigned _bridgeLineId = 0;
+    unsigned _bridgeCallId = 0;
     unsigned _ttsLineId = 0;
     unsigned _netTestLineId = 0;
 

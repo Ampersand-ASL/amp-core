@@ -130,7 +130,8 @@ void BridgeCall::consume(const Message& frame) {
     if (frame.getType() == Message::Type::TTS_AUDIO ||
         frame.getType() == Message::Type::TTS_END) {
         _processTTSAudio(frame);
-    } else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
+    } 
+    else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
         assert(frame.size() == sizeof(PayloadDtmfPress));
         PayloadDtmfPress* payload = (PayloadDtmfPress*)frame.body();
         if (_mode == Mode::PARROT) {
@@ -147,6 +148,9 @@ void BridgeCall::consume(const Message& frame) {
         }
     } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
         _bridgeIn.consume(frame);       
+    }
+    else if (frame.getType() == Message::Type::NET_DIAG_1_RES) {
+        _log->info("BridgeCall got a network diagnostic response");
     }
 }
 
@@ -323,7 +327,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             // Queue a TTS request
             Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
                 0, 0);
-            req.setSource(_lineId, _callId);
+            req.setSource(_bridgeLineId, _bridgeCallId);
             req.setDest(_ttsLineId, Message::BROADCAST);
             _sink->consume(req);
 
@@ -412,7 +416,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             // Queue a request for TTS
             Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
                 0, 0);
-            req.setSource(_lineId, _callId);
+            req.setSource(_bridgeLineId, _bridgeCallId);
             req.setDest(_ttsLineId, Message::BROADCAST);
             _sink->consume(req);
 

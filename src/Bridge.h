@@ -41,7 +41,8 @@ public:
     static const unsigned BLOCK_PERIOD_MS = 20;
 
     Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
-        BridgeCall::Mode defaultMode, unsigned ttsLineId, unsigned netTestLineId);
+        BridgeCall::Mode defaultMode, 
+        unsigned lineId, unsigned ttsLineId, unsigned netTestLineId);
 
     unsigned getCallCount() const;
 
@@ -71,6 +72,7 @@ private:
     Clock& _clock;
     MessageConsumer& _bus;
     const BridgeCall::Mode _defaultMode;
+    unsigned _lineId;
     unsigned _ttsLineId;
     unsigned _netTestLineId;
     

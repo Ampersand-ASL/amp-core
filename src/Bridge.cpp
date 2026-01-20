@@ -29,18 +29,21 @@ namespace kc1fsz {
     namespace amp {
 
 Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
-    BridgeCall::Mode defaultMode, unsigned ttsLineId, unsigned netTestLineId)
+    BridgeCall::Mode defaultMode, 
+    unsigned lineId, unsigned ttsLineId, unsigned netTestLineId)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
     _bus(bus),
     _defaultMode(defaultMode),
+    _lineId(lineId),
     _ttsLineId(ttsLineId),
     _netTestLineId(netTestLineId),
     _calls(_callSpace, MAX_CALLS) { 
 
     for (unsigned i = 0; i < MAX_CALLS; i++)
-        _callSpace[i].init(&log, &traceLog, &clock, &_bus, _ttsLineId, _netTestLineId);
+        _callSpace[i].init(&log, &traceLog, &clock, &_bus, 
+            _lineId, i, _ttsLineId, _netTestLineId);
 }
 
 void Bridge::reset() {
