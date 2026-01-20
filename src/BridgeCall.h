@@ -27,6 +27,7 @@
 #include "Message.h"
 #include "BridgeIn.h"
 #include "BridgeOut.h"
+#include "Poker.h"
 
 namespace kc1fsz {
 
@@ -208,6 +209,8 @@ private:
         NONE,
         ACTIVE,
         CONNECTED,
+        WAITING_FOR_NET_TEST,
+        READY_FOR_GREETING,
         TTS_AFTER_CONNECTED,
         PLAYING_PROMPT_GREETING,
         WAITING_FOR_RECORD,
@@ -221,6 +224,7 @@ private:
     ParrotState _parrotState = ParrotState::NONE;
     uint32_t _parrotStateStartMs = 0;
     uint32_t _lastUnkeyProcessedMs = 0;
+    Poker::Result _netTestResult;
 };
 
     }

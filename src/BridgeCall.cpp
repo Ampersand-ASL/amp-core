@@ -107,22 +107,8 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _mode = initialMode;
 
     if (_mode == Mode::PARROT) {
-
         _parrotState = ParrotState::CONNECTED;
         _parrotStateStartMs = _clock->time();
-
-        // Launch the network test for this new connection
-
-        Poker::Request req;
-        strcpyLimited(req.nodeNumber, remoteNodeNumber, sizeof(req.nodeNumber));
-        req.timeoutMs = 250;
-
-        Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
-            sizeof(req), (const uint8_t*)&req, 
-            0, 0);
-        msg.setSource(_lineId, _callId);
-        msg.setDest(_netTestLineId, Message::BROADCAST);
-        _sink->consume(msg);     
     }
 }
 
@@ -151,6 +137,10 @@ void BridgeCall::consume(const Message& frame) {
     }
     else if (frame.getType() == Message::Type::NET_DIAG_1_RES) {
         _log->info("BridgeCall got a network diagnostic response");
+        assert(frame.size() == sizeof(_netTestResult));
+        memcpy(&_netTestResult, frame.body(), sizeof(_netTestResult));
+        _parrotState = ParrotState::READY_FOR_GREETING;
+        _parrotStateStartMs = _clock->time();
     }
 }
 
@@ -306,9 +296,28 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         reset();
     }
     else if (_parrotState == ParrotState::CONNECTED) {
+
+        // Launch the network test for this new connection
+        Poker::Request req;
+        strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
+        req.timeoutMs = 250;
+
+        Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
+            sizeof(req), (const uint8_t*)&req, 
+            0, 0);
+        msg.setSource(_bridgeLineId, _bridgeCallId);
+        msg.setDest(_netTestLineId, Message::BROADCAST);
+        _sink->consume(msg);     
+
+        _netTestResult.code = -99;
+        _parrotState = ParrotState::WAITING_FOR_NET_TEST;
+        _parrotStateStartMs = _clock->time();
+    }
+    else if (_parrotState == ParrotState::READY_FOR_GREETING) {
+
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
-        if (_clock->isPast(_parrotStateStartMs + 1500)) {
+        if (_clock->isPast(_parrotStateStartMs + 1000)) {
 
             // Create the speech that will be sent to the caller
             string prompt;
@@ -316,6 +325,17 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
             if (!_sourceAddrValidated) 
                 prompt += "Node is unregistered. ";
+            else {
+                if (_netTestResult.code == 0) {
+                    char msg[64];
+                    snprintf(msg, 64, "Ping time is %d milliseconds.", 
+                        _netTestResult.pokeTimeMs);
+                    prompt += "Network test succeeded. ";
+                    prompt += msg;
+                }
+                else 
+                    prompt += "Your network is unreachable. ";
+            }
 
             if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G711_ULAW) 
                 prompt += "CODEC is 8K mulaw. ";
