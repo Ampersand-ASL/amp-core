@@ -31,6 +31,7 @@
 #include "IAX2Util.h"
 #include "Message.h"
 #include "Poker.h"
+#include "ThreadUtil.h"
 
 using namespace std;
 
