@@ -328,13 +328,13 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             else {
                 if (_netTestResult.code == 0) {
                     char msg[64];
-                    snprintf(msg, 64, "Ping time is %d milliseconds.", 
+                    snprintf(msg, 64, "Ping time %d milliseconds. ", 
                         _netTestResult.pokeTimeMs);
                     prompt += "Network test succeeded. ";
                     prompt += msg;
                 }
-                else 
-                    prompt += "Your network is unreachable. ";
+                else if (_netTestResult.code <= -8) 
+                    prompt += "Your node is unreachable. ";
             }
 
             if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G711_ULAW) 
