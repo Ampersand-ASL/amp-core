@@ -67,7 +67,7 @@ public:
     void init(Log* log, Log* traceLog, Clock* clock, 
         MessageConsumer* sink, 
         unsigned bridgeLineId, unsigned bridgeCallId, 
-        unsigned ttsLineId, unsigned netTestLineId) {
+        unsigned ttsLineId, unsigned netTestLineId, const char* netTestBindAddr) {
         _log = log;
         _traceLog = traceLog;
         _clock = clock;
@@ -76,6 +76,7 @@ public:
         _bridgeCallId = bridgeCallId;
         _ttsLineId = ttsLineId;
         _netTestLineId = netTestLineId;
+        _netTestBindAddr = netTestBindAddr;
         _bridgeIn.init(_log, _traceLog, _clock);
     }
 
@@ -139,6 +140,7 @@ private:
     unsigned _bridgeCallId = 0;
     unsigned _ttsLineId = 0;
     unsigned _netTestLineId = 0;
+    std::string _netTestBindAddr;
 
     bool _echo = false;
     bool _sourceAddrValidated = false;

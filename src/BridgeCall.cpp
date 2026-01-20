@@ -300,12 +300,12 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
         // Launch the network test for this new connection
         Poker::Request req;
+        strcpyLimited(req.bindAddr, _netTestBindAddr.c_str(), sizeof(_netTestBindAddr));
         strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
         req.timeoutMs = 250;
 
         Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
-            sizeof(req), (const uint8_t*)&req, 
-            0, 0);
+            sizeof(req), (const uint8_t*)&req, 0, 0);
         msg.setSource(_bridgeLineId, _bridgeCallId);
         msg.setDest(_netTestLineId, Message::BROADCAST);
         _sink->consume(msg);     

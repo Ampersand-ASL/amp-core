@@ -30,7 +30,8 @@ namespace kc1fsz {
 
 Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
     BridgeCall::Mode defaultMode, 
-    unsigned lineId, unsigned ttsLineId, unsigned netTestLineId)
+    unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
+    const char* netTestBindAddr)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
@@ -43,7 +44,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
 
     for (unsigned i = 0; i < MAX_CALLS; i++)
         _callSpace[i].init(&log, &traceLog, &clock, &_bus, 
-            _lineId, i, _ttsLineId, _netTestLineId);
+            _lineId, i, _ttsLineId, _netTestLineId, netTestBindAddr);
 }
 
 void Bridge::reset() {

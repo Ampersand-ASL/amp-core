@@ -42,7 +42,8 @@ public:
 
     Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
         BridgeCall::Mode defaultMode, 
-        unsigned lineId, unsigned ttsLineId, unsigned netTestLineId);
+        unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
+        const char* netTestBindAddr);
 
     unsigned getCallCount() const;
 
