@@ -18,10 +18,20 @@
 
 namespace kc1fsz {
 
-MultiRouter::MultiRouter() { }
+MultiRouter::MultiRouter(threadsafequeue<Message>& auxQueue)
+:   _auxQueue(auxQueue) {     
+}
 
 bool MultiRouter::run2() {
-    return false;
+    bool worked = false;
+    while (!_auxQueue.empty()) {
+        Message m;
+        if (_auxQueue.try_pop(m)) {
+            consume(m);
+            worked = true;
+        }
+    }
+    return worked;
 }
 
 void MultiRouter::consume(const Message& msg) {

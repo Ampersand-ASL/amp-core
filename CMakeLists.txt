@@ -441,7 +441,7 @@ target_include_directories(hello-usb-serial PRIVATE kc1fsz-tools-cpp/include/kc1
 target_include_directories(hello-usb-serial PRIVATE cobs-c)
 target_include_directories(hello-usb-serial PRIVATE kc1fsz-sdrc/sw/src)
 
-# ----- hello-poke -----------------------------------------------------------
+# ----- hello-poker -----------------------------------------------------------
 
 add_executable(hello-poker
   src/demos/hello-poker.cpp
@@ -457,3 +457,22 @@ add_executable(hello-poker
 target_include_directories(hello-poker PRIVATE src)
 target_include_directories(hello-poker PRIVATE kc1fsz-tools-cpp/include)
 
+# ----- hello-poker-async ----------------------------------------------------
+
+add_executable(hello-poker-async
+  src/demos/hello-poker-async.cpp
+  src/Poker.cpp
+  src/IAX2FrameFull.cpp
+  src/IAX2Util.cpp
+  src/MultiRouter.cpp
+  src/Message.cpp
+  src/EventLoop.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/MicroDNS.cpp
+  kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+)
+
+target_include_directories(hello-poker-async PRIVATE src)
+target_include_directories(hello-poker-async PRIVATE kc1fsz-tools-cpp/include)

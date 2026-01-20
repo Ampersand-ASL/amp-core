@@ -28,12 +28,18 @@
 namespace kc1fsz {
 
 /**
- * A simple MessageBus for routing messages to one of two destinations.
+ * A simple MessageBus for routing messages to registered destinations.
  */
 class MultiRouter : public MessageConsumer, public Runnable2 {
 public:
 
-    MultiRouter();
+    static const unsigned BROADCAST = 0;
+
+    /**
+     * @param auxQueue Another way to consume messages, useful for 
+     * posting messages from other threads.
+     */ 
+    MultiRouter(threadsafequeue<Message>& auxQueue);
 
     void addRoute(MessageConsumer* consumer, unsigned lineId);
 
@@ -41,16 +47,15 @@ public:
 
     bool run2();
 
+private:
+
     struct Dest {
         MessageConsumer* consumer;
         unsigned lineId;
     };
 
-    static const unsigned BROADCAST = 0;
-
-private:
-
     std::vector<Dest> _dests;
+    threadsafequeue<Message>& _auxQueue;
 };
 
 }

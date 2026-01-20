@@ -36,12 +36,15 @@ public:
         AUDIO_INTERPOLATE,
         TEXT,
         SIGNAL,
-        // A text-to-speach request
+        // A text-to-speech request
         TTS_REQ,
-        // Text-to-speach audio
+        // Text-to-speech audio
         TTS_AUDIO,
-        // A text-to-speach response end
-        TTS_END
+        // A text-to-speech response end
+        TTS_END,
+        // Network diagnostic
+        NET_DIAG_1_REQ,
+        NET_DIAG_2_RES
     };
 
     enum SignalType {
