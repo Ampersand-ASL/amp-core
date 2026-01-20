@@ -22,6 +22,7 @@
 
 #include "Message.h"
 #include "BridgeCall.h"
+#include "Poker.h"
 
 using namespace std;
 
@@ -86,13 +87,15 @@ void BridgeCall::reset() {
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-    bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode) {
+    bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
+    const char* remoteNodeNumber) {
 
     _active = true;
     _lineId = lineId;  
     _callId = callId; 
     _startMs = startMs;
     _lastAudioMs = 0;
+    _remoteNodeNumber = remoteNodeNumber;
 
     _bridgeIn.setCodec(codec);
     _bridgeIn.setBypassJitterBuffer(bypassJitterBuffer);
@@ -104,8 +107,22 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _mode = initialMode;
 
     if (_mode == Mode::PARROT) {
+
         _parrotState = ParrotState::CONNECTED;
         _parrotStateStartMs = _clock->time();
+
+        // Launch the network test for this new connection
+
+        Poker::Request req;
+        strcpyLimited(req.nodeNumber, remoteNodeNumber, sizeof(req.nodeNumber));
+        req.timeoutMs = 250;
+
+        Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
+            sizeof(req), (const uint8_t*)&req, 
+            0, 0);
+        msg.setSource(_lineId, _callId);
+        msg.setDest(_netTestLineId, Message::BROADCAST);
+        _sink->consume(msg);     
     }
 }
 
@@ -307,8 +324,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
                 0, 0);
             req.setSource(_lineId, _callId);
-            req.setDest(0, 0);
-            _ttsQueueReq->push(req);
+            req.setDest(_ttsLineId, Message::BROADCAST);
+            _sink->consume(req);
 
             _parrotState = ParrotState::TTS_AFTER_CONNECTED;
             _parrotStateStartMs = _clock->time();
@@ -396,8 +413,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
                 0, 0);
             req.setSource(_lineId, _callId);
-            req.setDest(0, 0);
-            _ttsQueueReq->push(req);
+            req.setDest(_ttsLineId, Message::BROADCAST);
+            _sink->consume(req);
 
             // Get into the state waiting for the TTS to complete
             _parrotState = ParrotState::TTS_AFTER_RECORD;

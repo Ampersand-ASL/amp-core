@@ -17,6 +17,7 @@
 #pragma once
 
 #include <queue>
+#include <string>
 
 #include "kc1fsz-tools/threadsafequeue.h"
 
@@ -63,21 +64,21 @@ public:
      * One-time initialization. Connects the call to the outside world.
      */
     void init(Log* log, Log* traceLog, Clock* clock, 
-        threadsafequeue<Message>* ttsQueueReq,
-        threadsafequeue<Message>* ttsQueueRes, MessageConsumer* sink) {
+        MessageConsumer* sink, unsigned ttsLineId, unsigned netTestLineId) {
         _log = log;
         _traceLog = traceLog;
         _clock = clock;
-        _ttsQueueReq = ttsQueueReq;
-        _ttsQueueRes = ttsQueueRes;
         _sink = sink;
+        _ttsLineId = ttsLineId;
+        _netTestLineId = netTestLineId;
         _bridgeIn.init(_log, _traceLog, _clock);
     }
 
     void reset();
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-        bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode);
+        bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
+        const char* remoteNodeNumber);
 
     bool isActive() const { 
         return _active; 
@@ -127,8 +128,8 @@ private:
     Log* _traceLog;
     Clock* _clock;
     MessageConsumer* _sink;
-    threadsafequeue<Message>* _ttsQueueReq;
-    threadsafequeue<Message>* _ttsQueueRes;
+    unsigned _ttsLineId = 0;
+    unsigned _netTestLineId = 0;
 
     bool _echo = false;
     bool _sourceAddrValidated = false;
@@ -138,6 +139,7 @@ private:
     unsigned _lineId = 0;
     unsigned _callId = 0;
     uint32_t _startMs = 0;
+    std::string _remoteNodeNumber;
     uint32_t _lastAudioMs = 0;
 
     BridgeIn _bridgeIn;

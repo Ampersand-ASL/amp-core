@@ -47,10 +47,9 @@ public:
     KerchunkFilter();
 
     void init(Log* log, Clock* clock);
-
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
-
     void reset();
+    void setEnabled(bool e) { _enabled = e; }
 
     // ----- Runnable2 --------------------------------------------------------
 
@@ -74,6 +73,7 @@ private:
 
     Log* _log = 0;
     Clock* _clock = 0;
+    bool _enabled = false;
 
     std::queue<Message> _queue;
     

@@ -16,31 +16,18 @@
  */
 #pragma once
 
-#include "kc1fsz-tools/threadsafequeue.h"
-#include "Message.h"
+#include <iostream>
+
+#include "kc1fsz-tools/Log.h"
 
 namespace kc1fsz {
 
-class MessageConsumer {
+class NullLog : public Log {
 public:
+   
+protected:
 
-    virtual void consume(const Message& msg) = 0;
-};
-
-/**
- * A consumer that just pushes the message on a queue.
- */
-class QueueConsumer : public MessageConsumer  {
-public: 
-
-    QueueConsumer(threadsafequeue<Message>& q) : _q(q) { }
-
-    void consume(const Message& msg) { _q.push(msg); }
-
-private:
-
-    threadsafequeue<Message>& _q;
+    void _out(const char* sev, const char* dt, const char* msg) { }
 };
 
 }
-

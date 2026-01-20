@@ -32,17 +32,50 @@
 using namespace std;
 
 namespace kc1fsz {
+
     namespace amp {
+
+static const unsigned AUDIO_RATE = 48000;
+static const unsigned BLOCK_SIZE_8K = 160;
+static const unsigned BLOCK_SIZE_16K = 160 * 2;
+static const unsigned BLOCK_SIZE_48K = 160 * 6;
+static const unsigned BLOCK_PERIOD_MS = 20;
+
+/**
+ * Converts one block of 16K PCM to an audio Message (TTS_AUDIO) that is encoded in 48K LE.
+ */
+static Message makeTTSAudioMsg(const Message& req, 
+    const int16_t* pcm16, unsigned pcm16Len, amp::Resampler& ttsResampler) {
+
+    assert(pcm16Len == BLOCK_SIZE_16K);
+
+    // Up-convert to 48K
+    int16_t pcm48[BLOCK_SIZE_48K];
+    // NOTE: We are using a resampler that exists at a higher level to ensure
+    // smooth transitions between consecutive frames.
+    ttsResampler.resample(pcm16, BLOCK_SIZE_16K, pcm48, BLOCK_SIZE_48K);
+
+    Transcoder_SLIN_48K trans;
+    uint8_t buf[BLOCK_SIZE_48K * sizeof(int16_t)];
+    trans.encode(pcm48, BLOCK_SIZE_48K, buf, BLOCK_SIZE_48K * sizeof(int16_t));
+
+    Message res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 0, 0);
+    res.setSource(req.getDestBusId(), req.getDestCallId());
+    res.setDest(req.getSourceBusId(), req.getSourceCallId());
+    return res;
+}
 
 // ------ Text To Speach Thread ----------------------------------------------
 
-void Bridge::ttsThread() {
+void ttsLoop(Log* loga, threadsafequeue<Message>* ttsQueueReq,
+    threadsafequeue<Message>* ttsQueueRes, std::atomic<bool>* runFlag) {
+
+    Log& log = *loga;
 
     setThreadName("TTS");
     lowerThreadPriority();
 
-    _log.info("Start TTS thread");
-
+    log.info("Start TTS thread");
 
     // #### TODO: ADD PRIORITY LOWER CODE
 
@@ -55,7 +88,7 @@ void Bridge::ttsThread() {
 
     piper_synthesizer *synth = piper_create(path0, path1, path2);
     if (synth == 0) {
-        _log.error("Failed to initialize piper TTS");
+        log.error("Failed to initialize piper TTS");
         return;
     }
 
@@ -64,15 +97,19 @@ void Bridge::ttsThread() {
     // options.speaker_id = 5;
     piper_synthesize_options options = piper_default_synthesize_options(synth);
 
+    // Used for converting TTS audio to 48k
+    amp::Resampler ttsResampler;
+    ttsResampler.setRates(16000, 48000);
+
     // Processing loop
-    while (true) {
+    while (runFlag->load()) {
 
         // Do this to avoid high-CPU
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         // Attemp to take a TTS request off the request queue
         Message req;
-        if (_ttsQueueReq.try_pop(req)) {
+        if (ttsQueueReq->try_pop(req)) {
             if (req.getType() == Message::Type::TTS_REQ) {
 
                 // Make a null-terminated buffer with a maximum size
@@ -81,14 +118,15 @@ void Bridge::ttsThread() {
                 memcpy(ttsReq, req.body(), size);
                 ttsReq[size] = 0;
 
-                _log.info("TTS request: \"%s\"", ttsReq);
+                log.info("TTS request: \"%s\"", ttsReq);
 
-                _ttsResampler.reset();
+                // There is state here so reset at the start of new speech
+                ttsResampler.reset();
 
-                // Here is where the actual speech sythensis happens
+                // Here is where the actual speech synthesis happens
                 piper_synthesize_start(synth, ttsReq, &options);
 
-                // Take the results of the sythensis (float) and put it into 16K LE frames.
+                // Take the results of the synthesis (floats) and put it into 16K LE frames.
                 int16_t pcm16[BLOCK_SIZE_16K];
                 unsigned pcm16Ptr = 0;
                 piper_audio_chunk chunk;
@@ -99,7 +137,7 @@ void Bridge::ttsThread() {
                         pcm16[pcm16Ptr++] = 32767.0f * chunk.samples[i];
                         // Filled a whole frame?
                         if (pcm16Ptr == BLOCK_SIZE_16K) {
-                            _ttsQueueRes.push(_makeTTSAudioMsg(req, pcm16, BLOCK_SIZE_16K));
+                            ttsQueueRes->push(makeTTSAudioMsg(req, pcm16, BLOCK_SIZE_16K, ttsResampler));
                             pcm16Ptr = 0;
                         }
                     }
@@ -109,43 +147,23 @@ void Bridge::ttsThread() {
                 if (pcm16Ptr > 0) {
                     for (unsigned i = pcm16Ptr; i < BLOCK_SIZE_16K; i++) 
                         pcm16[i] = 0;
-                    _ttsQueueRes.push(_makeTTSAudioMsg(req, pcm16, BLOCK_SIZE_16K));
+                    ttsQueueRes->push(makeTTSAudioMsg(req, pcm16, BLOCK_SIZE_16K, ttsResampler));
                 }
 
                 // Send a TTS_END signal so the call will know that this TTS process is finished.
                 Message res(Message::Type::TTS_END, 0, 0, 0, 0, 0);
-                res.setSource(req.getSourceBusId(), req.getSourceCallId());
-                _ttsQueueRes.push(res);
-                _log.info("TTS complete");
+                res.setSource(req.getDestBusId(), req.getDestCallId());
+                res.setDest(req.getSourceBusId(), req.getSourceCallId());
+                ttsQueueRes->push(res);
+
+                log.info("TTS complete");
             }
         }
     }
 
     piper_free(synth);
 
-    _log.info("End TTS thread");
-}
-
-/**
- * Converts one block of 16K PCM to an audio Message (TTS_AUDIO) that is encoded in 48K LE.
- */
-Message Bridge::_makeTTSAudioMsg(const Message& req, const int16_t* pcm16, unsigned pcm16Len) {
-
-    assert(pcm16Len == BLOCK_SIZE_16K);
-
-    // Up-convert to 48K
-    int16_t pcm48[BLOCK_SIZE_48K];
-    // NOTE: We are using a resampler that exists at the Bridge level to ensure
-    // smooth transitions between consecutive frames.
-    _ttsResampler.resample(pcm16, BLOCK_SIZE_16K, pcm48, BLOCK_SIZE_48K);
-
-    Transcoder_SLIN_48K trans;
-    uint8_t buf[BLOCK_SIZE_48K * sizeof(int16_t)];
-    trans.encode(pcm48, BLOCK_SIZE_48K, buf, BLOCK_SIZE_48K * sizeof(int16_t));
-
-    Message res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 0, 0);
-    res.setSource(req.getSourceBusId(), req.getSourceCallId());
-    return res;
+    log.info("End TTS thread");
 }
 
     }

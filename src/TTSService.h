@@ -16,31 +16,23 @@
  */
 #pragma once
 
+#include <atomic>
+
 #include "kc1fsz-tools/threadsafequeue.h"
-#include "Message.h"
 
 namespace kc1fsz {
 
-class MessageConsumer {
-public:
+class Log;
 
-    virtual void consume(const Message& msg) = 0;
-};
+    namespace amp {
 
 /**
- * A consumer that just pushes the message on a queue.
+ * A function that can be put on a background thread to do TTS via
+ * the message bus.
  */
-class QueueConsumer : public MessageConsumer  {
-public: 
-
-    QueueConsumer(threadsafequeue<Message>& q) : _q(q) { }
-
-    void consume(const Message& msg) { _q.push(msg); }
-
-private:
-
-    threadsafequeue<Message>& _q;
-};
+void ttsLoop(Log* log, threadsafequeue<Message>* ttsQueueReq,
+    threadsafequeue<Message>* ttsQueueRes, std::atomic<bool>* runFlag);
 
 }
 
+}

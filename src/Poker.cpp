@@ -46,6 +46,7 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* nodeNumber,
     unsigned char answer[128];
     int answerLen;
 
+    log.info("Network test requested for node %s", nodeNumber);
 
     // Query the SRV record
     char dname[64];

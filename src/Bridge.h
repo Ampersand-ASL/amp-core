@@ -16,12 +16,9 @@
  */
 #pragma once
 
-#include <thread>
-
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
-#include "amp/Resampler.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
 #include "Message.h"
@@ -43,7 +40,8 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, BridgeCall::Mode defaultMode);
+    Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
+        BridgeCall::Mode defaultMode, unsigned ttsLineId, unsigned netTestLineId);
 
     unsigned getCallCount() const;
 
@@ -63,7 +61,6 @@ public:
     
     bool run2();
     void audioRateTick(uint32_t tickMs);
-    void oneSecTick();
 
 private:
 
@@ -72,34 +69,14 @@ private:
     Log& _log;
     Log& _traceLog;
     Clock& _clock;
+    MessageConsumer& _bus;
     const BridgeCall::Mode _defaultMode;
-    MessageConsumer* _sink = 0;
+    unsigned _ttsLineId;
+    unsigned _netTestLineId;
     
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
-
-    // ----- Text To Speak Stuff ----------------------------------------------
-public:
-
-    /**
-     * Start this thread to use TTS. This is built in a separate function/file
-     * to avoid unneccessary linkage to the Piper TTS library for platformss
-     * that don't support it.
-     *     
-     * std::thread ttsThread(&Bridge::ttsThread, &bridge);
-     */
-    void ttsThread();
-
-private:
-
-    Message _makeTTSAudioMsg(const Message& req, const int16_t* pcm16, unsigned pcm16Len);
-
-    std::thread _ttsThread;
-    threadsafequeue<Message> _ttsQueueReq;
-    threadsafequeue<Message> _ttsQueueRes;
-    // Used for converting TTS audio to 48k
-    amp::Resampler _ttsResampler;
 };
 
     }

@@ -29,18 +29,18 @@ namespace kc1fsz {
     namespace amp {
 
 Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
-    BridgeCall::Mode defaultMode) 
+    BridgeCall::Mode defaultMode, unsigned ttsLineId, unsigned netTestLineId)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
+    _bus(bus),
     _defaultMode(defaultMode),
-    _sink(&bus),
+    _ttsLineId(ttsLineId),
+    _netTestLineId(netTestLineId),
     _calls(_callSpace, MAX_CALLS) { 
 
     for (unsigned i = 0; i < MAX_CALLS; i++)
-        _callSpace[i].init(&log, &traceLog, &clock, &_ttsQueueReq, &_ttsQueueRes, _sink);
-
-    _ttsResampler.setRates(16000, 48000);
+        _callSpace[i].init(&log, &traceLog, &clock, &_bus, _ttsLineId, _netTestLineId);
 }
 
 void Bridge::reset() {
@@ -90,15 +90,19 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call %u:%u started CODEC %08X, jbBypass %d, echo %d, validated %d", 
+            _log.info("Call %u:%u started node %s CODEC %08X, jbBypass %d, echo %d, validated %d", 
                 msg.getSourceBusId(),
-                msg.getSourceCallId(), payload.codec, payload.bypassJitterBuffer,
-                payload.echo, payload.sourceAddrValidated);
+                msg.getSourceCallId(), 
+                payload.remoteNumber, 
+                payload.codec, 
+                payload.bypassJitterBuffer,
+                payload.echo, 
+                payload.sourceAddrValidated);
 
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
-                payload.sourceAddrValidated, _defaultMode);
+                payload.sourceAddrValidated, _defaultMode, payload.remoteNumber);
         }
     }
     else if (msg.getType() == Message::SIGNAL && 
@@ -116,6 +120,9 @@ void Bridge::consume(const Message& msg) {
     // These are all the message types that get passed directly to the call.
     else if (msg.getType() == Message::AUDIO || 
              msg.getType() == Message::AUDIO_INTERPOLATE || 
+             msg.getType() == Message::TTS_AUDIO || 
+             msg.getType() == Message::TTS_END || 
+             msg.getType() == Message::NET_DIAG_1_RES || 
              (msg.getType() == Message::SIGNAL && 
               msg.getFormat() == Message::SignalType::RADIO_UNKEY) ||
              (msg.getType() == Message::SIGNAL && 
@@ -134,23 +141,7 @@ void Bridge::consume(const Message& msg) {
 }
 
 bool Bridge::run2() { 
-
-    unsigned count = 0;
-    // Look for anything coming back from the TTS thread, route to the correct call.
-    Message m;
-    while (_ttsQueueRes.try_pop(m)) {
-        _calls.visitIf(
-            // Visitor
-            [&m](BridgeCall& call) { 
-                call.consume(m);
-                return true;
-            },
-            // Predicate
-            [&m](const BridgeCall& s) { return s.isActive() && s.belongsTo(m); }
-        );
-        count++;
-    }
-    return count > 0;
+    return false;
 }
 
 /**
@@ -230,9 +221,5 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         if (_calls[j].isActive()) 
             _calls[j].clearInputAudio();
 }
-
-void Bridge::oneSecTick() {
-}
-
     }
 }

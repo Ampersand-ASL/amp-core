@@ -24,6 +24,8 @@
 
 namespace kc1fsz {
 
+static const int vadPowerThreshold = -40;
+
 KerchunkFilter::KerchunkFilter() {
 }
 
@@ -70,8 +72,8 @@ void KerchunkFilter::audioRateTick(uint32_t tickMs) {
         else if (_clock->isPast(_bufferingStartMs + _evaluationIntervalMs)) {
             _log->info("Kerchunk was detected, flushing %d ms",
                 _queue.size() * 20);
-            _saveAndDiscard(_queue);
-            //_queue = std::queue<Message>();
+            //_saveAndDiscard(_queue);
+            _queue = std::queue<Message>();
             _state = State::PASSING;
         }
     }
@@ -103,9 +105,9 @@ float KerchunkFilter::_framePower(const Message& frame) {
 
 void KerchunkFilter::consume(const Message& frame) {
 
-    int vadPowerThreshold = -40;
+    // When disabled everything just passes through
 
-    if (frame.isVoice()) {
+    if (_enabled && frame.isVoice()) {
 
         // Level 1 - Discard leading frames that don't appear 
         // to contain valid audio.
