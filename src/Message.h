@@ -44,7 +44,7 @@ public:
         TTS_END,
         // Network diagnostic
         NET_DIAG_1_REQ,
-        NET_DIAG_2_RES
+        NET_DIAG_1_RES
     };
 
     enum SignalType {

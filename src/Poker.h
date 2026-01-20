@@ -16,9 +16,10 @@
  */
 #pragma once
 
-#include "kc1fsz-tools/fixedstring.h"
+#include <atomic>
 
-#include "Runnable2.h"
+#include "kc1fsz-tools/threadsafequeue.h"
+#include "Message.h"
 
 namespace kc1fsz {
 
@@ -30,6 +31,11 @@ class Clock;
  */
 class Poker {
 public:
+
+    struct Request {
+        char nodeNumber[16] = { 0 };
+        unsigned timeoutMs = 250;
+    };
 
     struct Result {
 
@@ -52,6 +58,16 @@ public:
      */
     static Result poke(Log& log, Clock& clock, const char* nodeNumber, 
         unsigned timeoutMs = 250);
+ 
+    static Result poke(Log& log, Clock& clock, Request req);
+
+    /**
+     * A utility function that can be run on an independent thread. 
+     * @param runFlag Keep this set to true until it's time to exit the loop.
+     */
+    static void loop(Log* log, Clock* clock, 
+        threadsafequeue<Message>* reqQueue, threadsafequeue<Message>* respQueue,
+        std::atomic<bool>* runFlag);
 };
 
 }

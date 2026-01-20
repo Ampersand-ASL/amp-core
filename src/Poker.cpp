@@ -19,6 +19,7 @@
 #include <resolv.h>
 
 #include <cassert>
+#include <cstring>
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
@@ -28,11 +29,16 @@
 
 #include "IAX2FrameFull.h"
 #include "IAX2Util.h"
+#include "Message.h"
 #include "Poker.h"
 
 using namespace std;
 
 namespace kc1fsz {
+
+Poker::Result Poker::poke(Log& log, Clock& clock, Poker::Request req) {
+    return poke(log, clock, req.nodeNumber, req.timeoutMs);
+}
 
 Poker::Result Poker::poke(Log& log, Clock& clock, const char* nodeNumber,
     unsigned timeoutMs) {
@@ -184,6 +190,32 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* nodeNumber,
     r.pokeTimeMs = (endTimeUs - startTimeUs) / 1000;
 
     return r;
+}
+
+void Poker::loop(Log* log, Clock* clock, 
+    threadsafequeue<Message>* reqQueue,
+    threadsafequeue<Message>* respQueue, std::atomic<bool>* runFlag) {
+
+    while (runFlag->load()) {
+
+        // Do this to avoid high-CPU
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        // Attempt to take a request off the request queue
+        Message msg;
+        if (reqQueue->try_pop(msg)) {
+            if (msg.getType() == Message::Type::NET_DIAG_1_REQ) {
+                Poker::Request req;
+                memcpy(&req, msg.body(), sizeof(req));
+                Poker::Result r = Poker::poke(*log, *clock, req);
+                Message res(Message::Type::NET_DIAG_1_RES, 0, 
+                    sizeof(Poker::Result),  (const uint8_t*)&r, 0, 0);
+                res.setSource(0, 0);
+                res.setDest(1, 1);
+                respQueue->push(res);
+            }
+        }
+    }
 }
 
 }
