@@ -210,8 +210,8 @@ void Poker::loop(Log* log, Clock* clock,
                 Poker::Result r = Poker::poke(*log, *clock, req);
                 Message res(Message::Type::NET_DIAG_1_RES, 0, 
                     sizeof(Poker::Result),  (const uint8_t*)&r, 0, 0);
-                res.setSource(0, 0);
-                res.setDest(1, 1);
+                res.setSource(msg.getDestBusId(), msg.getDestCallId());
+                res.setDest(msg.getSourceBusId(), msg.getSourceCallId());
                 respQueue->push(res);
             }
         }
