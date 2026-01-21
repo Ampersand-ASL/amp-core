@@ -32,8 +32,8 @@ public:
 
 int main(int, const char**) {
 
-    threadsafequeue<Message> reqQueue;
-    threadsafequeue<Message> respQueue;
+    threadsafequeue2<Message> reqQueue;
+    threadsafequeue2<Message> respQueue;
 
     Log log;
     StdClock clock;
@@ -44,11 +44,24 @@ int main(int, const char**) {
 
     std::thread t0(Poker::loop, &log, &clock, &reqQueue, &respQueue, &runFlag);
 
+    log.info("Starting the diagnostic request");
+
     Poker::Request req = { .bindAddr = "0.0.0.0", .nodeNumber = "61057", .timeoutMs = 250};
     Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
         sizeof(Poker::Request),  (const uint8_t*)&req, 0, 0);
     reqQueue.push(msg);
+   
+    // Block waiting
+    log.info("Blocking ...");
+    Message m;
+    bool r = respQueue.try_pop(m, 1000);
 
-    Runnable2* tasks[] = { &bus };
-    EventLoop::run(log, clock, 0, 0, tasks, std::size(tasks));
+    log.info("Done! %d", r);
+
+    runFlag.store(false);
+    t0.join();
+
+    log.info("Exit");
+
+    return 0;
 }

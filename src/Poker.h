@@ -18,7 +18,7 @@
 
 #include <atomic>
 
-#include "kc1fsz-tools/threadsafequeue.h"
+#include "kc1fsz-tools/threadsafequeue2.h"
 #include "Message.h"
 
 namespace kc1fsz {
@@ -67,7 +67,7 @@ public:
      * @param runFlag Keep this set to true until it's time to exit the loop.
      */
     static void loop(Log* log, Clock* clock, 
-        threadsafequeue<Message>* reqQueue, threadsafequeue<Message>* respQueue,
+        threadsafequeue2<Message>* reqQueue, threadsafequeue2<Message>* respQueue,
         std::atomic<bool>* runFlag);
 };
 

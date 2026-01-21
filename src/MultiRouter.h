@@ -19,7 +19,7 @@
 #include <cassert>
 #include <vector>
 
-#include "kc1fsz-tools/threadsafequeue.h"
+#include "kc1fsz-tools/threadsafequeue2.h"
 
 #include "Message.h"
 #include "Runnable2.h"
@@ -39,7 +39,7 @@ public:
      * @param auxQueue Another way to consume messages, useful for 
      * posting messages from other threads.
      */ 
-    MultiRouter(threadsafequeue<Message>& auxQueue);
+    MultiRouter(threadsafequeue2<Message>& auxQueue);
 
     void addRoute(MessageConsumer* consumer, unsigned lineId);
 
@@ -55,7 +55,7 @@ private:
     };
 
     std::vector<Dest> _dests;
-    threadsafequeue<Message>& _auxQueue;
+    threadsafequeue2<Message>& _auxQueue;
 };
 
 }
