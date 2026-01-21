@@ -79,6 +79,8 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* bindAddr,
     char dottedAddr[32];
     formatIP4Address(addr, dottedAddr, sizeof(dottedAddr));
 
+    log.info("Network test %s:%d", dottedAddr, iaxPort);
+
     // Create a UDP socket 
     // The IP address family used for this connection. Either AF_INET
     // or AF_INET6.

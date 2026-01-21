@@ -314,7 +314,11 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         _parrotState = ParrotState::WAITING_FOR_NET_TEST;
         _parrotStateStartMs = _clock->time();
     }
-    else if (_parrotState == ParrotState::READY_FOR_GREETING) {
+    else if (_parrotState == ParrotState::WAITING_FOR_NET_TEST) {
+        // Check for timeout
+        if (_clock->isPast(_parrotStateStartMs + 5000))
+            _parrotState = ParrotState::READY_FOR_GREETING;
+    } else if (_parrotState == ParrotState::READY_FOR_GREETING) {
 
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
@@ -328,13 +332,15 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
                 prompt += "Node is unregistered. ";
             else {
                 if (_netTestResult.code == 0) {
+                    prompt += "Network test succeeded. ";
                     char msg[64];
                     snprintf(msg, 64, "Ping time %d milliseconds. ", 
                         _netTestResult.pokeTimeMs);
-                    prompt += "Network test succeeded. ";
                     prompt += msg;
                 }
-                else if (_netTestResult.code <= -8) 
+                else if (_netTestResult.code == -99) {
+                    // Do nothing
+                } else if (_netTestResult.code <= -8) 
                     prompt += "Your node is unreachable. ";
             }
 
