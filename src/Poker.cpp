@@ -48,7 +48,7 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* bindAddr,
     unsigned char answer[128];
     int answerLen;
 
-    log.info("Network test requested for node %s using interface %s", 
+    log.info("Test requested for node %s from %s", 
         nodeNumber, bindAddr);
 
     // Query the SRV record
@@ -79,7 +79,7 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* bindAddr,
     char dottedAddr[32];
     formatIP4Address(addr, dottedAddr, sizeof(dottedAddr));
 
-    log.info("Network test %s:%d", dottedAddr, iaxPort);
+    log.info("Testing %s:%d", dottedAddr, iaxPort);
 
     // Create a UDP socket 
     // The IP address family used for this connection. Either AF_INET
