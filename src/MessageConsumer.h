@@ -16,7 +16,7 @@
  */
 #pragma once
 
-#include "kc1fsz-tools/threadsafequeue.h"
+#include "kc1fsz-tools/threadsafequeue2.h"
 #include "Message.h"
 
 namespace kc1fsz {
@@ -33,13 +33,13 @@ public:
 class QueueConsumer : public MessageConsumer  {
 public: 
 
-    QueueConsumer(threadsafequeue<Message>& q) : _q(q) { }
+    QueueConsumer(threadsafequeue2<Message>& q) : _q(q) { }
 
     void consume(const Message& msg) { _q.push(msg); }
 
 private:
 
-    threadsafequeue<Message>& _q;
+    threadsafequeue2<Message>& _q;
 };
 
 }

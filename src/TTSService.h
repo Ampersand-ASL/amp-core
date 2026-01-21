@@ -18,7 +18,7 @@
 
 #include <atomic>
 
-#include "kc1fsz-tools/threadsafequeue.h"
+#include "kc1fsz-tools/threadsafequeue2.h"
 
 namespace kc1fsz {
 
@@ -29,9 +29,13 @@ class Log;
 /**
  * A function that can be put on a background thread to do TTS via
  * the message bus.
+ *
+ * @param reqQueue Request queue.
+ * @param resQueue Response queue.
+ * @param runFlag Used to exit the thread.
  */
-void ttsLoop(Log* log, threadsafequeue<Message>* ttsQueueReq,
-    threadsafequeue<Message>* ttsQueueRes, std::atomic<bool>* runFlag);
+void ttsLoop(Log* log, threadsafequeue2<Message>* reqQueue,
+    threadsafequeue2<Message>* resQueue, std::atomic<bool>* runFlag);
 
 }
 

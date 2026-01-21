@@ -67,8 +67,8 @@ static Message makeTTSAudioMsg(const Message& req,
 
 // ------ Text To Speach Thread ----------------------------------------------
 
-void ttsLoop(Log* loga, threadsafequeue<Message>* ttsQueueReq,
-    threadsafequeue<Message>* ttsQueueRes, std::atomic<bool>* runFlag) {
+void ttsLoop(Log* loga, threadsafequeue2<Message>* ttsQueueReq,
+    threadsafequeue2<Message>* ttsQueueRes, std::atomic<bool>* runFlag) {
 
     Log& log = *loga;
 
@@ -104,12 +104,10 @@ void ttsLoop(Log* loga, threadsafequeue<Message>* ttsQueueReq,
     // Processing loop
     while (runFlag->load()) {
 
-        // Do this to avoid high-CPU
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-        // Attemp to take a TTS request off the request queue
+        // Attempt to take a TTS request off the request queue. Use a long
+        // timeout to avoid high CPU
         Message req;
-        if (ttsQueueReq->try_pop(req)) {
+        if (ttsQueueReq->try_pop(req, 500)) {
             if (req.getType() == Message::Type::TTS_REQ) {
 
                 // Make a null-terminated buffer with a maximum size
