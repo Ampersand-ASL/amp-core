@@ -479,3 +479,16 @@ add_executable(hello-poker-async
 
 target_include_directories(hello-poker-async PRIVATE src)
 target_include_directories(hello-poker-async PRIVATE kc1fsz-tools-cpp/include)
+
+# ----- white-noise --------------------------------------------------------
+
+add_executable(white-noise
+  src/demos/white-noise.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+)
+
+target_include_directories(white-noise PRIVATE src)
+target_include_directories(white-noise PRIVATE kc1fsz-tools-cpp/include)
+
