@@ -88,7 +88,7 @@ private:
 
     // How long we wait before making a decision about whether a 
     // kerchunk has happened.
-    unsigned _evaluationIntervalMs = 1500;
+    unsigned _evaluationIntervalMs = 2000;
     // The amount of time that a channel remains trusted.
     unsigned _trustIntervalMs = 1 * 60 * 1000;
     // Used for detecting the trailing edge of activity
