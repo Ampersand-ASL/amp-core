@@ -20,11 +20,6 @@
 
 #include "kc1fsz-tools/Log.h"
 
-struct service_thread_args {
-    std::string cfgFileName;
-    kc1fsz::Log* log;
-};
-
-void service_thread(const service_thread_args* args);
+void service_thread(const std::string* cfgFileName, kc1fsz::Log* log);
 
 

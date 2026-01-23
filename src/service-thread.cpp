@@ -45,13 +45,11 @@
 using namespace std;
 using namespace kc1fsz;
 
-void service_thread(const service_thread_args* args) {
+void service_thread(const std::string* cfgFileName, kc1fsz::Log* loga) {
+
+    Log& log = *loga;
 
     amp::setThreadName("amp-svc");
-
-    // Pull out the thread startup arguments
-    const string cfgFileName = args->cfgFileName;
-    Log& log = *(args->log);
 
     log.info("service_thread start");
 
@@ -65,7 +63,7 @@ void service_thread(const service_thread_args* args) {
 
     StatsTask statsTask(log, clock, "1.0.0");
 
-    amp::ConfigPoller cfgPoller(log, cfgFileName.c_str(), 
+    amp::ConfigPoller cfgPoller(log, cfgFileName->c_str(), 
         // This function will be called on any update to the configuration document.
         [&log, &registerTask, &statsTask](const json& cfg) {
             try {
