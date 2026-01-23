@@ -275,7 +275,7 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
     if (_injectToneActive) {
         int16_t toneBlock[BLOCK_SIZE_48K];
         for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-            toneBlock[i] = _injectToneAmp * std::cos(_injectTonePhi);
+            toneBlock[i] = _injectToneAmp * std::cos(_injectTonePhi) * 32767.0f;
             _injectTonePhi += _injectToneOmega;
         }
         _injectTonePhi = std::fmod(_injectTonePhi, 2.0f * 3.1415926f);
