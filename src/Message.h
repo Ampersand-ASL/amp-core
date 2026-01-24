@@ -71,8 +71,9 @@ public:
     // Message needs to be large enough for 20ms of PCM16 at 48K 
     // (This is 1920 bytes)
     static const unsigned MAX_SIZE = 160 * 6 * 2;
-    // Constant used for line/call
+    // Constant used for line
     static const unsigned BROADCAST = 0;
+    static const unsigned UNKNOWN_CALL_ID = -1;
 
     Message();
     Message(Type type, unsigned format, unsigned size, const uint8_t* body,
