@@ -44,6 +44,8 @@ class Bridge;
 class BridgeCall {
 public:
 
+    friend class Bridge;
+
     static const unsigned AUDIO_RATE = 48000;
     static const unsigned BLOCK_SIZE_8K = 160;
     static const unsigned BLOCK_SIZE_16K = 160 * 2;

@@ -225,5 +225,14 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         if (_calls[j].isActive()) 
             _calls[j].clearInputAudio();
 }
+
+void Bridge::tenSecTick() {
+    _log.info("Call status:");
+    for (unsigned j = 0; j < MAX_CALLS; j++) {
+        _log.info("%d %d %d %d", j, _calls[j].isActive(), 
+            _calls[j]._lineId, _calls[j]._callId);
+    }
+}
+
     }
 }

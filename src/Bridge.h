@@ -63,6 +63,7 @@ public:
     
     bool run2();
     void audioRateTick(uint32_t tickMs);
+    void tenSecTick();
 
 private:
 
