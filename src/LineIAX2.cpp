@@ -1690,6 +1690,9 @@ bool LineIAX2::_progressCall(Call& call) {
             // accepted.
             if (_clock.isPast(call._callInitiatedMs + CALL_INITIATION_TIMEOUS_MS)) {
 
+                _log.info("Call failed %s -> %s", 
+                    call.localNumber.c_str(), call.remoteNumber.c_str()); 
+
                 PayloadCallFailed payload;
                 strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
                 strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
