@@ -414,8 +414,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
            
             // #### TODO: DO A BETTER JOB ON THE CLIPPING CASE
 
-            int peakPowerInt = (int)peakPower;
-
+            int peakPowerInt = std::round(peakPower);
             if (peakPowerInt < -40) {
                 snprintf(sp, 64, "Peak is less than minus 40db");
             } else if (peakPowerInt < 0) {                
@@ -426,8 +425,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += sp;
             prompt += ", ";
 
-            int avgPowerInt = (int)avgPower;
-
+            int avgPowerInt = std::round(avgPower);
             if (avgPower < -40) {
                 snprintf(sp, 64, "Average is less than minus 40db");
             } else if (avgPower < 0) {

@@ -80,6 +80,23 @@ extern unsigned int _amp_core_www_config_html_len;
 extern unsigned char _amp_core_www_main_css[];
 extern unsigned int _amp_core_www_main_css_len;
 
+// ### TODO: CLEAN UP
+// Function to trim leading whitespace (ltrim)
+void ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if_not(s.begin(), s.end(), ::isspace));
+}
+
+// Function to trim trailing whitespace (rtrim)
+void rtrim(std::string &s) {
+    s.erase(std::find_if_not(s.rbegin(), s.rend(), ::isspace).base(), s.end());
+}
+
+// Function to trim both leading and trailing whitespace (trim)
+void trim(std::string &s) {
+    ltrim(s);
+    rtrim(s);
+}
+
 namespace kc1fsz {
 
     namespace amp {
@@ -260,6 +277,8 @@ void WebUi::_thread() {
                 if (cfgDoc.contains("node"))
                     localNode = cfgDoc["node"];
                 string targetNode = data["node"];
+                // ### TODO: CLEAN UP
+                trim(targetNode);
                 if (!localNode.empty() && !targetNode.empty()) {
                     PayloadCall payload;
                     strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
