@@ -195,6 +195,8 @@ private:
     void _loadSweep(std::queue<PCM16Frame>& queue);
     void _loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue);
 
+    void _loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const;
+
     /**
      * Puts one 16K LE frame onto the queue provided
      */

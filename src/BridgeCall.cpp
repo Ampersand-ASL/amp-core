@@ -19,12 +19,20 @@
 #include <fstream>
 #include <algorithm>
 #include <string> 
+#include <random>
 
 #include "Message.h"
 #include "BridgeCall.h"
 #include "Poker.h"
 
 using namespace std;
+
+// 1. Seed the random number engine.
+// std::random_device provides a non-deterministic source of randomness (hardware entropy) 
+// to seed the PRNG differently each time the program runs.
+// These things are used in global space because of large stack consumption
+static std::random_device rd;
+static std::mt19937 gen(rd());
 
 namespace kc1fsz {
 
@@ -129,6 +137,11 @@ void BridgeCall::consume(const Message& frame) {
                 _log->info("Starting tone");
                 // A 5 second tone at 440 Hz
                 _loadCw(0.5, 440, 50 * 5, _playQueue);
+                _parrotState = ParrotState::PLAYING;            
+            } else if (payload->symbol == '3') {
+                _log->info("Generating white noise");
+                _loadWhite(0.5, 5 * 1000 / 20, _playQueue);
+                _log->info("Done");
                 _parrotState = ParrotState::PLAYING;            
             }
         }
@@ -585,6 +598,23 @@ void BridgeCall::_loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Fr
             data[i] = (amp * cos(_tonePhi)) * 32767.0f;
             _tonePhi += toneOmega;
             _tonePhi = fmod(_tonePhi, 2.0f * 3.14159f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        queue.push(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
+
+void BridgeCall::_loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const {
+
+    // Generates float values in the range [-1.0, 1.0).
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * dist(gen) * 32767.0f);
         }
         // Pass into the output pipeline for transcoding, etc.
         queue.push(PCM16Frame(data, BLOCK_SIZE_48K));
