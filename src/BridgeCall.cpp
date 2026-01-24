@@ -436,6 +436,19 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += sp;
             prompt += ". ";
 
+            // Now add some subjective commentary (CONTROVERSIAL!)
+
+            if (peakPowerInt > -6)
+                prompt = "Level is very high.";
+            if (peakPowerInt > -9)
+                prompt = "Level is high.";
+            else if (peakPowerInt > -15) 
+                prompt = "Level is good.";
+            else if (peakPowerInt > -20) 
+                prompt = "Level is low.";
+            else 
+                prompt = "Level is very low.";
+
             prompt += "Playback.";
 
             // Queue a request for TTS
@@ -605,8 +618,8 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
 
     unsigned frameCount = audio.size();
 
-    // Ignore the first 100ms of the recording to avoid distortion due to pops/clips
-    unsigned startI = 100 / 20;
+    // Ignore the first 300ms of the recording to avoid distortion due to pops/clips
+    unsigned startI = 300 / 20;
     // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
     // influence of tail.
     unsigned endIgnoreCount = 300 / 20;
