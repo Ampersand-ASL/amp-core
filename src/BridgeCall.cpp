@@ -438,16 +438,16 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
             // Now add some subjective commentary (CONTROVERSIAL!)
 
-            if (peakPowerInt > -6)
-                prompt = "Level is very high.";
+            if (peakPowerInt > -3)
+                prompt += "Level is very high. ";
             if (peakPowerInt > -9)
-                prompt = "Level is high.";
+                prompt += "Level is high. ";
             else if (peakPowerInt > -15) 
-                prompt = "Level is good.";
-            else if (peakPowerInt > -20) 
-                prompt = "Level is low.";
+                prompt += "Level is good. ";
+            else if (peakPowerInt > -21) 
+                prompt += "Level is low. ";
             else 
-                prompt = "Level is very low.";
+                prompt += "Level is very low. ";
 
             prompt += "Playback.";
 
