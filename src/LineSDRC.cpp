@@ -188,8 +188,6 @@ void LineSDRC::consume(const Message& frame) {
 }
 
 void LineSDRC::audioRateTick(uint32_t tickMs) {
-    // Make these audio frames perfectly spaced
-    _originMsCounter += 20;
 }
 
 void LineSDRC::oneSecTick() { 
@@ -217,6 +215,8 @@ bool LineSDRC::run2() {
                 msg.setSource(_lineId, _callId);
                 msg.setDest(_destLineId, Message::BROADCAST);
                 _bus.consume(msg);
+                // Make these audio frames perfectly spaced
+                _originMsCounter += 20;
             }
         );
     }

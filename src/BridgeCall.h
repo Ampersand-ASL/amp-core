@@ -78,7 +78,10 @@ public:
         _bridgeCallId = bridgeCallId;
         _ttsLineId = ttsLineId;
         _netTestLineId = netTestLineId;
-        _netTestBindAddr = netTestBindAddr;
+        if (netTestBindAddr)
+            _netTestBindAddr = netTestBindAddr;
+        else 
+            _netTestBindAddr = "0.0.0.0";
         _bridgeIn.init(_log, _traceLog, _clock);
     }
 

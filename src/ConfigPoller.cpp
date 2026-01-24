@@ -34,10 +34,13 @@ namespace kc1fsz {
 
 const char* ConfigPoller::DEFAULT_CONFIG = "{ \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"-10\", \"aslTxMixBSet\":\"-10\", \"aslRxMixerSet\":\"0\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
 
-ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb) 
+ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, 
+    std::function<void(const json& cfg)> cb,
+    std::function<void(const json& cfg)> startupCb) 
 :   _log(log),
     _fn(cfgFileName),
-    _cb(cb) { 
+    _cb(cb),
+    _startupCb(startupCb) { 
 }
 
 void ConfigPoller::oneSecTick() {   
@@ -50,17 +53,19 @@ void ConfigPoller::oneSecTick() {
 
         if (_startup || ftime > _lastUpdate) {
             _lastUpdate = ftime;
-            _startup = false;
             try {
                 json j = json::parse(ifstream(_fn));
                 _populateDefaults(j);
-                // Fire the callback 
+                // Fire the callbacks
                 _cb(j);
+                if (_startup && _startupCb)
+                    _startupCb(j);
             } catch(json::exception& ex) {
                 _log.error("Config file format error %s", ex.what());
             } catch (exception& ex) {
                 _log.error("Unable to load config: %s", ex.what());
             }
+            _startup = false;
         }
 
     } catch (exception& ex) {

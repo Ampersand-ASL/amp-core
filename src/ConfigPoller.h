@@ -32,7 +32,7 @@ class Log;
     namespace amp {
 
 /**
- * Polls the congiruation file and fires a callback any time the system 
+ * Polls the configuration file and fires a callback any time the system 
  * configuration is changed. This should be the only thing that reads
  * the configuration file.
  */
@@ -41,7 +41,13 @@ public:
 
     static const char* DEFAULT_CONFIG;
 
-    ConfigPoller(Log& log, const char* cfgFileName, std::function<void(const json& cfg)> cb);
+    /**
+     * @param configChangeCb Called every time the configuration document changes.
+     * @param startupCb Called on first startup only, but after configChangeCb.
+     */
+    ConfigPoller(Log& log, const char* cfgFileName, 
+        std::function<void(const json& cfg)> configChangeCb,
+        std::function<void(const json& cfg)> startupCb = nullptr);
 
     // ----- Runnable2 --------------------------------------------------------
 
@@ -55,6 +61,7 @@ private:
     Log& _log;
     std::string _fn;
     std::function<void(const json& cfg)> _cb;
+    std::function<void(const json& cfg)> _startupCb;
     // Initialize at the epoch
     std::filesystem::file_time_type _lastUpdate;
     bool _startup = true;
