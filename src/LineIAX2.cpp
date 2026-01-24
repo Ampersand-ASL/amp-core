@@ -60,6 +60,8 @@ static const uint32_t _inactivityTimeoutMs = 40 * 1000;
 // How long we will wait around before cleaning up a terminated call. 
 // This window is used to allow time to re-transmit and unacknowledged messages.
 static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
+// How long we wait for a callee to respond to our NEW
+#define CALL_INITIATION_TIMEOUS_MS (2000)
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
@@ -1681,6 +1683,26 @@ bool LineIAX2::_progressCall(Call& call) {
             _sendFrameToPeer(frame, call);
 
             call.state = Call::State::STATE_WAITING;
+            call._callInitiatedMs = _clock.time();
+        }
+        else if (call.state == Call::State::STATE_WAITING) { 
+            // Check to see if we should give up on a new call that isn't
+            // accepted.
+            if (_clock.isPast(call._callInitiatedMs + CALL_INITIATION_TIMEOUS_MS)) {
+
+                PayloadCallFailed payload;
+                strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+                strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+
+                Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
+                    sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+                msg.setSource(_busId, call.localCallId);
+                msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+                _bus.consume(msg);
+
+                call.state = Call::State::STATE_TERMINATED;
+                call.terminationMs = _clock.time();
+            }
         }
     }
     else if (call.side == Call::Side::SIDE_CALLED) {
@@ -2218,6 +2240,7 @@ void LineIAX2::Call::reset() {
     lastLagrqMs = 0;
     lastRxVoiceFrameMs = 0;
     lastTxVoiceFrameMs = 0;
+    _callInitiatedMs = 0;
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?

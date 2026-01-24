@@ -51,6 +51,7 @@ public:
         SIGNALTYPE_NONE = 0,
         CALL_START,
         CALL_END,
+        CALL_FAILED,
         CALL_LEVELS,
         // Sent out periodically by the line that "owns" the call to provide
         // and update on the status of teh call.
@@ -128,6 +129,11 @@ struct PayloadCallStart {
     bool echo = false;
     bool originated = false;
     bool sourceAddrValidated = false;
+};
+
+struct PayloadCallFailed {
+    char localNumber[16];
+    char remoteNumber[16];
 };
 
 struct PayloadCallStatus {

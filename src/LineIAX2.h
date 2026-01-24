@@ -292,6 +292,8 @@ private:
 
         uint64_t lastRxVoiceFrameMs = 0;
         uint64_t lastTxVoiceFrameMs = 0;
+        // When a NEW request is sent out during call initiation
+        uint32_t _callInitiatedMs = 0;
 
         void reset();
 
