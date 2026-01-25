@@ -66,7 +66,10 @@ public:
         // Tells an audio interface that the COS signal has been activated/deactivated
         COS_ON,
         COS_OFF,
-        DTMF_PRESS
+        // Used to report inbound DTMF
+        DTMF_PRESS,
+        // Used to generate outbound DTMF
+        DTMF_GEN
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
@@ -155,6 +158,10 @@ struct PayloadCallLevels {
     int tx0Db;
     int rx1Db;
     int tx1Db;
+};
+
+struct PayloadDtmfGen {
+    char symbol;
 };
 
 }

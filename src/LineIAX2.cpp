@@ -1821,6 +1821,16 @@ void LineIAX2::_terminateCall(Call& call) {
     call.state = Call::State::STATE_TERMINATE_WAITING;
 }
 
+void LineIAX2::_dtmfGen(char symbol) {
+    // For now we send on all
+    _visitActiveCallsIf(
+        [this, symbol](Call& call) { 
+            call.dtmfGen(this->_log, this->_clock, *this, symbol); 
+        },
+        [](const Call& call) { return true; }
+    );
+}
+
 unsigned LineIAX2::getActiveCalls() const {
     unsigned result = 0;
     _visitActiveCallsIf(
@@ -1848,6 +1858,11 @@ void LineIAX2::consume(const Message& msg) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
         drop(payload->localNumber, payload->targetNumber);
+    } else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
+        PayloadDtmfGen payload;
+        assert(sizeof(payload) == msg.size());
+        memcpy(&payload, msg.body(), msg.size());
+        _dtmfGen(payload.symbol);
     }
     // Everything else gets handed to the calls for processing.
     else {
@@ -2399,6 +2414,15 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
 }
 
 void LineIAX2::Call::logStats(Log& log) {
+}
+
+void LineIAX2::Call::dtmfGen(Log& log, Clock& clock, LineIAX2& line, char symbol) {
+    log.info("Call %u sending DTMF %c", localCallId, symbol);
+    IAX2FrameFull frame;
+    frame.setHeader(localCallId, remoteCallId, 
+        dispenseElapsedMs(clock), 
+        outSeqNo, expectedInSeqNo, FrameType::IAX2_TYPE_DTMF2, symbol);
+    line._sendFrameToPeer(frame, *this);
 }
 
 }

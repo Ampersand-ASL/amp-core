@@ -339,6 +339,8 @@ private:
         void resetStats();
 
         void setNetworkDelayEstimate(unsigned ms, bool first = false);
+
+        void dtmfGen(Log& log, Clock& clock, LineIAX2& line, char symbol);
     };
 
     friend class Call;
@@ -429,6 +431,8 @@ private:
     void _sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const char* cause);
     void _hangupCall(Call& call);
     void _terminateCall(Call& call);
+    // ### TODO: NEED TO DESIGNATE CALL
+    void _dtmfGen(char symbol);
 
     /**
      * Sends a frame to the call peer. Also deals with call management:

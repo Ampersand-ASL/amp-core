@@ -290,7 +290,15 @@ void WebUi::_thread() {
                 } else {
                     // ### TODO: ERROR MESSAGE
                 }
-            } 
+            } else if (data["button"] == "dtmf3") {
+                _log.info("DTMF"); 
+                PayloadDtmfGen payload;
+                payload.symbol = '3';
+                Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
+                    sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                msg.setDest(_networkDestLineId, DEST_CALL_ID);
+                _outQueue.push(msg);
+            }
             else if (data["button"] == "drop") {
                 string localNode = "*";
                 string targetNode = data["node"];
