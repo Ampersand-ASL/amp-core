@@ -55,6 +55,11 @@ public:
     static const unsigned LINE_ID = 10;
     static const unsigned CALL_ID = 1;
 
+    /**
+     * Called during startup to get the white noise buffer built
+     */
+    static void initializeWhiteNoise();
+
     enum Mode {
         NORMAL,
         PARROT,

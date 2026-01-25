@@ -27,16 +27,37 @@
 
 using namespace std;
 
+namespace kc1fsz {
+
+    namespace amp {
+
 // 1. Seed the random number engine.
 // std::random_device provides a non-deterministic source of randomness (hardware entropy) 
 // to seed the PRNG differently each time the program runs.
 // These things are used in global space because of large stack consumption
 static std::random_device rd;
 static std::mt19937 gen(rd());
+// A vector that holds 2 seconds of pre-made white noise
+static std::vector<PCM16Frame> whiteNoise;
 
-namespace kc1fsz {
+void BridgeCall::initializeWhiteNoise() {
 
-    namespace amp {
+    // Generates float values in the range [-1.0, 1.0).
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    float amp = 0.5;
+    unsigned ticks = 2 * 1000 / 20;
+
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * dist(gen) * 32767.0f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        whiteNoise.push_back(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
 
 BridgeCall::BridgeCall() {
     // The last stage of the BridgeIn pipeline drops the message 
@@ -140,7 +161,8 @@ void BridgeCall::consume(const Message& frame) {
                 _parrotState = ParrotState::PLAYING;            
             } else if (payload->symbol == '3') {
                 _log->info("Generating white noise");
-                _loadWhite(0.5, 5 * 1000 / 20, _playQueue);
+                for (auto it = whiteNoise.begin(); it != whiteNoise.end(); it++)
+                    _playQueue.push(PCM16Frame(*it));
                 _log->info("Done");
                 _parrotState = ParrotState::PLAYING;            
             }
