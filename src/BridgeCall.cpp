@@ -19,6 +19,7 @@
 #include <fstream>
 #include <algorithm>
 #include <string> 
+#include <random>
 
 #include "Message.h"
 #include "BridgeCall.h"
@@ -29,6 +30,34 @@ using namespace std;
 namespace kc1fsz {
 
     namespace amp {
+
+// 1. Seed the random number engine.
+// std::random_device provides a non-deterministic source of randomness (hardware entropy) 
+// to seed the PRNG differently each time the program runs.
+// These things are used in global space because of large stack consumption
+static std::random_device rd;
+static std::mt19937 gen(rd());
+// A vector that holds 2 seconds of pre-made white noise
+static std::vector<PCM16Frame> whiteNoise;
+
+void BridgeCall::initializeWhiteNoise() {
+
+    // Generates float values in the range [-1.0, 1.0).
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    float amp = 0.5;
+    unsigned ticks = 2 * 1000 / 20;
+
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * dist(gen) * 32767.0f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        whiteNoise.push_back(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
 
 BridgeCall::BridgeCall() {
     // The last stage of the BridgeIn pipeline drops the message 
@@ -129,6 +158,12 @@ void BridgeCall::consume(const Message& frame) {
                 _log->info("Starting tone");
                 // A 5 second tone at 440 Hz
                 _loadCw(0.5, 440, 50 * 5, _playQueue);
+                _parrotState = ParrotState::PLAYING;            
+            } else if (payload->symbol == '3') {
+                _log->info("Generating white noise");
+                for (auto it = whiteNoise.begin(); it != whiteNoise.end(); it++)
+                    _playQueue.push(PCM16Frame(*it));
+                _log->info("Done");
                 _parrotState = ParrotState::PLAYING;            
             }
         }
@@ -436,6 +471,19 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += sp;
             prompt += ". ";
 
+            // Now add some subjective commentary (CONTROVERSIAL!)
+
+            if (peakPowerInt > -3)
+                prompt += "Level is very high. ";
+            if (peakPowerInt > -9)
+                prompt += "Level is high. ";
+            else if (peakPowerInt > -15) 
+                prompt += "Level is good. ";
+            else if (peakPowerInt > -21) 
+                prompt += "Level is low. ";
+            else 
+                prompt += "Level is very low. ";
+
             prompt += "Playback.";
 
             // Queue a request for TTS
@@ -578,6 +626,23 @@ void BridgeCall::_loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Fr
     }
 }
 
+void BridgeCall::_loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const {
+
+    // Generates float values in the range [-1.0, 1.0).
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * dist(gen) * 32767.0f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        queue.push(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
+
 void BridgeCall::_loadSweep(std::queue<PCM16Frame>& queue) {    
     // Alternating intro
     for (unsigned i = 0; i < 8; i++) {
@@ -605,8 +670,8 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
 
     unsigned frameCount = audio.size();
 
-    // Ignore the first 100ms of the recording to avoid distortion due to pops/clips
-    unsigned startI = 100 / 20;
+    // Ignore the first 300ms of the recording to avoid distortion due to pops/clips
+    unsigned startI = 300 / 20;
     // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
     // influence of tail.
     unsigned endIgnoreCount = 300 / 20;

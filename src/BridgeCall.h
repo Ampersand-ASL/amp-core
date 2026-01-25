@@ -55,6 +55,11 @@ public:
     static const unsigned LINE_ID = 10;
     static const unsigned CALL_ID = 1;
 
+    /**
+     * Called during startup to get the white noise buffer built
+     */
+    static void initializeWhiteNoise();
+
     enum Mode {
         NORMAL,
         PARROT,
@@ -194,6 +199,8 @@ private:
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
     void _loadSweep(std::queue<PCM16Frame>& queue);
     void _loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue);
+
+    void _loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const;
 
     /**
      * Puts one 16K LE frame onto the queue provided
