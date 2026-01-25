@@ -45,7 +45,7 @@ void BridgeCall::initializeWhiteNoise() {
     // Generates float values in the range [-1.0, 1.0).
     std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
     float amp = 0.5;
-    unsigned ticks = 2 * 1000 / 20;
+    unsigned ticks = 5 * 1000 / 20;
 
     int16_t data[BLOCK_SIZE_48K];
     for (unsigned k = 0; k < ticks; k++) {
