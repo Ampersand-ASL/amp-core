@@ -16,6 +16,8 @@
  */
 #pragma once
 
+#include <string>
+
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
@@ -46,14 +48,9 @@ public:
         const char* netTestBindAddr);
 
     unsigned getCallCount() const;
-
     void reset();
 
-    /**
-     * Only call this if the text-to-speech server is needed. This may not be 
-     * avaiable on all platforms.
-     */
-    void startTTSThread();
+    void setNodeNumber(const char* nodeNumber) { _nodeNumber = nodeNumber; }
 
     // ----- MessageConsumer --------------------------------------------------
 
@@ -77,7 +74,8 @@ private:
     unsigned _lineId;
     unsigned _ttsLineId;
     unsigned _netTestLineId;
-    
+    std::string _nodeNumber;
+
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;

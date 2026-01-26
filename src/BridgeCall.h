@@ -71,10 +71,11 @@ public:
     /**
      * One-time initialization. Connects the call to the outside world.
      */
-    void init(Log* log, Log* traceLog, Clock* clock, 
+    void init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock, 
         MessageConsumer* sink, 
         unsigned bridgeLineId, unsigned bridgeCallId, 
         unsigned ttsLineId, unsigned netTestLineId, const char* netTestBindAddr) {
+        _bridge = bridge;
         _log = log;
         _traceLog = traceLog;
         _clock = clock;
@@ -142,6 +143,7 @@ public:
 
 private:
 
+    Bridge* _bridge;
     Log* _log;
     Log* _traceLog;
     Clock* _clock;
@@ -169,6 +171,7 @@ private:
     Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
         unsigned destLineId, unsigned destCallId) const;
     void _processTTSAudio(const Message& msg);
+    void _requestTTS(const char* prompt);
 
     // ----- Normal Mode Related ----------------------------------------------
 
