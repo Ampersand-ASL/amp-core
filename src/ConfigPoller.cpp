@@ -20,7 +20,10 @@
 #include <iostream>
 
 #include "kc1fsz-tools/Log.h"
+
+#ifndef _WIN32
 #include "sound-map.h"
+#endif
 
 #include "ConfigPoller.h"
 
@@ -81,6 +84,7 @@ void ConfigPoller::_populateDefaults(json& j) {
     // If there is no USB sound device selected, default to the first C-Media 
     // device we can find.
     if (j["aslAudioDevice"].get<std::string>().empty()) {
+#ifndef _WIN32        
         visitUSBDevices2([&j](
             const char*, const char*, 
             const char* vendorId, const char*,                 
@@ -95,6 +99,7 @@ void ConfigPoller::_populateDefaults(json& j) {
                     j["aslAudioDevice"] = val;
                 }
             });
+#endif            
     }
 }
 

@@ -30,13 +30,15 @@
 #include "kc1fsz-tools/Clock.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
+#ifndef _WIN32
 #include "sound-map.h"
+#include "LineUsb.h"
+#endif
 
 #include "Message.h"
 #include "MessageConsumer.h"
 #include "WebUi.h"
 #include "ThreadUtil.h"
-#include "LineUsb.h"
 #include "TraceLog.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
@@ -360,6 +362,7 @@ void WebUi::_thread() {
         
         if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet" || menuName == "aslRxMixerSet") {
             string arg = req.get_param_value("arg");      
+#ifndef _WIN32            
             if (arg.starts_with("usb ")) {
                 // Try to locate that sound device and get its volume range
                 int alsaDev;
@@ -399,6 +402,7 @@ void WebUi::_thread() {
                     }
                 }
             }
+#endif            
         }
         else if (menuName == "aslAudioDevice") {
 
@@ -407,6 +411,7 @@ void WebUi::_thread() {
             o["desc"] = "None";
             a.push_back(o);
 
+#ifndef _WIN32            
             visitUSBDevices2([&a](
                 const char* vendorName, const char* productName, 
                 const char* vendorId, const char* productId,                 
@@ -436,6 +441,7 @@ void WebUi::_thread() {
                     }
                 }
             );
+#endif            
         }
 
         res.set_content(a.dump(), "application/json");
@@ -450,6 +456,7 @@ void WebUi::_thread() {
         o["desc"] = "None";
         a.push_back(o);
 
+#ifndef _WIN32        
         visitUSBDevices2([&a](const char* vendorName, const char* productName, 
             const char* vendorId, const char* productId,             
             const char* busId, const char* portId) {
@@ -478,7 +485,7 @@ void WebUi::_thread() {
                 a.push_back(o);
             }
         );
-
+#endif        
         res.set_content(a.dump(), "application/json");
     });
 

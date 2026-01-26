@@ -30,6 +30,8 @@
 
 #include <iostream>
 #include <string>
+#include <chrono>
+#include <thread>
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/linux/StdClock.h"
@@ -54,7 +56,7 @@ void service_thread(const std::string* cfgFileName, kc1fsz::Log* loga) {
     log.info("service_thread start");
 
     // Sleep waiting to change real-time status
-    sleep(10);
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     amp::lowerThreadPriority();
 
     StdClock clock;

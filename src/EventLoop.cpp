@@ -16,6 +16,12 @@
  */
 #include <algorithm>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <poll.h>
+#endif
+
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/StdPollTimer.h"
 #include "kc1fsz-tools/linux/StdClock.h"
