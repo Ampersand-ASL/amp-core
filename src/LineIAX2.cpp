@@ -638,7 +638,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
-            if (_destAuthorizer == 0 ||
+            if (_destAuthorizer &&
                 !_destAuthorizer->isAuthorized(targetNumber.c_str())) {
                 _log.error("Wrong number");
                 _sendREJECT(destCallId, peerAddr, "Wrong number");
@@ -655,7 +655,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
-            if (_sourceAuthorizer == 0 ||
+            if (_sourceAuthorizer &&
                 !_sourceAuthorizer->isAuthorized(callingNumber.c_str())) {
                 _log.info("Call from %s rejected", callingNumber.c_str());
                 _sendREJECT(destCallId, peerAddr, "UNKNOWN");
