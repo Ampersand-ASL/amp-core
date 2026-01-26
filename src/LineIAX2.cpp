@@ -73,13 +73,15 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 }
 
 LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
-    MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg, unsigned destLineId)
+    MessageConsumer& bus, NumberAuthorizer* destAuth, NumberAuthorizer* sourceAuth,
+    LocalRegistry* locReg, unsigned destLineId)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
     _busId(busId),
     _bus(bus),
-    _validator(validator),
+    _destAuthorizer(destAuth),
+    _sourceAuthorizer(sourceAuth),
     _locReg(locReg),
     _destLineId(destLineId),
     _startTime(clock.time()) {
@@ -127,12 +129,12 @@ void LineIAX2::setAuthMode(AuthMode mode) {
     }
 }
 
-int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
+int LineIAX2::open(short addrFamily, int listenPort, const char* defaultUser) {
 
     // If the configuration is changing then ignore the request
     if (addrFamily == _addrFamily &&
         _iaxListenPort == listenPort &&
-        _localUser == localUser &&
+        _defaultUser == defaultUser &&
         _iaxSockFd != 0 &&
         _dnsSockFd != 0) {
         return 0;
@@ -142,7 +144,7 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
 
     _addrFamily = addrFamily;
     _iaxListenPort = listenPort;
-    _localUser = localUser;
+    _defaultUser = defaultUser;
 
     _log.info("Listening on IAX port %d", _iaxListenPort);
 
@@ -297,17 +299,23 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     call.lastLagrqMs = _clock.time();
     call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
+    // This may get overridden later
+    call.callUser = _defaultUser;
 
     // Check the local registration (if available) to see if we can resolve the target 
     // without going out to the DNS/directory.
     if (_locReg) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
-        if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr)) { 
+        fixedstring targetUser;
+        fixedstring targetPassword;
+        if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr, targetUser, targetPassword)) { 
             char addr[64];
             formatIPAddrAndPort((const sockaddr&)targetAddr, addr, 64);
             _log.info("Resolved %s locally -> %s", call.remoteNumber.c_str(), addr);
             memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
+            call.callUser = targetUser;
+            call.callPassword = targetPassword;
             call.state = Call::State::STATE_INITIATION_WAIT;
         }
     }
@@ -630,8 +638,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
-            if (_validator == 0 ||
-                !_validator->isNumberAllowed(targetNumber.c_str())) {
+            if (_destAuthorizer == 0 ||
+                !_destAuthorizer->isAuthorized(targetNumber.c_str())) {
                 _log.error("Wrong number");
                 _sendREJECT(destCallId, peerAddr, "Wrong number");
                 return;
@@ -644,6 +652,13 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             } else {
                 _log.error("No calling number provided");
                 _sendREJECT(destCallId, peerAddr, "Calling number missing");
+                return;
+            }
+
+            if (_sourceAuthorizer == 0 ||
+                !_sourceAuthorizer->isAuthorized(callingNumber.c_str())) {
+                _log.info("Call from %s rejected", callingNumber.c_str());
+                _sendREJECT(destCallId, peerAddr, "UNKNOWN");
                 return;
             }
 
@@ -684,7 +699,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.localStartMs = _clock.time() - AUDIO_TICK_MS;
             call.expectedInSeqNo = 1;
             call.remoteNumber = callingNumber;
-            call.remoteUser = callingUser;
+            call.callUser = callingUser;
             // Move the entire address in for use when sending out messages
             memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
             // Schedule the ping out
@@ -1657,7 +1672,7 @@ bool LineIAX2::_progressCall(Call& call) {
             // Name of caller, not sent by Asterisk
             //frame.addIE_str(4, 0, 0);
             frame.addIE_str(10, "en", 2);
-            frame.addIE_str(6, _localUser);
+            frame.addIE_str(6, call.callUser);
             // Desired CODEC
             frame.addIE_uint32(9, CODECType::IAX2_CODEC_SLIN_16K);
             // ##### TODO
@@ -1740,7 +1755,7 @@ bool LineIAX2::_progressCall(Call& call) {
 
             _log.info("Call %u accepted from %s %s",
                 call.localCallId,
-                call.remoteNumber.c_str(), call.remoteUser.c_str());
+                call.remoteNumber.c_str(), call.callUser.c_str());
 
             call.trusted = true;
             call.state = Call::State::STATE_LINKED;
@@ -2234,7 +2249,8 @@ void LineIAX2::Call::reset() {
     lastVoiceFrameElapsedMs = 0;
     localNumber.clear();
     remoteNumber.clear();
-    remoteUser.clear();
+    callUser.clear();
+    callPassword.clear();
     calltoken.clear();
     memset(&peerAddr, 0, sizeof(peerAddr));
     supportedCodecs = 0;

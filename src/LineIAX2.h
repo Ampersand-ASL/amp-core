@@ -41,13 +41,16 @@ namespace kc1fsz {
 class Log;
 class Clock;
 
-// ##### TODO CHANGE TO CallDestinationValidator
-class CallValidator {
+/**
+ * And interface used for authorizing numbers in a few contexts
+ */
+class NumberAuthorizer {
 public:
+
     /**
-     * @returns true if the destination number is reachable.
+     * @returns true if the number is authorized
      */
-    virtual bool isNumberAllowed(const char* destNumber) const = 0;
+    virtual bool isAuthorized(const char* nodeNumber) const = 0;
 };
 
 /**
@@ -59,11 +62,16 @@ public:
 class LocalRegistry {
 public:
     /**
+     * @param addr Will be populated with the node's address
+     * @param user Will be populated with the user to use for the call
+     * @param password Will be populated with the password to use for the call
+
      * @returns true if the number is listed in the local registry.
      * If found, the addr is filled in with the address/port number
      * of the destination.
      */
-    virtual bool lookup(const char* destNumber, sockaddr_storage& addr) = 0;
+    virtual bool lookup(const char* destNumber, sockaddr_storage& addr,
+        fixedstring& user, fixedstring& password) = 0;
 };
 
 /**
@@ -77,19 +85,22 @@ public:
      * @param consumer This is the sink interface that received messages
      * will be sent to. VERY IMPORTANT: Audio frames will not have been 
      * de-jittered before they are passed to this sink. 
-     * @param destValidator An interface that is used to validate the 
+     * @param destAuthorizer An interface that is used to validate the 
      * DESTINATIONS of incoming calls. In other words, this can 
-     * control what numbers this channel will ACCEPT calls for. Not
+     * control what numbers this channel will ACCEPT calls to. Not
      * to be confused with validation of the caller (that is handled
      * internally).
+     * @param sourceAuthorizer An interface that is used to validate the 
+     * SOURCES of incoming calls. In other words, this can 
+     * control what numbers this channel will ACCEPT calls from. 
      * @param supportDirectedPoke Please see documentation. This controls
      * whether POKE to another address can be requested.
      * @param privateKeyHex The server's private ED25519 seed in ASCII/Hex
      * representation. This should be exactly 64 characters long.
      */
     LineIAX2(Log& log, Log& traceLog, Clock& clock, int lineId, MessageConsumer& consumer,
-        CallValidator* destValidator, LocalRegistry* locReg, 
-        unsigned destLineId);
+        NumberAuthorizer* destAuthorizer, NumberAuthorizer* sourceAuthorizer, 
+        LocalRegistry* locReg, unsigned destLineId);
 
     // Configuration 
 
@@ -131,11 +142,13 @@ public:
      *
      * @param listenFamily - Either AF_INET or AF_INET6
      * @param listenPort
-     * @param localUser (Research in process to see if this is relevent here)
+     * @param defaultUser - The user sent in IAX2 NEW requests when no 
+     * explicit username is specified. This is generally used for calls to 
+     * public nodes. (i.e. "radio")
      *
      * @returns 0 if the open was successful.
      */
-    int open(short addrFamily, int listenPort, const char* localUser);
+    int open(short addrFamily, int listenPort, const char* defaultUser);
 
     /**
      * Resets all calls as a side-effect.
@@ -247,7 +260,8 @@ private:
         uint32_t lastVoiceFrameElapsedMs = 0;
         fixedstring localNumber;
         fixedstring remoteNumber;
-        fixedstring remoteUser;
+        fixedstring callUser;
+        fixedstring callPassword;
         fixedstring calltoken;
         // This is the ED5519 public key in binary format
         unsigned char publicKeyBin[32];
@@ -352,7 +366,9 @@ private:
     MessageConsumer& _bus;
     // An interface used to validate wether a call to a target number
     // should be allowed.
-    CallValidator* _validator = 0;
+    NumberAuthorizer* _destAuthorizer = 0;
+    // Used to determine whether the source number is allowed
+    NumberAuthorizer* _sourceAuthorizer = 0;
     // Used to resolve targets using a local file
     LocalRegistry* _locReg = 0;
     // The line that all messages are directed to
@@ -373,7 +389,7 @@ private:
     // The UDP port number used to receive IAX packet
     int _iaxListenPort = 0;
     // NOTE: Still researching this
-    fixedstring _localUser;
+    fixedstring _defaultUser;
     // The UDP socket on which IAX messages are received/sent
     int _iaxSockFd = 0;
 
