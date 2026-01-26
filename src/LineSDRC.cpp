@@ -21,6 +21,12 @@
 #include <linux/serial.h>
 #include <sys/ioctl.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <poll.h>
+#endif
+
 #include <cstring>
 #include <iostream>
 #include <algorithm>
