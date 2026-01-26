@@ -51,6 +51,7 @@ public:
         SIGNALTYPE_NONE = 0,
         CALL_START,
         CALL_END,
+        CALL_FAILED,
         CALL_LEVELS,
         // Sent out periodically by the line that "owns" the call to provide
         // and update on the status of teh call.
@@ -65,14 +66,18 @@ public:
         // Tells an audio interface that the COS signal has been activated/deactivated
         COS_ON,
         COS_OFF,
-        DTMF_PRESS
+        // Used to report inbound DTMF
+        DTMF_PRESS,
+        // Used to generate outbound DTMF
+        DTMF_GEN
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
     // (This is 1920 bytes)
     static const unsigned MAX_SIZE = 160 * 6 * 2;
-    // Constant used for line/call
+    // Constant used for line
     static const unsigned BROADCAST = 0;
+    static const unsigned UNKNOWN_CALL_ID = -1;
 
     Message();
     Message(Type type, unsigned format, unsigned size, const uint8_t* body,
@@ -129,6 +134,11 @@ struct PayloadCallStart {
     bool sourceAddrValidated = false;
 };
 
+struct PayloadCallFailed {
+    char localNumber[16];
+    char remoteNumber[16];
+};
+
 struct PayloadCallStatus {
     uint64_t lastRxMs;
     uint64_t lastTxMs;
@@ -148,6 +158,10 @@ struct PayloadCallLevels {
     int tx0Db;
     int rx1Db;
     int tx1Db;
+};
+
+struct PayloadDtmfGen {
+    char symbol;
 };
 
 }

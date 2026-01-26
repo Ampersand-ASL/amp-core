@@ -60,10 +60,11 @@ static const uint32_t _inactivityTimeoutMs = 40 * 1000;
 // How long we will wait around before cleaning up a terminated call. 
 // This window is used to allow time to re-transmit and unacknowledged messages.
 static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
+// How long we wait for a callee to respond to our NEW
+#define CALL_INITIATION_TIMEOUS_MS (2000)
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
-static const unsigned DEST_CALL_ID = 1;
 
 namespace kc1fsz {
 
@@ -72,13 +73,15 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 }
 
 LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
-    MessageConsumer& bus, CallValidator* validator, LocalRegistry* locReg, unsigned destLineId)
+    MessageConsumer& bus, NumberAuthorizer* destAuth, NumberAuthorizer* sourceAuth,
+    LocalRegistry* locReg, unsigned destLineId)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
     _busId(busId),
     _bus(bus),
-    _validator(validator),
+    _destAuthorizer(destAuth),
+    _sourceAuthorizer(sourceAuth),
     _locReg(locReg),
     _destLineId(destLineId),
     _startTime(clock.time()) {
@@ -126,12 +129,12 @@ void LineIAX2::setAuthMode(AuthMode mode) {
     }
 }
 
-int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
+int LineIAX2::open(short addrFamily, int listenPort, const char* defaultUser) {
 
     // If the configuration is changing then ignore the request
     if (addrFamily == _addrFamily &&
         _iaxListenPort == listenPort &&
-        _localUser == localUser &&
+        _defaultUser == defaultUser &&
         _iaxSockFd != 0 &&
         _dnsSockFd != 0) {
         return 0;
@@ -141,7 +144,7 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* localUser) {
 
     _addrFamily = addrFamily;
     _iaxListenPort = listenPort;
-    _localUser = localUser;
+    _defaultUser = defaultUser;
 
     _log.info("Listening on IAX port %d", _iaxListenPort);
 
@@ -296,17 +299,23 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     call.lastLagrqMs = _clock.time();
     call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
+    // This may get overridden later
+    call.callUser = _defaultUser;
 
     // Check the local registration (if available) to see if we can resolve the target 
     // without going out to the DNS/directory.
     if (_locReg) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
-        if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr)) { 
+        fixedstring targetUser;
+        fixedstring targetPassword;
+        if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr, targetUser, targetPassword)) { 
             char addr[64];
             formatIPAddrAndPort((const sockaddr&)targetAddr, addr, 64);
             _log.info("Resolved %s locally -> %s", call.remoteNumber.c_str(), addr);
             memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
+            call.callUser = targetUser;
+            call.callPassword = targetPassword;
             call.state = Call::State::STATE_INITIATION_WAIT;
         }
     }
@@ -629,8 +638,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
-            if (_validator == 0 ||
-                !_validator->isNumberAllowed(targetNumber.c_str())) {
+            if (_destAuthorizer &&
+                !_destAuthorizer->isAuthorized(targetNumber.c_str())) {
                 _log.error("Wrong number");
                 _sendREJECT(destCallId, peerAddr, "Wrong number");
                 return;
@@ -643,6 +652,13 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             } else {
                 _log.error("No calling number provided");
                 _sendREJECT(destCallId, peerAddr, "Calling number missing");
+                return;
+            }
+
+            if (_sourceAuthorizer &&
+                !_sourceAuthorizer->isAuthorized(callingNumber.c_str())) {
+                _log.info("Call from %s rejected", callingNumber.c_str());
+                _sendREJECT(destCallId, peerAddr, "UNKNOWN");
                 return;
             }
 
@@ -683,7 +699,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.localStartMs = _clock.time() - AUDIO_TICK_MS;
             call.expectedInSeqNo = 1;
             call.remoteNumber = callingNumber;
-            call.remoteUser = callingUser;
+            call.callUser = callingUser;
             // Move the entire address in for use when sending out messages
             memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
             // Schedule the ping out
@@ -1136,7 +1152,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
-        msg.setDest(_destLineId, DEST_CALL_ID);
+        msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
     }
     // ANSWER
@@ -1169,7 +1185,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
             0, 0, frame.getTimeStamp(), rxStampMs);
         unkeyMsg.setSource(_busId, call.localCallId);
-        unkeyMsg.setDest(_destLineId, DEST_CALL_ID);
+        unkeyMsg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(unkeyMsg);
 
         _traceLog.info("UNK", frame.getTimeStamp());
@@ -1270,7 +1286,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         if (goodVoice) {
             voiceMsg.setSource(_busId, call.localCallId);
-            voiceMsg.setDest(_destLineId, DEST_CALL_ID);
+            voiceMsg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
             _bus.consume(voiceMsg);
         }
 
@@ -1324,7 +1340,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
             sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
         msg.setSource(_busId, call.localCallId);
-        msg.setDest(_destLineId, DEST_CALL_ID);
+        msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
     }
     // DTMF release
@@ -1389,7 +1405,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             }
 
             voiceMsg.setSource(line->_busId, call.localCallId);
-            voiceMsg.setDest(line->_destLineId, DEST_CALL_ID);
+            voiceMsg.setDest(line->_destLineId, Message::UNKNOWN_CALL_ID);
             line->_bus.consume(voiceMsg);
         },
         // Predicate
@@ -1656,7 +1672,7 @@ bool LineIAX2::_progressCall(Call& call) {
             // Name of caller, not sent by Asterisk
             //frame.addIE_str(4, 0, 0);
             frame.addIE_str(10, "en", 2);
-            frame.addIE_str(6, _localUser);
+            frame.addIE_str(6, call.callUser);
             // Desired CODEC
             frame.addIE_uint32(9, CODECType::IAX2_CODEC_SLIN_16K);
             // ##### TODO
@@ -1682,6 +1698,29 @@ bool LineIAX2::_progressCall(Call& call) {
             _sendFrameToPeer(frame, call);
 
             call.state = Call::State::STATE_WAITING;
+            call._callInitiatedMs = _clock.time();
+        }
+        else if (call.state == Call::State::STATE_WAITING) { 
+            // Check to see if we should give up on a new call that isn't
+            // accepted.
+            if (_clock.isPast(call._callInitiatedMs + CALL_INITIATION_TIMEOUS_MS)) {
+
+                _log.info("Call failed %s -> %s", 
+                    call.localNumber.c_str(), call.remoteNumber.c_str()); 
+
+                PayloadCallFailed payload;
+                strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+                strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+
+                Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
+                    sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+                msg.setSource(_busId, call.localCallId);
+                msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+                _bus.consume(msg);
+
+                call.state = Call::State::STATE_TERMINATED;
+                call.terminationMs = _clock.time();
+            }
         }
     }
     else if (call.side == Call::Side::SIDE_CALLED) {
@@ -1716,7 +1755,7 @@ bool LineIAX2::_progressCall(Call& call) {
 
             _log.info("Call %u accepted from %s %s",
                 call.localCallId,
-                call.remoteNumber.c_str(), call.remoteUser.c_str());
+                call.remoteNumber.c_str(), call.callUser.c_str());
 
             call.trusted = true;
             call.state = Call::State::STATE_LINKED;
@@ -1731,7 +1770,7 @@ bool LineIAX2::_progressCall(Call& call) {
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
             msg.setSource(_busId, call.localCallId);
-            msg.setDest(_destLineId, DEST_CALL_ID);
+            msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
             _bus.consume(msg);
         }
 
@@ -1764,7 +1803,7 @@ bool LineIAX2::_progressCall(Call& call) {
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
             0, 0, 0, _clock.time());            
         msg.setSource(_busId, call.localCallId);
-        msg.setDest(_destLineId, DEST_CALL_ID);
+        msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
 
         call.state = Call::State::STATE_TERMINATED;
@@ -1797,6 +1836,16 @@ void LineIAX2::_terminateCall(Call& call) {
     call.state = Call::State::STATE_TERMINATE_WAITING;
 }
 
+void LineIAX2::_dtmfGen(char symbol) {
+    // For now we send on all
+    _visitActiveCallsIf(
+        [this, symbol](Call& call) { 
+            call.dtmfGen(this->_log, this->_clock, *this, symbol); 
+        },
+        [](const Call& call) { return true; }
+    );
+}
+
 unsigned LineIAX2::getActiveCalls() const {
     unsigned result = 0;
     _visitActiveCallsIf(
@@ -1824,6 +1873,11 @@ void LineIAX2::consume(const Message& msg) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
         drop(payload->localNumber, payload->targetNumber);
+    } else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
+        PayloadDtmfGen payload;
+        assert(sizeof(payload) == msg.size());
+        memcpy(&payload, msg.body(), msg.size());
+        _dtmfGen(payload.symbol);
     }
     // Everything else gets handed to the calls for processing.
     else {
@@ -2112,7 +2166,7 @@ void LineIAX2::oneSecTick() {
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_STATUS, sizeof(status),
                 (const uint8_t*)&status, 0, 0);
             msg.setSource(_busId, call.localCallId);
-            msg.setDest(_destLineId, DEST_CALL_ID);
+            msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         },
         // Predicate
         [](const Call& call) { return true; }
@@ -2195,7 +2249,8 @@ void LineIAX2::Call::reset() {
     lastVoiceFrameElapsedMs = 0;
     localNumber.clear();
     remoteNumber.clear();
-    remoteUser.clear();
+    callUser.clear();
+    callPassword.clear();
     calltoken.clear();
     memset(&peerAddr, 0, sizeof(peerAddr));
     supportedCodecs = 0;
@@ -2219,6 +2274,7 @@ void LineIAX2::Call::reset() {
     lastLagrqMs = 0;
     lastRxVoiceFrameMs = 0;
     lastTxVoiceFrameMs = 0;
+    _callInitiatedMs = 0;
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
@@ -2374,6 +2430,15 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
 }
 
 void LineIAX2::Call::logStats(Log& log) {
+}
+
+void LineIAX2::Call::dtmfGen(Log& log, Clock& clock, LineIAX2& line, char symbol) {
+    log.info("Call %u sending DTMF %c", localCallId, symbol);
+    IAX2FrameFull frame;
+    frame.setHeader(localCallId, remoteCallId, 
+        dispenseElapsedMs(clock), 
+        outSeqNo, expectedInSeqNo, FrameType::IAX2_TYPE_DTMF2, symbol);
+    line._sendFrameToPeer(frame, *this);
 }
 
 }

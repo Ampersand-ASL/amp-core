@@ -23,6 +23,12 @@
 #include <arpa/inet.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <poll.h>
+#endif
+
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/fixedstring.h"

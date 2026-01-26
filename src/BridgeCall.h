@@ -44,6 +44,8 @@ class Bridge;
 class BridgeCall {
 public:
 
+    friend class Bridge;
+
     static const unsigned AUDIO_RATE = 48000;
     static const unsigned BLOCK_SIZE_8K = 160;
     static const unsigned BLOCK_SIZE_16K = 160 * 2;
@@ -52,6 +54,11 @@ public:
     static const unsigned SESSION_TIMEOUT_MS = 120 * 1000;
     static const unsigned LINE_ID = 10;
     static const unsigned CALL_ID = 1;
+
+    /**
+     * Called during startup to get the white noise buffer built
+     */
+    static void initializeWhiteNoise();
 
     enum Mode {
         NORMAL,
@@ -64,10 +71,11 @@ public:
     /**
      * One-time initialization. Connects the call to the outside world.
      */
-    void init(Log* log, Log* traceLog, Clock* clock, 
+    void init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock, 
         MessageConsumer* sink, 
         unsigned bridgeLineId, unsigned bridgeCallId, 
         unsigned ttsLineId, unsigned netTestLineId, const char* netTestBindAddr) {
+        _bridge = bridge;
         _log = log;
         _traceLog = traceLog;
         _clock = clock;
@@ -76,7 +84,10 @@ public:
         _bridgeCallId = bridgeCallId;
         _ttsLineId = ttsLineId;
         _netTestLineId = netTestLineId;
-        _netTestBindAddr = netTestBindAddr;
+        if (netTestBindAddr)
+            _netTestBindAddr = netTestBindAddr;
+        else 
+            _netTestBindAddr = "0.0.0.0";
         _bridgeIn.init(_log, _traceLog, _clock);
     }
 
@@ -132,6 +143,7 @@ public:
 
 private:
 
+    Bridge* _bridge;
     Log* _log;
     Log* _traceLog;
     Clock* _clock;
@@ -159,6 +171,7 @@ private:
     Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
         unsigned destLineId, unsigned destCallId) const;
     void _processTTSAudio(const Message& msg);
+    void _requestTTS(const char* prompt);
 
     // ----- Normal Mode Related ----------------------------------------------
 
@@ -189,6 +202,8 @@ private:
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
     void _loadSweep(std::queue<PCM16Frame>& queue);
     void _loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue);
+
+    void _loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const;
 
     /**
      * Puts one 16K LE frame onto the queue provided

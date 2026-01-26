@@ -19,6 +19,7 @@
 #include <fstream>
 #include <algorithm>
 #include <string> 
+#include <random>
 
 #include "Message.h"
 #include "BridgeCall.h"
@@ -29,6 +30,34 @@ using namespace std;
 namespace kc1fsz {
 
     namespace amp {
+
+// 1. Seed the random number engine.
+// std::random_device provides a non-deterministic source of randomness (hardware entropy) 
+// to seed the PRNG differently each time the program runs.
+// These things are used in global space because of large stack consumption
+static std::random_device rd;
+static std::mt19937 gen(rd());
+// A vector that holds 2 seconds of pre-made white noise
+static std::vector<PCM16Frame> whiteNoise;
+
+void BridgeCall::initializeWhiteNoise() {
+
+    // Generates float values in the range [-1.0, 1.0).
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    float amp = 0.5;
+    unsigned ticks = 5 * 1000 / 20;
+
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * dist(gen) * 32767.0f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        whiteNoise.push_back(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
 
 BridgeCall::BridgeCall() {
     // The last stage of the BridgeIn pipeline drops the message 
@@ -118,8 +147,10 @@ void BridgeCall::consume(const Message& frame) {
         _processTTSAudio(frame);
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
+
         assert(frame.size() == sizeof(PayloadDtmfPress));
         PayloadDtmfPress* payload = (PayloadDtmfPress*)frame.body();
+
         if (_mode == Mode::PARROT) {
             if (payload->symbol == '1') {
                 _log->info("Starting sweep");
@@ -130,7 +161,17 @@ void BridgeCall::consume(const Message& frame) {
                 // A 5 second tone at 440 Hz
                 _loadCw(0.5, 440, 50 * 5, _playQueue);
                 _parrotState = ParrotState::PLAYING;            
+            } else if (payload->symbol == '3') {
+                _log->info("Generating white noise");
+                for (auto it = whiteNoise.begin(); it != whiteNoise.end(); it++)
+                    _playQueue.push(PCM16Frame(*it));
+                _log->info("Done");
+                _parrotState = ParrotState::PLAYING;            
             }
+        }
+        else {
+            _log->info("Playing test message");
+            _requestTTS("Hello!");
         }
     } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
         _bridgeIn.consume(frame);       
@@ -154,6 +195,13 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
     } else if (_mode == Mode::PARROT) {
         _parrotAudioRateTick(tickMs);
     }
+
+    // If there is audio in the play queue then feed it out no matter what 
+    // mode we're in.
+    if (!_playQueue.empty()) {
+        _bridgeOut.consume(_makeMessage(_playQueue.front(), tickMs, _lineId, _callId));
+        _playQueue.pop();
+    }
 }
 
 Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
@@ -171,6 +219,12 @@ Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
 }
 
 void BridgeCall::_processTTSAudio(const Message& frame) {
+
+    // Anything that comes back from TTS goes to the play queue without
+    // regard for state/mode.
+    if (frame.getType() == Message::Type::TTS_AUDIO)
+        _loadAudioMessage(frame, _playQueue);
+
     if (_mode == Mode::PARROT) 
         _processParrotTTSAudio(frame);
 }
@@ -352,11 +406,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += "Ready to record.";
 
             // Queue a TTS request
-            Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
-                0, 0);
-            req.setSource(_bridgeLineId, _bridgeCallId);
-            req.setDest(_ttsLineId, Message::BROADCAST);
-            _sink->consume(req);
+            _requestTTS(prompt.c_str());
 
             _parrotState = ParrotState::TTS_AFTER_CONNECTED;
             _parrotStateStartMs = _clock->time();
@@ -367,9 +417,6 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _log->info("Greeting end");
             _parrotState = ParrotState::WAITING_FOR_RECORD;
             _parrotStateStartMs = _clock->time();
-        } else {
-            _bridgeOut.consume(_makeMessage(_playQueue.front(), tickMs, _lineId, _callId));
-            _playQueue.pop();
         }
     }
     else if (_parrotState == ParrotState::RECORDING) {
@@ -414,8 +461,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
            
             // #### TODO: DO A BETTER JOB ON THE CLIPPING CASE
 
-            int peakPowerInt = (int)peakPower;
-
+            int peakPowerInt = std::round(peakPower);
             if (peakPowerInt < -40) {
                 snprintf(sp, 64, "Peak is less than minus 40db");
             } else if (peakPowerInt < 0) {                
@@ -426,8 +472,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += sp;
             prompt += ", ";
 
-            int avgPowerInt = (int)avgPower;
-
+            int avgPowerInt = std::round(avgPower);
             if (avgPower < -40) {
                 snprintf(sp, 64, "Average is less than minus 40db");
             } else if (avgPower < 0) {
@@ -438,14 +483,23 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += sp;
             prompt += ". ";
 
+            // Now add some subjective commentary (CONTROVERSIAL!)
+
+            if (peakPowerInt > -3)
+                prompt += "Level is very high. ";
+            if (peakPowerInt > -9)
+                prompt += "Level is high. ";
+            else if (peakPowerInt > -15) 
+                prompt += "Level is good. ";
+            else if (peakPowerInt > -21) 
+                prompt += "Level is low. ";
+            else 
+                prompt += "Level is very low. ";
+
             prompt += "Playback.";
 
             // Queue a request for TTS
-            Message req(Message::Type::TTS_REQ, 0, prompt.length(), (const uint8_t*)prompt.c_str(), 
-                0, 0);
-            req.setSource(_bridgeLineId, _bridgeCallId);
-            req.setDest(_ttsLineId, Message::BROADCAST);
-            _sink->consume(req);
+            _requestTTS(prompt.c_str());
 
             // Get into the state waiting for the TTS to complete
             _parrotState = ParrotState::TTS_AFTER_RECORD;
@@ -458,27 +512,20 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             // TODO
             _parrotState = ParrotState::WAITING_FOR_RECORD;
             _parrotStateStartMs = _clock->time();
-        } else {
-            _bridgeOut.consume(_makeMessage(_playQueue.front(), tickMs, _lineId, _callId));
-            _playQueue.pop();
         }
     }
 }
 
 void BridgeCall::_processParrotTTSAudio(const Message& frame) {
     if (_parrotState == ParrotState::TTS_AFTER_CONNECTED) {
-        if (frame.getType() == Message::Type::TTS_AUDIO) {
-            _loadAudioMessage(frame, _playQueue);
-        } else if (frame.getType() == Message::Type::TTS_END) {
+        if (frame.getType() == Message::Type::TTS_END) {
             _log->info("Greeting start");
             _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
             _parrotStateStartMs = _clock->time();
         }        
     }
     else if (_parrotState == ParrotState::TTS_AFTER_RECORD) {
-        if (frame.getType() == Message::Type::TTS_AUDIO) {
-            _loadAudioMessage(frame, _playQueue);
-        } else if (frame.getType() == Message::Type::TTS_END) {
+        if (frame.getType() == Message::Type::TTS_END) {
 
             _loadSilence(25, _playQueue);
 
@@ -493,6 +540,14 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
             _parrotStateStartMs = _clock->time();
         }        
     }
+}
+
+void BridgeCall::_requestTTS(const char* prompt) {
+    Message req(Message::Type::TTS_REQ, 0, strlen(prompt), (const uint8_t*)prompt, 
+        0, 0);
+    req.setSource(_bridgeLineId, _bridgeCallId);
+    req.setDest(_ttsLineId, Message::BROADCAST);
+    _sink->consume(req);
 }
 
 void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const {    
@@ -580,6 +635,23 @@ void BridgeCall::_loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Fr
     }
 }
 
+void BridgeCall::_loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const {
+
+    // Generates float values in the range [-1.0, 1.0).
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+    int16_t data[BLOCK_SIZE_48K];
+    for (unsigned k = 0; k < ticks; k++) {
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            // We're using a continuous phase here to avoid glitches during 
+            // frequency changes
+            data[i] = (amp * dist(gen) * 32767.0f);
+        }
+        // Pass into the output pipeline for transcoding, etc.
+        queue.push(PCM16Frame(data, BLOCK_SIZE_48K));
+    }
+}
+
 void BridgeCall::_loadSweep(std::queue<PCM16Frame>& queue) {    
     // Alternating intro
     for (unsigned i = 0; i < 8; i++) {
@@ -607,8 +679,8 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
 
     unsigned frameCount = audio.size();
 
-    // Ignore the first 100ms of the recording to avoid distortion due to pops/clips
-    unsigned startI = 100 / 20;
+    // Ignore the first 300ms of the recording to avoid distortion due to pops/clips
+    unsigned startI = 300 / 20;
     // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
     // influence of tail.
     unsigned endIgnoreCount = 300 / 20;

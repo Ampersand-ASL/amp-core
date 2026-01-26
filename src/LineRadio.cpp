@@ -271,7 +271,18 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
     // Make an SLIN_48K buffer in CODEC format.
     uint8_t outBuffer[BLOCK_SIZE_48K * 2];
     Transcoder_SLIN_48K transcoder;
-    transcoder.encode(block, blockLen, outBuffer, BLOCK_SIZE_48K * 2);
+
+    if (_injectToneActive) {
+        int16_t toneBlock[BLOCK_SIZE_48K];
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
+            toneBlock[i] = _injectToneAmp * std::cos(_injectTonePhi) * 32767.0f;
+            _injectTonePhi += _injectToneOmega;
+        }
+        _injectTonePhi = std::fmod(_injectTonePhi, 2.0f * 3.1415926f);
+        transcoder.encode(toneBlock, blockLen, outBuffer, BLOCK_SIZE_48K * 2);
+    } else {
+        transcoder.encode(block, blockLen, outBuffer, BLOCK_SIZE_48K * 2);
+    }
 
     // Make an audio message and send it to the listeners for processing
     Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,

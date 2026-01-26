@@ -20,8 +20,6 @@
 #include "Message.h"
 #include "BridgeIn.h"
 
-using namespace std;
-
 namespace kc1fsz {
 
     namespace amp {

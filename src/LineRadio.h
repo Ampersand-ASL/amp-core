@@ -178,6 +178,12 @@ protected:
     int16_t _clipThreshold = 32432;
     unsigned _captureClips = 0;
     unsigned _playClips = 0;
+
+    bool _injectToneActive = false;
+    // -10dBFS
+    float _injectToneAmp = 0.31;
+    float _injectToneOmega = 2.0f * 3.1415926f * 440.0f / 48000.0f;
+    float _injectTonePhi = 0;
 };
 
 }

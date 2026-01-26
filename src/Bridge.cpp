@@ -42,8 +42,9 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _netTestLineId(netTestLineId),
     _calls(_callSpace, MAX_CALLS) { 
 
+    // One-time (static) setup of all calls
     for (unsigned i = 0; i < MAX_CALLS; i++)
-        _callSpace[i].init(&log, &traceLog, &clock, &_bus, 
+        _callSpace[i].init(this, &log, &traceLog, &clock, &_bus, 
             _lineId, i, _ttsLineId, _netTestLineId, netTestBindAddr);
 }
 
@@ -225,5 +226,9 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         if (_calls[j].isActive()) 
             _calls[j].clearInputAudio();
 }
+
+void Bridge::tenSecTick() {
+}
+
     }
 }
