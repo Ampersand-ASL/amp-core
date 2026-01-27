@@ -212,6 +212,10 @@ private:
     // Indicates whether any output was provided during this tick
     bool _stageOutSet = false;
 
+    // Used to identify the trailing edge of output generation so that we 
+    // can make an UNKEY at the right time.
+    bool _lastCycleGeneratedOutput = false;
+
     // ----- Tone Mode Related ------------------------------------------------
 
     void _toneAudioRateTick(uint32_t tickMs);

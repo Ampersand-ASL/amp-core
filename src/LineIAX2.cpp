@@ -1956,13 +1956,22 @@ void LineIAX2::consume(const Message& msg) {
 
                     call.lastTxVoiceFrameMs = line->_clock.timeUs() / 1000;
                     call.lastVoiceFrameElapsedMs = elapsed;
-                    call.vox = true;
                 }
                 else if (msg.getType() == Message::Type::SIGNAL) {
                     if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
                         line->_hangupCall(call);
-                    } else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
-                        line->_log.info("Explicit unkey consumed");
+                    } 
+                    // This is the case where an UNKEY is requested by something 
+                    // on the internal bus. Create an UNKEY frame and send it out.
+                    else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY_GEN) {                        
+                        line->_log.info("Call %u sending unkey", call.localCallId);
+                        IAX2FrameFull frame;
+                        frame.setHeader(call.localCallId, call.remoteCallId, 
+                            call.dispenseElapsedMs(line->_clock), 
+                            call.outSeqNo, call.expectedInSeqNo, 
+                            FrameType::IAX2_TYPE_CONTROL,
+                            ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY);
+                        line->_sendFrameToPeer(frame, call);
                     }
                 }
             },
@@ -2142,17 +2151,6 @@ void LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {
     _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
-void LineIAX2::audioRateTick(uint32_t tickMs) {
-    _visitActiveCallsIf(
-        // Visitor
-        [&log = _log, &clock = _clock, line = this](Call& call) {
-            call.audioRateTick(log, clock, line->_bus, line->_busId, *line);
-        },
-        // Predicate
-        [](const Call& call) { return true; }
-    );
-}
-
 void LineIAX2::oneSecTick() { 
     _visitActiveCallsIf(
         // This function will be called for each active call in the system.
@@ -2275,7 +2273,6 @@ void LineIAX2::Call::reset() {
     _nvi_1 = 0;
     reTx.reset();
     dnsRequestId = 0;
-    vox = false;
     lastLMs = 0;
     lastPingSentMs = 0;
     lastPingTimeMs = 0;
@@ -2333,32 +2330,6 @@ void LineIAX2::Call::setNetworkDelayEstimate(unsigned ms, bool first) {
     _nvi = _nAlpha * _nvi_1 + (1 - _nAlpha) * fabs(_ndi - nni);
     _nvi_1 = _nvi;
     networkDelayEstimateMs = _ndi;
-}
-
-/**
- * Take care of anything that needs to happen on the audio clock. 
- * IMPORTANT: These are time-sensitive operations.
- */
-void LineIAX2::Call::audioRateTick(Log& log, Clock& clock, 
-    MessageConsumer& cons, unsigned localBusId, LineIAX2& line) {    
-
-    // #### TODO: THIS WILL MOVE OUT TO THE BRIDGE
-    // Look for VOX drop
-    if (state == Call::State::STATE_UP) {
-        if (vox && 
-            (localElapsedMs(clock) > lastVoiceFrameElapsedMs + line._voxUnkeyMs)) {
-            
-            vox = false;
-            log.info("Sending UNKEY");
-            
-            // Send an unkey
-            IAX2FrameFull controlFrame;
-            controlFrame.setHeader(localCallId, remoteCallId, 
-                dispenseElapsedMs(clock), 
-                outSeqNo, expectedInSeqNo, 4, 13);
-            line._sendFrameToPeer(controlFrame, *this);
-        }
-    }
 }
 
 /**

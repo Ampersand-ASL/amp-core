@@ -58,7 +58,10 @@ public:
         CALL_STATUS,
         CALL_TERMINATE,
         RADIO_KEY,
+        // Used to report an inbound unkey
         RADIO_UNKEY,
+        // Used to generate and outbound unkey
+        RADIO_UNKEY_GEN,
         // Requests network call/drop
         CALL_NODE,
         DROP_NODE,

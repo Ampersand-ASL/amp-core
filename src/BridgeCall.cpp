@@ -119,6 +119,7 @@ void BridgeCall::reset() {
 
     _stageInSet = false;
     _stageOutSet = false;
+    _lastCycleGeneratedOutput = false;
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
@@ -157,7 +158,6 @@ void BridgeCall::consume(const Message& frame) {
         assert(frame.size() == sizeof(PayloadDtmfPress));
         PayloadDtmfPress* payload = (PayloadDtmfPress*)frame.body();
         char symbol = (char)payload->symbol;
-        _log->info("DTMF symbol [%c]", symbol);
 
         if (_mode == Mode::PARROT) {
             if (symbol == '1') {
@@ -203,6 +203,9 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
     //
     // This should be the ONLY place in this class where a frame
     // of audio is passed to the _bridgeOut.
+    // 
+    // This is also the place where an UNKEY event is requested on
+    // the trailing edge of contributed audio.
 
     int16_t output[BLOCK_SIZE_48K];
     int16_t sources = 0;
@@ -223,24 +226,39 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
         sources++;
         for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
             output[i] = (output[i] / sources) + (_stageOut[i] / sources);
+        // Clear this flag so that we are ready for the next iteration
+        _stageOutSet = false;
     }
 
-    // Make a message and send it
+    // If there was any audio contributed then make a message and send it
+    if (sources > 0) {
+        //if (!_lastCycleGeneratedOutput)
+        //    _log->info("Leading edge of audio detected");
+        // Convert the PCM16 data into LE mode as defined by the CODEC.
+        uint8_t pcm48k[BLOCK_SIZE_48K * 2];
+        Transcoder_SLIN_48K transcoder;
+        transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
+        // #### TODO: DO TIMES MATTER HERE?
+        Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K, 
+            BLOCK_SIZE_48K * 2, pcm48k, 0, tickMs);
+        msg.setSource(LINE_ID, CALL_ID);
+        msg.setDest(_lineId, _callId);
+        _bridgeOut.consume(msg);
 
-    // Convert the PCM16 data into LE mode as defined by the CODEC.
-    uint8_t pcm48k[BLOCK_SIZE_48K * 2];
-    Transcoder_SLIN_48K transcoder;
-    transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
-    // #### TODO: DO TIMES MATTER HERE?
-    Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K, 
-        BLOCK_SIZE_48K * 2, pcm48k, 0, tickMs);
-    msg.setSource(LINE_ID, CALL_ID);
-    msg.setDest(_lineId, _callId);
-
-    _bridgeOut.consume(msg);
-
-    // Clear this flag so that we are ready for the next iteration
-    _stageOutSet = false;
+        _lastCycleGeneratedOutput = true;
+    }
+    // If there was no audio contributed then consider a UNKEY event on the
+    // trailing edge.
+    else {
+        if (_lastCycleGeneratedOutput) {
+            Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY_GEN, 
+                0, 0, 0, tickMs);
+            msg.setSource(LINE_ID, CALL_ID);
+            msg.setDest(_lineId, _callId);
+            _bridgeOut.consume(msg);
+        }
+        _lastCycleGeneratedOutput = false;
+    }
 }
 
 void BridgeCall::audioRateTick(uint32_t tickMs) {
@@ -319,6 +337,9 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         }
         prompt += ".";
         requestTTS(prompt.c_str());
+    }
+    else {
+        _log->info("Unrecognized DTMF command ignored %s", _cmd.c_str());
     }
 }
 
