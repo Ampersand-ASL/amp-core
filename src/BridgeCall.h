@@ -101,6 +101,8 @@ public:
         return _active; 
     }
 
+    bool isNormal() const { return _mode == Mode::NORMAL; }
+
     bool equals(const BridgeCall& other) const { 
         return _active && _lineId == other._lineId && _callId == other._callId; 
     }

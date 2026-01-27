@@ -153,6 +153,8 @@ void Bridge::consume(const Message& msg) {
                 // Predicate
                 [msg](const BridgeCall& c) { 
                     return c.isActive() && 
+                        // Make sure this is a normal conference node
+                        c.isNormal() &&
                         // Make sure this is NOT the call we just setup above
                         !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
                 }
@@ -189,6 +191,8 @@ void Bridge::consume(const Message& msg) {
             // Predicate
             [msg](const BridgeCall& c) { 
                 return c.isActive() && 
+                    // Make sure this is a normal conference node
+                    c.isNormal() &&
                     // Make sure this is NOT the call we just dropped above
                     !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
             }
