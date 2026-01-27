@@ -107,9 +107,7 @@ public:
         return _active && _lineId == other._lineId && _callId == other._callId; 
     }
 
-    bool hasInputAudio() const { 
-        return _stageIn.getType() == Message::Type::AUDIO; 
-    }
+    bool hasInputAudio() const { return _stageInSet; }
 
     bool belongsTo(const Message& msg) const {
         return _active && 
@@ -120,6 +118,11 @@ public:
     bool isEcho() const { return _echo; }
 
     std::string getRemoteNodeNumber() const { return _remoteNodeNumber; }
+
+    /**
+     * Requests a text-to-speech announcement to be sent to the call.
+     */
+    void requestTTS(const char* prompt);
 
     /**
      * This extracts the call's contribution (if any) to the audio frame for the designated
@@ -139,12 +142,13 @@ public:
      * 
      * @param tickMs The start of the time interval for which this frame is applicable.
      */
-    void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
+    void setConferenceOutput(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
 
     /**
-     * Requests a text-to-speech announcement to be sent to the call.
+     * Tells the call to generate its audio output for the designated tick interval,
+     * taking into account all of the various sources.
      */
-    void requestTTS(const char* prompt);
+    void produceOutput(uint32_t tickMs);
 
     // ----- MessageConsumer -------------------------------------------------
 
@@ -188,8 +192,6 @@ private:
     std::string _dtmfAccumulator;
     uint32_t _lastDtmfRxMs = 0;
 
-    Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
-        unsigned destLineId, unsigned destCallId) const;
     void _processTTSAudio(const Message& msg);
 
     // ----- Normal Mode Related ----------------------------------------------
@@ -200,8 +202,15 @@ private:
 
     // This is the call's contribution to the conference when in normal mode.
     // IMPORTANT: All of the signaling has been handled ahead of this point
-    // so _stageIn will either be silence or audio.
-    Message _stageIn;
+    // so _stageIn will either be silence or audio.  
+    int16_t _stageIn[BLOCK_SIZE_48K];
+    // Indicates whether any input was provided during this tick
+    bool _stageInSet = false;
+
+    // This is the conference audio prepared for this call. 
+    int16_t _stageOut[BLOCK_SIZE_48K];
+    // Indicates whether any output was provided during this tick
+    bool _stageOutSet = false;
 
     // ----- Tone Mode Related ------------------------------------------------
 
@@ -236,9 +245,6 @@ private:
     // The audio captured from the caller
     std::queue<PCM16Frame> _captureQueue;
     unsigned _captureQueueDepth = 0;
-
-    // The audio received and waiting to be echoed
-    std::queue<PCM16Frame> _echoQueue;
 
     enum ParrotState {
         NONE,

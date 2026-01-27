@@ -293,8 +293,10 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             }
 
             // Output the result
-            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K, tickMs);
+            _calls[i].setConferenceOutput(mixedFrame, BLOCK_SIZE_48K, tickMs);
         }
+
+        _calls[i].produceOutput(tickMs);
     }
 
     // Clear all contributions for this tick
