@@ -45,6 +45,12 @@ public:
     static const unsigned BLOCK_PERIOD_MS = 20;
 
     /**
+    * Takes text and adds a space between each letter. Relevant to 
+    * text-to-speach.
+    */
+    static std::string addSpaces(const char* text);
+
+    /**
     * @param netLineId The line ID of the IAX network connection.
      */
     Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
@@ -54,9 +60,12 @@ public:
         unsigned networkDestLineId);
 
     unsigned getCallCount() const;
+
     void reset();
 
-    void setNodeNumber(const char* nodeNumber);
+    void setLocalNodeNumber(const char* nodeNumber);
+
+    std::vector<std::string> getConnectedNodes() const;
 
     // ----- MessageConsumer --------------------------------------------------
 

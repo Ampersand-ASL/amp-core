@@ -163,6 +163,7 @@ public:
 
     /**
      * Drops the target node number.
+     * @returns 0 On success, -1 on failure (not found)
      */
     int drop(const char* localNumber, const char* targetNumber);
 
@@ -170,6 +171,11 @@ public:
      * Drops all connections that aren't marked as permanent.
      */
     void dropAllNonPermanent();
+
+    /**
+     * Drops all outbound connections.
+     */
+    void dropAllOutbound();
 
     void setTrace(bool a) { _trace = a; }
 
@@ -419,6 +425,12 @@ private:
     bool _authorizeWithCalltoken = true;
     bool _authorizeWithAuthreq = false;
     const bool _supportDirectedPoke = true;
+
+    /**
+     * Drops all calls that match the predicate.
+     * @returns The number of calls dropped
+     */
+    unsigned _dropIf(std::function<bool(const Call& call)> pred);
 
     /**
      * @return true if there might be more work to be done

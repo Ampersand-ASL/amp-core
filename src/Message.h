@@ -63,6 +63,7 @@ public:
         CALL_NODE,
         DROP_NODE,
         DROP_ALL_NODES,
+        DROP_ALL_NODES_OUTBOUND,
         // Tells an audio interface that the COS signal has been activated/deactivated
         COS_ON,
         COS_OFF,
@@ -132,6 +133,11 @@ struct PayloadCallStart {
     bool echo = false;
     bool originated = false;
     bool sourceAddrValidated = false;
+};
+
+struct PayloadCallEnd {
+    char localNumber[16];
+    char remoteNumber[16];
 };
 
 struct PayloadCallFailed {

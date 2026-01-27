@@ -323,19 +323,26 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     return 0;
 }
 
+unsigned LineIAX2::_dropIf(std::function<bool(const Call& call)> pred) {
+    unsigned count = 0;
+    _visitActiveCallsIf(
+        // Visitor
+        [this, &count](Call& call) {
+            _log.info("Hanging up call %d to node %s", 
+                call.localCallId, call.remoteNumber.c_str());
+            _hangupCall(call);
+            count++;
+        },
+        pred
+    );
+    return count;
+}
+
 int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
 
     _log.info("Request to drop %s -> %s", localNumber, targetNumber);
 
-    bool found = false;
-
-    _visitActiveCallsIf(
-        // Visitor
-        [&found, localNumber, targetNumber, this](Call& call) {
-            _hangupCall(call);
-            found = true;
-        },
-        // Predicate
+    unsigned count = _dropIf(
         [localNumber, targetNumber](const Call& call) {
             return call.remoteNumber == targetNumber && 
               (strcmp("*", localNumber) == 0 || call.localNumber == localNumber) && 
@@ -343,25 +350,20 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
               call.state != Call::State::STATE_TERMINATED;
         }
     );
-
-    if (found) {
-        return -1;
-    } else {
-        return 0;
-    }
+    return count > 0 ? 0 : -1;
 }
 
 void LineIAX2::dropAllNonPermanent() {
-    _visitActiveCallsIf(
-        // Visitor
-        [&log=_log, line=this](Call& call) {
-            log.info("Hanging up call %d to node %s", 
-                call.localCallId, call.remoteNumber.c_str());
-            line->_hangupCall(call);
-        },
-        // Predicate
-        [](const Call& call) {
+    _dropIf([](const Call& call) {
             return call.state != Call::State::STATE_TERMINATED;
+        }
+    );
+}
+
+void LineIAX2::dropAllOutbound() {
+    _dropIf([](const Call& call) {
+            return call.state != Call::State::STATE_TERMINATED &&
+                call.side == Call::Side::SIDE_CALLER;
         }
     );
 }
@@ -1800,8 +1802,16 @@ bool LineIAX2::_progressCall(Call& call) {
     // Doesn't matter whether we called or was called for these tasks.
 
     if (call.state == Call::State::STATE_TERMINATE_WAITING) {
+
+        // Broadcast a message on the bus to inform listeners that 
+        // the call was terminated.
+        PayloadCallEnd payload;
+        strcpyLimited(payload.localNumber, call.localNumber.c_str(), 
+            sizeof(payload.localNumber));
+        strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), 
+            sizeof(payload.remoteNumber));
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-            0, 0, 0, _clock.time());            
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());            
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
@@ -1863,16 +1873,16 @@ void LineIAX2::consume(const Message& msg) {
     // Look at for non-call signals
     if (msg.isSignal(Message::SignalType::DROP_ALL_NODES)) {
         dropAllNonPermanent();
-    }
-    else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
-        PayloadCall* payload = (PayloadCall*)msg.body();
-        assert(msg.size() == sizeof(PayloadCall));
-        call(payload->localNumber, payload->targetNumber);
-    }
-    else if (msg.isSignal(Message::SignalType::DROP_NODE)) {
+    } else if (msg.isSignal(Message::SignalType::DROP_ALL_NODES_OUTBOUND)) {
+        dropAllOutbound();
+    } else if (msg.isSignal(Message::SignalType::DROP_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
         drop(payload->localNumber, payload->targetNumber);
+    } else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
+        PayloadCall* payload = (PayloadCall*)msg.body();
+        assert(msg.size() == sizeof(PayloadCall));
+        call(payload->localNumber, payload->targetNumber);
     } else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
         PayloadDtmfGen payload;
         assert(sizeof(payload) == msg.size());

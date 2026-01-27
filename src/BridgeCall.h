@@ -117,6 +117,8 @@ public:
 
     bool isEcho() const { return _echo; }
 
+    std::string getRemoteNodeNumber() const { return _remoteNodeNumber; }
+
     /**
      * This extracts the call's contribution (if any) to the audio frame for the designated
      * tick interval.
@@ -136,6 +138,11 @@ public:
      * @param tickMs The start of the time interval for which this frame is applicable.
      */
     void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
+
+    /**
+     * Requests a text-to-speech announcement to be sent to the call.
+     */
+    void requestTTS(const char* prompt);
 
     // ----- MessageConsumer -------------------------------------------------
 
@@ -182,7 +189,6 @@ private:
     Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
         unsigned destLineId, unsigned destCallId) const;
     void _processTTSAudio(const Message& msg);
-    void _requestTTS(const char* prompt);
 
     // ----- Normal Mode Related ----------------------------------------------
 

@@ -280,7 +280,6 @@ void WebUi::_thread() {
                 if (symbol.size() >= 1) {
                     PayloadDtmfGen payload;
                     payload.symbol = symbol[0];
-                    _log.info("DTMF %c", payload.symbol); 
                     Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
                     msg.setDest(_networkDestLineId, DEST_CALL_ID);

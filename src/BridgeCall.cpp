@@ -262,11 +262,34 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
         _bridge->_bus.consume(msg);
     }
-    // *70 disconnect last
+    // *71 drop all outbound calls
+    else if (cmd.starts_with("*71")) {
+
+        _log->info("Request to disconnect all");
+
+        // Create a signal and publish it to the LineIAX2 for processing
+        Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_ALL_NODES_OUTBOUND, 
+            0, 0, 0, 0);
+        msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
+        _bridge->_bus.consume(msg);
+    }
+    // *70 status
     else if (cmd.starts_with("*70")) {
-        /*
-        _log->info("Request to disconnect from %s", 
-        (/)
+
+        _log->info("Request for status");
+
+        // Get a list of the nodes connected
+        vector<string> nodes = _bridge->getConnectedNodes();
+        string prompt = "Connected to ";
+        bool first = true;
+        for (auto n : nodes) {
+            if (!first)
+                prompt += " and ";
+            prompt += Bridge::addSpaces(n.c_str());
+            first = false;
+        }
+        prompt += ".";
+        requestTTS(prompt.c_str());
     }
 }
 
@@ -447,7 +470,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += "Ready to record.";
 
             // Queue a TTS request
-            _requestTTS(prompt.c_str());
+            requestTTS(prompt.c_str());
 
             _parrotState = ParrotState::TTS_AFTER_CONNECTED;
             _parrotStateStartMs = _clock->time();
@@ -540,7 +563,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += "Playback.";
 
             // Queue a request for TTS
-            _requestTTS(prompt.c_str());
+            requestTTS(prompt.c_str());
 
             // Get into the state waiting for the TTS to complete
             _parrotState = ParrotState::TTS_AFTER_RECORD;
@@ -583,7 +606,7 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
     }
 }
 
-void BridgeCall::_requestTTS(const char* prompt) {
+void BridgeCall::requestTTS(const char* prompt) {
     Message req(Message::Type::TTS_REQ, 0, strlen(prompt), (const uint8_t*)prompt, 
         0, 0);
     req.setSource(_bridgeLineId, _bridgeCallId);
