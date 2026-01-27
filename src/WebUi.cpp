@@ -275,14 +275,17 @@ void WebUi::_thread() {
                 } else {
                     // ### TODO: ERROR MESSAGE
                 }
-            } else if (data["button"] == "dtmf3") {
-                _log.info("DTMF"); 
-                PayloadDtmfGen payload;
-                payload.symbol = '3';
-                Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
-                    sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                msg.setDest(_networkDestLineId, DEST_CALL_ID);
-                _outQueue.push(msg);
+            } else if (data["button"].get<std::string>().starts_with("dtmf")) {
+                string symbol = data["button"].get<std::string>().substr(4);
+                if (symbol.size() >= 1) {
+                    PayloadDtmfGen payload;
+                    payload.symbol = symbol[0];
+                    _log.info("DTMF %c", payload.symbol); 
+                    Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
+                        sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                    msg.setDest(_networkDestLineId, DEST_CALL_ID);
+                    _outQueue.push(msg);
+                }
             }
             else if (data["button"] == "drop") {
                 string localNode = "*";
