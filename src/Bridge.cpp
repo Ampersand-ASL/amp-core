@@ -31,7 +31,8 @@ namespace kc1fsz {
 Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
     BridgeCall::Mode defaultMode, 
     unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
-    const char* netTestBindAddr)
+    const char* netTestBindAddr,
+    unsigned networkDestLineId)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
@@ -40,6 +41,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _lineId(lineId),
     _ttsLineId(ttsLineId),
     _netTestLineId(netTestLineId),
+    _networkDestLineId(networkDestLineId),
     _calls(_callSpace, MAX_CALLS) { 
 
     // One-time (static) setup of all calls
@@ -64,6 +66,11 @@ unsigned Bridge::getCallCount() const {
         [](const BridgeCall& s) { return s.isActive(); }
     );
     return result;
+}
+
+void Bridge::setNodeNumber(const char* nodeNumber) { 
+    _log.info("Bridge node number %s", nodeNumber);
+    _nodeNumber = nodeNumber; 
 }
 
 void Bridge::consume(const Message& msg) {
@@ -108,6 +115,9 @@ void Bridge::consume(const Message& msg) {
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
                 payload.sourceAddrValidated, _defaultMode, payload.remoteNumber);
+
+            // #### TODO: Annouce to all of the other calls
+
         }
     }
     else if (msg.getType() == Message::SIGNAL && 
@@ -225,6 +235,19 @@ void Bridge::audioRateTick(uint32_t tickMs) {
     for (unsigned j = 0; j < MAX_CALLS; j++)
         if (_calls[j].isActive()) 
             _calls[j].clearInputAudio();
+}
+
+void Bridge::oneSecTick() {
+     // Tick each call so that we have an input frame for each.
+    _calls.visitIf(
+        // Visitor
+        [](BridgeCall& call) { 
+            call.oneSecTick();
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
 }
 
 void Bridge::tenSecTick() {

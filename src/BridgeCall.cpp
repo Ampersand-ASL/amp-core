@@ -24,6 +24,7 @@
 #include "Message.h"
 #include "BridgeCall.h"
 #include "Poker.h"
+#include "Bridge.h"
 
 using namespace std;
 
@@ -113,6 +114,9 @@ void BridgeCall::reset() {
     _parrotState = ParrotState::NONE;
     _parrotStateStartMs = 0;
     _lastUnkeyProcessedMs = 0;
+
+    _dtmfAccumulator.clear();
+    _lastDtmfRxMs = 0;
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
@@ -150,28 +154,31 @@ void BridgeCall::consume(const Message& frame) {
 
         assert(frame.size() == sizeof(PayloadDtmfPress));
         PayloadDtmfPress* payload = (PayloadDtmfPress*)frame.body();
+        char symbol = (char)payload->symbol;
+        _log->info("DTMF symbol [%c]", symbol);
 
         if (_mode == Mode::PARROT) {
-            if (payload->symbol == '1') {
+            if (symbol == '1') {
                 _log->info("Starting sweep");
                 _loadSweep(_playQueue);
                 _parrotState = ParrotState::PLAYING;            
-            } else if (payload->symbol == '2') {
+            } else if (symbol == '2') {
                 _log->info("Starting tone");
                 // A 5 second tone at 440 Hz
                 _loadCw(0.5, 440, 50 * 5, _playQueue);
                 _parrotState = ParrotState::PLAYING;            
-            } else if (payload->symbol == '3') {
+            } else if (symbol == '3') {
                 _log->info("Generating white noise");
                 for (auto it = whiteNoise.begin(); it != whiteNoise.end(); it++)
                     _playQueue.push(PCM16Frame(*it));
                 _log->info("Done");
                 _parrotState = ParrotState::PLAYING;            
             }
-        }
-        else {
-            _log->info("Playing test message");
-            _requestTTS("Hello!");
+        } else {
+            if (symbol == '*') 
+                _dtmfAccumulator.clear();
+            _dtmfAccumulator += symbol;
+            _lastDtmfRxMs = _clock->time();
         }
     } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
         _bridgeIn.consume(frame);       
@@ -204,6 +211,13 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
     }
 }
 
+void BridgeCall::oneSecTick() {
+    if (!_dtmfAccumulator.empty() && _clock->isPast(_lastDtmfRxMs + 3000)) {
+        _processDtmfCommand(_dtmfAccumulator);
+        _dtmfAccumulator.clear();
+    }
+}
+
 Message BridgeCall::_makeMessage(const PCM16Frame& frame, uint32_t rxMs,
     unsigned destLineId, unsigned destCallId) const {
     // Convert the PCM16 data into LE mode as defined by the CODEC.
@@ -227,6 +241,33 @@ void BridgeCall::_processTTSAudio(const Message& frame) {
 
     if (_mode == Mode::PARROT) 
         _processParrotTTSAudio(frame);
+}
+
+void BridgeCall::_processDtmfCommand(const string& cmd) {
+
+    // *3xxxx connect to node
+    if (cmd.starts_with("*3")) {
+        // Parse off the node number
+        string targetNode = cmd.substr(2);
+
+        _log->info("Request to call %s -> %s", 
+            _bridge->_nodeNumber.c_str(), targetNode.c_str());
+
+        // Create a signal and publish it to the LineIAX2 for processing
+        PayloadCall payload;
+        strcpyLimited(payload.localNumber, _bridge->_nodeNumber.c_str(), sizeof(payload.localNumber));
+        strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
+        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+            sizeof(payload), (const uint8_t*)&payload, 0, 0);
+        msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
+        _bridge->_bus.consume(msg);
+    }
+    // *70 disconnect last
+    else if (cmd.starts_with("*70")) {
+        /*
+        _log->info("Request to disconnect from %s", 
+        (/)
+    }
 }
 
 // ===== Conference Mode Related ===============================================

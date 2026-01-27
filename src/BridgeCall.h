@@ -117,10 +117,6 @@ public:
 
     bool isEcho() const { return _echo; }
 
-    void consume(const Message& frame);
-
-    void audioRateTick(uint32_t tickMs);
-
     /**
      * This extracts the call's contribution (if any) to the audio frame for the designated
      * tick interval.
@@ -140,6 +136,15 @@ public:
      * @param tickMs The start of the time interval for which this frame is applicable.
      */
     void setOutputAudio(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
+
+    // ----- MessageConsumer -------------------------------------------------
+
+    void consume(const Message& frame);
+
+    // ----- Runnable2 --------------------------------------------------------
+
+    void audioRateTick(uint32_t tickMs);
+    void oneSecTick();
 
 private:
 
@@ -168,12 +173,20 @@ private:
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
 
+    // The audio waiting to be sent to the caller in PCM16 48K format.
+    std::queue<PCM16Frame> _playQueue;
+
+    std::string _dtmfAccumulator;
+    uint32_t _lastDtmfRxMs = 0;
+
     Message _makeMessage(const PCM16Frame& frame, uint32_t rxMs,
         unsigned destLineId, unsigned destCallId) const;
     void _processTTSAudio(const Message& msg);
     void _requestTTS(const char* prompt);
 
     // ----- Normal Mode Related ----------------------------------------------
+
+    void _processDtmfCommand(const std::string& cmd);
 
     void _processNormalAudio(const Message& msg);
 
@@ -215,9 +228,6 @@ private:
     // The audio captured from the caller
     std::queue<PCM16Frame> _captureQueue;
     unsigned _captureQueueDepth = 0;
-
-    // The audio waiting to be sent to the caller in PCM16 48K format.
-    std::queue<PCM16Frame> _playQueue;
 
     // The audio received and waiting to be echoed
     std::queue<PCM16Frame> _echoQueue;
