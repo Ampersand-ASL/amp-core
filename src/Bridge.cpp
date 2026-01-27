@@ -73,6 +73,13 @@ void Bridge::setLocalNodeNumber(const char* nodeNumber) {
     _nodeNumber = nodeNumber; 
 }
 
+void Bridge::setGreeting(const char* greeting) { 
+    if (greeting)
+        _greetingText = greeting; 
+    else 
+        _greetingText.clear();
+}
+
 vector<string> Bridge::getConnectedNodes() const {
     vector<string> result;
     _calls.visitIf(
@@ -139,6 +146,10 @@ void Bridge::consume(const Message& msg) {
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
                 payload.sourceAddrValidated, _defaultMode, payload.remoteNumber);
 
+            // Play the greeting to the new caller
+            if (!_greetingText.empty())                
+                call.requestTTS(_greetingText.c_str());
+
             // Announce the new connection to all of the *other* active calls
             string prompt = "Node ";
             prompt += addSpaces(payload.remoteNumber);
@@ -159,6 +170,9 @@ void Bridge::consume(const Message& msg) {
                         !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
                 }
             );
+
+
+
         }
     }
     else if (msg.isSignal(Message::SignalType::CALL_END)) {

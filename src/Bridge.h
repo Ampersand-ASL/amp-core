@@ -65,6 +65,11 @@ public:
 
     void setLocalNodeNumber(const char* nodeNumber);
 
+    /**
+     * Sets optional text greeting that will be spoken to any new caller.
+     */
+    void setGreeting(const char* greeting);
+
     std::vector<std::string> getConnectedNodes() const;
 
     // ----- MessageConsumer --------------------------------------------------
@@ -92,6 +97,7 @@ private:
     unsigned _netTestLineId;
     unsigned _networkDestLineId;
     std::string _nodeNumber;
+    std::string _greetingText;
 
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
