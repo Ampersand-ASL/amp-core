@@ -339,7 +339,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         requestTTS(prompt.c_str());
     }
     else {
-        _log->info("Unrecognized DTMF command ignored %s", _cmd.c_str());
+        _log->info("Unrecognized DTMF command ignored %s", cmd.c_str());
     }
 }
 
