@@ -1315,7 +1315,28 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             respFrame0.setBody((const uint8_t*)"!NEWKEY1!", 10);
             _sendFrameToPeer(respFrame0, call);
         }
-        else {
+        // 27-Jan-2026 Bruce saw this alternate method of sending DTMF
+        // commands while testing on IaxRtp (Windows softphone).
+        else if (textMessage[0] == 'D') {
+            // Tokenize
+            unsigned spaceCount = 0;
+            unsigned i = 0;
+            for (; i < strlen(textMessage) && spaceCount < 4; i++)
+                if (textMessage[i] == ' ') 
+                    spaceCount++;
+            // The pointer should end up on top of the DTMF symbol
+            if (textMessage[i] != 0) {
+                char symbol = textMessage[i];
+                _log.info("Call %u DTMF Press %c", call.localCallId, symbol);
+                PayloadDtmfPress payload;
+                payload.symbol = symbol;
+                Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+                    sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+                msg.setSource(_busId, call.localCallId);
+                msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+                _bus.consume(msg);
+            }
+        } else {
             // The "L" message contains the list of linked nodes
             if (textMessage[0] != 'L')
                 _log.info("Text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
