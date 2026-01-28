@@ -598,18 +598,20 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             prompt += ". ";
 
             // Now add some subjective commentary (CONTROVERSIAL!)
-
-            if (peakPowerInt > -3)
-                prompt += "Level is very high. ";
-            if (peakPowerInt > -9)
-                prompt += "Level is high. ";
-            else if (peakPowerInt > -15) 
-                prompt += "Level is good. ";
-            else if (peakPowerInt > -21) 
-                prompt += "Level is low. ";
-            else 
-                prompt += "Level is very low. ";
-
+            if (_bridge->_parrotLevelThresholds.size() >= 4) {
+                prompt += "Level is ";
+                if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(0))
+                    prompt += "very high";
+                if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
+                    prompt += "high";
+                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(2)) 
+                    prompt += "good";
+                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(3)) 
+                    prompt += "low";
+                else 
+                    prompt += "very low";
+                prompt += ". ";
+            }
             prompt += "Playback.";
 
             // Queue a request for TTS
