@@ -80,6 +80,10 @@ void Bridge::setGreeting(const char* greeting) {
         _greetingText.clear();
 }
 
+void Bridge::setParrotLevelThresholds(std::vector<int>& thresholds) {
+    _parrotLevelThresholds = thresholds;
+}
+
 vector<string> Bridge::getConnectedNodes() const {
     vector<string> result;
     _calls.visitIf(

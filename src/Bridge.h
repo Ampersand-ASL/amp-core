@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
@@ -70,6 +71,8 @@ public:
      */
     void setGreeting(const char* greeting);
 
+    void setParrotLevelThresholds(std::vector<int>& thresholds);
+
     std::vector<std::string> getConnectedNodes() const;
 
     // ----- MessageConsumer --------------------------------------------------
@@ -102,6 +105,8 @@ private:
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
+
+    std::vector<int> _parrotLevelThresholds;
 };
 
     }
