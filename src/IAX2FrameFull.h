@@ -79,6 +79,14 @@ public:
     bool getIE_uint32(uint8_t id, uint32_t* result) const;
 
     /**
+     * Extracts the raw bytes of an IE. The result is not null
+     * terminated.
+     * @returns -1 if not found, otherwise the number of bytes
+     * available.
+     */
+    int getIE_raw(uint8_t id, uint8_t* buf, unsigned bufCapacity) const;
+
+    /**
      * Gets the value of the information element in 
      * string format.  Null-terminates the result.
      * 
@@ -114,6 +122,11 @@ public:
     void addIE_str(uint8_t id, const char* value);
 
     void addIE_str(uint8_t id, const fixedstring& value);
+
+    /**
+     * Adds an IE in raw form.
+     */
+    void addIE_raw(uint8_t id, const uint8_t* buf, unsigned bufLen);
 
 private:
 

@@ -93,10 +93,6 @@ public:
      * @param sourceAuthorizer An interface that is used to validate the 
      * SOURCES of incoming calls. In other words, this can 
      * control what numbers this channel will ACCEPT calls from. 
-     * @param supportDirectedPoke Please see documentation. This controls
-     * whether POKE to another address can be requested.
-     * @param privateKeyHex The server's private ED25519 seed in ASCII/Hex
-     * representation. This should be exactly 64 characters long.
      */
     LineIAX2(Log& log, Log& traceLog, Clock& clock, int lineId, MessageConsumer& consumer,
         NumberAuthorizer* destAuthorizer, NumberAuthorizer* sourceAuthorizer, 
@@ -114,13 +110,27 @@ public:
      * Controls whether a regular poke is issued. This would generally be used 
      * to keep a UDP hole punch open.
      */
-    void setPokeEnabled(bool b);
+    void setPokeEnabled(bool b) { _pokeEnabled = b; }
+
+    /**
+     * This flag enables to extended capabilities:
+     * 1. If a POKE message has a TARGET_ADDR then the POKE is forwarded on
+     *    to the designated address.
+     * 2. If a POKE message has a TARGET_ADDR2 then the PONG that is generated
+     *    will use that value as the TARGET_ADDR.
+     * 3. If a PONG message has a TARGET_ADDR then the PONG is forwarded on
+     *    to the designated address.
+     */
+    void setDirectedPokeEnabled(bool b) { _supportDirectedPoke = b; }
 
     /**
      * The address and port in xx.xx.xx.xx:yyyy (IPv4) or [xx:xx:xx:xx]:yyyy (IPv6)
      * format.
      */
     void setPokeAddr(const char* addrAndPort);
+    
+    // #### TODO: MAKE THIS A LIST
+    void setPokeNodeNumber(const char* nodeNumber);
 
     /**
      * Sets the private ED25519 seed. This is a 64-byte ASCII hex string.
@@ -371,8 +381,6 @@ private:
     // This is an ED25519 private key in ASCII Hex format (exactly 64 characters)
     char _privateKeyHex[65];
     char _dnsRoot[32];
-    bool _pokeEnabled = false;
-    char _pokeAddr[65];
 
     // The startup time of this line. Mostly used for generating unique
     // tokens.
@@ -411,7 +419,12 @@ private:
     // Controls authentication methods, only relevant for inbound calls
     bool _authorizeWithCalltoken = true;
     bool _authorizeWithAuthreq = false;
-    const bool _supportDirectedPoke = true;
+
+    bool _pokeEnabled = false;
+    char _pokeAddr[65];
+    bool _supportDirectedPoke = false;
+    // #### TODO: MAKE THIS A LIST
+    char _pokeNodeNumber[17];
 
     /**
      * Drops all calls that match the predicate.

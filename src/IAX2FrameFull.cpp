@@ -165,7 +165,7 @@ void IAX2FrameFull::addIE_uint8(uint8_t id, uint8_t value) {
 }
 
 void IAX2FrameFull::addIE_str(uint8_t id, const char* value, unsigned valueLen) {
-    assert(_spaceLeft() >= 2 + valueLen); 
+    assert(_spaceLeft() >= 2 + valueLen && valueLen < 255); 
     _buf[_bufLen] = id;
     _buf[_bufLen + 1] = valueLen;
     for (unsigned i = 0; i < valueLen; i++)
@@ -179,6 +179,15 @@ void IAX2FrameFull::addIE_str(uint8_t id, const char* value) {
 
 void IAX2FrameFull::addIE_str(uint8_t id, const fixedstring& value) {
     addIE_str(id, value.c_str(), value.size());
+}
+
+void IAX2FrameFull::addIE_raw(uint8_t id, const uint8_t* value, unsigned valueLen) {
+    assert(_spaceLeft() >= 2 + valueLen && valueLen < 255); 
+    _buf[_bufLen] = id;
+    _buf[_bufLen + 1] = valueLen;
+    for (unsigned i = 0; i < valueLen; i++)
+        _buf[_bufLen + 2 + i] = value[i];
+    _bufLen += (2 + valueLen);
 }
 
 int extractIE(const uint8_t* packet, unsigned packetLen, 
@@ -270,6 +279,14 @@ bool IAX2FrameFull::getIE_str(uint8_t id, char* buf, unsigned bufMaxLen) const {
         buf[rc] = 0;
         return true;
     }
+}
+
+int IAX2FrameFull::getIE_raw(uint8_t id, uint8_t* buf, unsigned bufCapacity) const {
+    int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, bufCapacity);
+    if (rc == -1)
+        return -1;
+    else 
+        return rc;
 }
 
 }

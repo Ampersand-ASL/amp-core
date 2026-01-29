@@ -87,6 +87,7 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _startTime(clock.time()) {
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
+    _pokeNodeNumber[0] = 0;
     strcpyLimited(_dnsRoot, "allstarlink.org", sizeof(_dnsRoot));
 }
 
@@ -95,13 +96,18 @@ void LineIAX2::setDNSRoot(const char* dnsRoot) {
         strcpyLimited(_dnsRoot, dnsRoot, sizeof(_dnsRoot));
 }
 
-void LineIAX2::setPokeEnabled(bool b) {
-    _pokeEnabled = b;
-}
-
 void LineIAX2::setPokeAddr(const char* addrAndPort) {
     if (addrAndPort)
         strcpyLimited(_pokeAddr, addrAndPort, sizeof(_pokeAddr));
+    else 
+        _pokeAddr[0] = 0;
+}
+
+void LineIAX2::setPokeNodeNumber(const char* nodeNumber) {
+    if (nodeNumber)
+        strcpyLimited(_pokeNodeNumber, nodeNumber, sizeof(_pokeNodeNumber));
+    else 
+        _pokeNodeNumber[0] = 0;
 }
 
 void LineIAX2::setPrivateKey(const char* privateKeyHex) {
@@ -648,7 +654,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             }
 
             fixedstring callingNumber;
-            found = frame.getIE_str(2, temp, 33);
+            found = frame.getIE_str(IEType::IAX2_IE_CALLING_NUMBER, temp, 33);
             if (found) {
                 callingNumber = temp;
             } else {
@@ -743,55 +749,136 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
         else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, 
             IAXSubclass::IAX2_SUBCLASS_IAX_POKE)) {
             
-            // Respond back per the specification
-            IAX2FrameFull pong;
-            pong.setHeader(
-                // Call IDs unused
-                0, 0,
-                // Echo back time 
-                frame.getTimeStamp(), 
-                // SEQ UNUSED
-                0, 0, 
-                FrameType::IAX2_TYPE_IAX, 
-                IAXSubclass::IAX2_SUBCLASS_IAX_PONG);
-            _sendFrameToPeer(pong, peerAddr);
+            // We've made an extention to the POKE protocol here so that
+            // this feature can be used to help with firewall/CGNAT mitigation.
+            // If the POKE message contains a target address then the POKE
+            // is essentially forwarded on to another node.
+            char target[129];
+            if (_supportDirectedPoke &&
+                frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR, target, 129)) {
 
-            // This is a special feature that is not in the RFC specification.
-            // If an extra IE is in the POKE request that we received it causes
-            // us to POKE another station. This is to allow transient port forwarding 
-            // to be triggered.
-            if (_supportDirectedPoke) {
-                // Look to see if there is a target address/port in the message
-                char target[129];
-                if (frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR, target, 129)) {
+                _log.info("POKE had target address [%s]", target);
 
-                    //_log.info("Directed POKE requested to %s", target);
+                sockaddr_storage poke2Addr;
+                int parseRc = parseIPAddrAndPort(target, poke2Addr);
+                if (parseRc == 0) {
 
-                    // #### TODO: KEY VALIDATION HAPPENS HERE
-
+                    IAX2FrameFull poke2;
+                    poke2.setHeader(
+                        // Call IDs unused
+                        0, 0,
+                        // Keep passing through same time (for diagnostics)
+                        frame.getTimeStamp(), 
+                        // SEQ UNUSED
+                        0, 0, 
+                        FrameType::IAX2_TYPE_IAX, 
+                        IAXSubclass::IAX2_SUBCLASS_IAX_POKE);
+                    
+                    // The node that originated the POKE gets set as the
+                    // return address.
                     char sourceAddrAndPort[128];
                     formatIPAddrAndPort(peerAddr, sourceAddrAndPort, 128);
+                    poke2.addIE_str(IEType::IAX2_IE_TARGET_ADDR2, sourceAddrAndPort);
 
-                    sockaddr_storage pokeAddr;
-                    int parseRc = parseIPAddrAndPort(target, pokeAddr);
-                    if (parseRc == 0) {
-                        IAX2FrameFull poke2;
-                        poke2.setHeader(
-                            // Call IDs unused
-                            0, 0,
-                            // Keep passing through same time (for diagnostics)
-                            frame.getTimeStamp(), 
-                            // SEQ UNUSED
-                            0, 0, 
-                            FrameType::IAX2_TYPE_IAX, 
-                            IAXSubclass::IAX2_SUBCLASS_IAX_POKE);
-                        // Include the address of the original POKE requestor
-                        poke2.addIE_str(0x21, sourceAddrAndPort);
-                        _sendFrameToPeer(poke2, (const sockaddr&)pokeAddr);
+                    _sendFrameToPeer(poke2, (const sockaddr&)poke2Addr);
+                }
+                else {
+                    _log.info("Ignoring directed POKE, unable to parse target");
+                }
+            }
+
+            // If there is no target address then we create a PONG response 
+            // and send it back to the peer.
+            else {
+
+                // Respond back per the specification
+                IAX2FrameFull pong;
+                pong.setHeader(
+                    // Call IDs unused
+                    0, 0,
+                    // Echo back time 
+                    frame.getTimeStamp(), 
+                    // SEQ UNUSED
+                    0, 0, 
+                    FrameType::IAX2_TYPE_IAX, 
+                    IAXSubclass::IAX2_SUBCLASS_IAX_PONG);
+                
+                // Send back the "apparent address" to help the peer figure 
+                // out how they are perceived to the outside world.
+                //
+                // See https://datatracker.ietf.org/doc/html/rfc5456#section-8.6.17 for
+                // notes on the format of the APPARENT ADDR information element.
+                //
+                // NOTE: The use of this IE in the PONG message is not in the RFC but
+                // we are adding it as part of the firewall/CGNAT mitigation strategy.
+                unsigned addrLen = 0;
+                if (peerAddr.sa_family == AF_INET)
+                    addrLen = sizeof(sockaddr_in);
+                else if (peerAddr.sa_family == AF_INET6)
+                    addrLen = sizeof(sockaddr_in6);
+                if (addrLen != 0) {
+                    pong.addIE_raw(IEType::IAX2_IE_APPARENT_ADDR, 
+                        (const uint8_t*)&peerAddr, addrLen);
+                }
+
+                // If the POKE request has a "target address 2" in it then 
+                // we use that to set the target address on the PONG. This has 
+                // the effect of forwarding the PONG another hop.
+                char target2[129];
+                if (frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR2, target2, 129)) {
+
+                    _log.info("POKE had target address 2 [%s]", target2);
+
+                    // Include the address of the original POKE requestor
+                    pong.addIE_str(IEType::IAX2_IE_TARGET_ADDR, target2);
+                }
+
+                _sendFrameToPeer(pong, peerAddr);
+            }
+        }
+
+        // We've made an extension to the IAX2 protocol to allow PONG messages
+        // to be forwarded.
+        else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, 
+            IAXSubclass::IAX2_SUBCLASS_IAX_PONG)) {
+
+            // We've made an extension to the PONG protocol to help with firewall/
+            // CGNAT traversal. If the POKE message has a target address then we
+            // just forward it along.
+            char target[129];
+            if (_supportDirectedPoke &&
+                frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR, target, 129)) {
+
+                _log.info("PONG had target address [%s]", target);
+
+                sockaddr_storage pong2Addr;
+                int parseRc = parseIPAddrAndPort(target, pong2Addr);
+                if (parseRc == 0) {
+
+                    IAX2FrameFull pong2;
+                    pong2.setHeader(
+                        // Call IDs unused
+                        0, 0,
+                        // Echo back time 
+                        frame.getTimeStamp(), 
+                        // SEQ UNUSED
+                        0, 0, 
+                        FrameType::IAX2_TYPE_IAX, 
+                        IAXSubclass::IAX2_SUBCLASS_IAX_PONG);
+
+                    // If the PONG has an apparent address, copy it and forward.
+                    uint8_t apparentAddrBuf[64];
+                    int apparentAddrLen = frame.getIE_raw(IEType::IAX2_IE_APPARENT_ADDR,
+                        apparentAddrBuf, 64);
+                    if (apparentAddrLen > 0) {
+                        pong2.addIE_raw(IEType::IAX2_IE_APPARENT_ADDR, apparentAddrBuf, 
+                            apparentAddrLen);
                     }
-                    else {
-                        _log.info("Ignoring directed POKE, unable to parse target");
-                    }
+
+                    _sendFrameToPeer(pong2, (const sockaddr&)pong2Addr);
+                }
+                else {
+                    _log.info("Ignoring directed PONG, unable to parse target");
                 }
             }
         }
@@ -2221,6 +2308,7 @@ void LineIAX2::tenSecTick() {
     // This would be used to keep a UDP firewall hole open.
 
     if (_pokeEnabled && _pokeAddr[0] != 0) {
+        
         sockaddr_storage pokeAddr;
         parseIPAddrAndPort(_pokeAddr, pokeAddr);
         IAX2FrameFull poke2;
@@ -2233,8 +2321,14 @@ void LineIAX2::tenSecTick() {
             0, 0, 
             FrameType::IAX2_TYPE_IAX, 
             IAXSubclass::IAX2_SUBCLASS_IAX_POKE);
+
+        // NOTE: This isn't in the RFC, but we include the calling node in the 
+        // poke message. This is useful as part of the firewall/CGNAT mitigation
+        // strategy.
+        if (_pokeNodeNumber[0] != 0)
+            poke2.addIE_str(IEType::IAX2_IE_CALLING_NUMBER, _pokeNodeNumber);
+
         _sendFrameToPeer(poke2, (const sockaddr&)pokeAddr);
-        _log.infoDump("Sending POKE", poke2.buf(), poke2.size());
     }
 }
 
