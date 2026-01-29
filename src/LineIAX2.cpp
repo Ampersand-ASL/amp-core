@@ -323,19 +323,26 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     return 0;
 }
 
+unsigned LineIAX2::_dropIf(std::function<bool(const Call& call)> pred) {
+    unsigned count = 0;
+    _visitActiveCallsIf(
+        // Visitor
+        [this, &count](Call& call) {
+            _log.info("Hanging up call %d to node %s", 
+                call.localCallId, call.remoteNumber.c_str());
+            _hangupCall(call);
+            count++;
+        },
+        pred
+    );
+    return count;
+}
+
 int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
 
     _log.info("Request to drop %s -> %s", localNumber, targetNumber);
 
-    bool found = false;
-
-    _visitActiveCallsIf(
-        // Visitor
-        [&found, localNumber, targetNumber, this](Call& call) {
-            _hangupCall(call);
-            found = true;
-        },
-        // Predicate
+    unsigned count = _dropIf(
         [localNumber, targetNumber](const Call& call) {
             return call.remoteNumber == targetNumber && 
               (strcmp("*", localNumber) == 0 || call.localNumber == localNumber) && 
@@ -343,25 +350,20 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
               call.state != Call::State::STATE_TERMINATED;
         }
     );
-
-    if (found) {
-        return -1;
-    } else {
-        return 0;
-    }
+    return count > 0 ? 0 : -1;
 }
 
 void LineIAX2::dropAllNonPermanent() {
-    _visitActiveCallsIf(
-        // Visitor
-        [&log=_log, line=this](Call& call) {
-            log.info("Hanging up call %d to node %s", 
-                call.localCallId, call.remoteNumber.c_str());
-            line->_hangupCall(call);
-        },
-        // Predicate
-        [](const Call& call) {
+    _dropIf([](const Call& call) {
             return call.state != Call::State::STATE_TERMINATED;
+        }
+    );
+}
+
+void LineIAX2::dropAllOutbound() {
+    _dropIf([](const Call& call) {
+            return call.state != Call::State::STATE_TERMINATED &&
+                call.side == Call::Side::SIDE_CALLER;
         }
     );
 }
@@ -1313,7 +1315,28 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             respFrame0.setBody((const uint8_t*)"!NEWKEY1!", 10);
             _sendFrameToPeer(respFrame0, call);
         }
-        else {
+        // 27-Jan-2026 Bruce saw this alternate method of sending DTMF
+        // commands while testing on IaxRtp (Windows softphone).
+        else if (textMessage[0] == 'D') {
+            // Tokenize
+            unsigned spaceCount = 0;
+            unsigned i = 0;
+            for (; i < strlen(textMessage) && spaceCount < 4; i++)
+                if (textMessage[i] == ' ') 
+                    spaceCount++;
+            // The pointer should end up on top of the DTMF symbol
+            if (textMessage[i] != 0) {
+                char symbol = textMessage[i];
+                _log.info("Call %u DTMF Press %c", call.localCallId, symbol);
+                PayloadDtmfPress payload;
+                payload.symbol = symbol;
+                Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+                    sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+                msg.setSource(_busId, call.localCallId);
+                msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+                _bus.consume(msg);
+            }
+        } else {
             // The "L" message contains the list of linked nodes
             if (textMessage[0] != 'L')
                 _log.info("Text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
@@ -1800,8 +1823,16 @@ bool LineIAX2::_progressCall(Call& call) {
     // Doesn't matter whether we called or was called for these tasks.
 
     if (call.state == Call::State::STATE_TERMINATE_WAITING) {
+
+        // Broadcast a message on the bus to inform listeners that 
+        // the call was terminated.
+        PayloadCallEnd payload;
+        strcpyLimited(payload.localNumber, call.localNumber.c_str(), 
+            sizeof(payload.localNumber));
+        strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), 
+            sizeof(payload.remoteNumber));
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-            0, 0, 0, _clock.time());            
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());            
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
@@ -1863,16 +1894,16 @@ void LineIAX2::consume(const Message& msg) {
     // Look at for non-call signals
     if (msg.isSignal(Message::SignalType::DROP_ALL_NODES)) {
         dropAllNonPermanent();
-    }
-    else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
-        PayloadCall* payload = (PayloadCall*)msg.body();
-        assert(msg.size() == sizeof(PayloadCall));
-        call(payload->localNumber, payload->targetNumber);
-    }
-    else if (msg.isSignal(Message::SignalType::DROP_NODE)) {
+    } else if (msg.isSignal(Message::SignalType::DROP_ALL_NODES_OUTBOUND)) {
+        dropAllOutbound();
+    } else if (msg.isSignal(Message::SignalType::DROP_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
         drop(payload->localNumber, payload->targetNumber);
+    } else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
+        PayloadCall* payload = (PayloadCall*)msg.body();
+        assert(msg.size() == sizeof(PayloadCall));
+        call(payload->localNumber, payload->targetNumber);
     } else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
         PayloadDtmfGen payload;
         assert(sizeof(payload) == msg.size());
@@ -1946,13 +1977,22 @@ void LineIAX2::consume(const Message& msg) {
 
                     call.lastTxVoiceFrameMs = line->_clock.timeUs() / 1000;
                     call.lastVoiceFrameElapsedMs = elapsed;
-                    call.vox = true;
                 }
                 else if (msg.getType() == Message::Type::SIGNAL) {
                     if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
                         line->_hangupCall(call);
-                    } else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY) {
-                        line->_log.info("Explicit unkey consumed");
+                    } 
+                    // This is the case where an UNKEY is requested by something 
+                    // on the internal bus. Create an UNKEY frame and send it out.
+                    else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY_GEN) {                        
+                        line->_log.info("Call %u sending unkey", call.localCallId);
+                        IAX2FrameFull frame;
+                        frame.setHeader(call.localCallId, call.remoteCallId, 
+                            call.dispenseElapsedMs(line->_clock), 
+                            call.outSeqNo, call.expectedInSeqNo, 
+                            FrameType::IAX2_TYPE_CONTROL,
+                            ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY);
+                        line->_sendFrameToPeer(frame, call);
                     }
                 }
             },
@@ -2132,17 +2172,6 @@ void LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {
     _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
-void LineIAX2::audioRateTick(uint32_t tickMs) {
-    _visitActiveCallsIf(
-        // Visitor
-        [&log = _log, &clock = _clock, line = this](Call& call) {
-            call.audioRateTick(log, clock, line->_bus, line->_busId, *line);
-        },
-        // Predicate
-        [](const Call& call) { return true; }
-    );
-}
-
 void LineIAX2::oneSecTick() { 
     _visitActiveCallsIf(
         // This function will be called for each active call in the system.
@@ -2265,7 +2294,6 @@ void LineIAX2::Call::reset() {
     _nvi_1 = 0;
     reTx.reset();
     dnsRequestId = 0;
-    vox = false;
     lastLMs = 0;
     lastPingSentMs = 0;
     lastPingTimeMs = 0;
@@ -2323,32 +2351,6 @@ void LineIAX2::Call::setNetworkDelayEstimate(unsigned ms, bool first) {
     _nvi = _nAlpha * _nvi_1 + (1 - _nAlpha) * fabs(_ndi - nni);
     _nvi_1 = _nvi;
     networkDelayEstimateMs = _ndi;
-}
-
-/**
- * Take care of anything that needs to happen on the audio clock. 
- * IMPORTANT: These are time-sensitive operations.
- */
-void LineIAX2::Call::audioRateTick(Log& log, Clock& clock, 
-    MessageConsumer& cons, unsigned localBusId, LineIAX2& line) {    
-
-    // #### TODO: THIS WILL MOVE OUT TO THE BRIDGE
-    // Look for VOX drop
-    if (state == Call::State::STATE_UP) {
-        if (vox && 
-            (localElapsedMs(clock) > lastVoiceFrameElapsedMs + line._voxUnkeyMs)) {
-            
-            vox = false;
-            log.info("Sending UNKEY");
-            
-            // Send an unkey
-            IAX2FrameFull controlFrame;
-            controlFrame.setHeader(localCallId, remoteCallId, 
-                dispenseElapsedMs(clock), 
-                outSeqNo, expectedInSeqNo, 4, 13);
-            line._sendFrameToPeer(controlFrame, *this);
-        }
-    }
 }
 
 /**

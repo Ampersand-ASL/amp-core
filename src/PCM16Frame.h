@@ -50,6 +50,9 @@ public:
         return *this;
     }
 
+    /**
+     * @returns Number of samples
+     */
     unsigned size() const { return _size; }
 
     const int16_t* data() const { return _body; }

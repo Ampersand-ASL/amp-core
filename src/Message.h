@@ -58,11 +58,15 @@ public:
         CALL_STATUS,
         CALL_TERMINATE,
         RADIO_KEY,
+        // Used to report an inbound unkey
         RADIO_UNKEY,
+        // Used to generate and outbound unkey
+        RADIO_UNKEY_GEN,
         // Requests network call/drop
         CALL_NODE,
         DROP_NODE,
         DROP_ALL_NODES,
+        DROP_ALL_NODES_OUTBOUND,
         // Tells an audio interface that the COS signal has been activated/deactivated
         COS_ON,
         COS_OFF,
@@ -132,6 +136,11 @@ struct PayloadCallStart {
     bool echo = false;
     bool originated = false;
     bool sourceAddrValidated = false;
+};
+
+struct PayloadCallEnd {
+    char localNumber[16];
+    char remoteNumber[16];
 };
 
 struct PayloadCallFailed {

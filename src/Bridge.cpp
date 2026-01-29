@@ -31,7 +31,8 @@ namespace kc1fsz {
 Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
     BridgeCall::Mode defaultMode, 
     unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
-    const char* netTestBindAddr)
+    const char* netTestBindAddr,
+    unsigned networkDestLineId)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
@@ -40,6 +41,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _lineId(lineId),
     _ttsLineId(ttsLineId),
     _netTestLineId(netTestLineId),
+    _networkDestLineId(networkDestLineId),
     _calls(_callSpace, MAX_CALLS) { 
 
     // One-time (static) setup of all calls
@@ -66,10 +68,49 @@ unsigned Bridge::getCallCount() const {
     return result;
 }
 
+void Bridge::setLocalNodeNumber(const char* nodeNumber) { 
+    _log.info("Bridge node number %s", nodeNumber);
+    _nodeNumber = nodeNumber; 
+}
+
+void Bridge::setGreeting(const char* greeting) { 
+    if (greeting)
+        _greetingText = greeting; 
+    else 
+        _greetingText.clear();
+}
+
+void Bridge::setParrotLevelThresholds(std::vector<int>& thresholds) {
+    _parrotLevelThresholds = thresholds;
+}
+
+vector<string> Bridge::getConnectedNodes() const {
+    vector<string> result;
+    _calls.visitIf(
+        // Visitor
+        [&result](const BridgeCall& call) { 
+            result.push_back(call.getRemoteNodeNumber());
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+    return result;
+}
+
+string Bridge::addSpaces(const char* text) {
+    string result;
+    for (unsigned i = 0; i < strlen(text); i++) {
+        if (i > 0)
+            result += " ";
+        result += text[i];
+    }
+    return result;
+}
+
 void Bridge::consume(const Message& msg) {
-    if (msg.getType() == Message::SIGNAL && 
-        msg.getFormat() == Message::SignalType::CALL_START) {
-        
+    if (msg.isSignal(Message::SignalType::CALL_START)) {        
+
         // Remove old/existing session for this call (if any)
         _calls.visitIf(
             // Visitor
@@ -108,18 +149,71 @@ void Bridge::consume(const Message& msg) {
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
                 payload.sourceAddrValidated, _defaultMode, payload.remoteNumber);
+
+            // Play the greeting to the new caller
+            if (!_greetingText.empty())                
+                call.requestTTS(_greetingText.c_str());
+
+            // Announce the new connection to all of the *other* active calls
+            string prompt = "Node ";
+            prompt += addSpaces(payload.remoteNumber);
+            prompt += " connected.";
+            
+            _calls.visitIf(
+                // Visitor
+                [&prompt](BridgeCall& call) { 
+                    call.requestTTS(prompt.c_str());
+                    return true;
+                 },
+                // Predicate
+                [msg](const BridgeCall& c) { 
+                    return c.isActive() && 
+                        // Make sure this is a normal conference node
+                        c.isNormal() &&
+                        // Make sure this is NOT the call we just setup above
+                        !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
+                }
+            );
+
+
+
         }
     }
-    else if (msg.getType() == Message::SIGNAL && 
-             msg.getFormat() == Message::SignalType::CALL_END) {
+    else if (msg.isSignal(Message::SignalType::CALL_END)) {
 
-        _log.info("Call ended %d", msg.getSourceCallId());
+        PayloadCallEnd payload;
+        assert(msg.size() == sizeof(payload));
+        memcpy(&payload, msg.body(), sizeof(payload));
+
+        _log.info("Call ended %u:%u (%s)", msg.getSourceBusId(), msg.getSourceCallId(),
+            payload.remoteNumber);
 
         _calls.visitIf(
             // Visitor
             RESET_VISITOR,
             // Predicate
-            [msg](const BridgeCall& c) { return c.belongsTo(msg); }
+            [msg](const BridgeCall& c) { return c.belongsTo(msg); }         
+        );
+
+        // Announce the dropped connection to all of the *other* active calls
+        string prompt = "Node ";
+        prompt += addSpaces(payload.remoteNumber);
+        prompt += " disconnected.";
+        
+        _calls.visitIf(
+            // Visitor
+            [&prompt](BridgeCall& call) { 
+                call.requestTTS(prompt.c_str()); 
+                return true;
+            },
+            // Predicate
+            [msg](const BridgeCall& c) { 
+                return c.isActive() && 
+                    // Make sure this is a normal conference node
+                    c.isNormal() &&
+                    // Make sure this is NOT the call we just dropped above
+                    !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
+            }
         );
     }
     // These are all the message types that get passed directly to the call.
@@ -217,14 +311,29 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             }
 
             // Output the result
-            _calls[i].setOutputAudio(mixedFrame, BLOCK_SIZE_48K, tickMs);
+            _calls[i].setConferenceOutput(mixedFrame, BLOCK_SIZE_48K, tickMs);
         }
+
+        _calls[i].produceOutput(tickMs);
     }
 
     // Clear all contributions for this tick
     for (unsigned j = 0; j < MAX_CALLS; j++)
         if (_calls[j].isActive()) 
             _calls[j].clearInputAudio();
+}
+
+void Bridge::oneSecTick() {
+     // Tick each call so that we have an input frame for each.
+    _calls.visitIf(
+        // Visitor
+        [](BridgeCall& call) { 
+            call.oneSecTick();
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
 }
 
 void Bridge::tenSecTick() {

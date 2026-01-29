@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
@@ -36,21 +37,43 @@ class Clock;
 class Bridge : public MessageConsumer, public Runnable2 {
 public:
 
+    friend class BridgeCall;
+
     static const unsigned AUDIO_RATE = 48000;
     static const unsigned BLOCK_SIZE_8K = 160;
     static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
+    /**
+    * Takes text and adds a space between each letter. Relevant to 
+    * text-to-speach.
+    */
+    static std::string addSpaces(const char* text);
+
+    /**
+    * @param netLineId The line ID of the IAX network connection.
+     */
     Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
         BridgeCall::Mode defaultMode, 
         unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
-        const char* netTestBindAddr);
+        const char* netTestBindAddr,
+        unsigned networkDestLineId);
 
     unsigned getCallCount() const;
+
     void reset();
 
-    void setNodeNumber(const char* nodeNumber) { _nodeNumber = nodeNumber; }
+    void setLocalNodeNumber(const char* nodeNumber);
+
+    /**
+     * Sets optional text greeting that will be spoken to any new caller.
+     */
+    void setGreeting(const char* greeting);
+
+    void setParrotLevelThresholds(std::vector<int>& thresholds);
+
+    std::vector<std::string> getConnectedNodes() const;
 
     // ----- MessageConsumer --------------------------------------------------
 
@@ -60,6 +83,7 @@ public:
     
     bool run2();
     void audioRateTick(uint32_t tickMs);
+    void oneSecTick();
     void tenSecTick();
 
 private:
@@ -74,11 +98,15 @@ private:
     unsigned _lineId;
     unsigned _ttsLineId;
     unsigned _netTestLineId;
+    unsigned _networkDestLineId;
     std::string _nodeNumber;
+    std::string _greetingText;
 
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
+
+    std::vector<int> _parrotLevelThresholds;
 };
 
     }

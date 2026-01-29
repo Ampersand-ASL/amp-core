@@ -24,10 +24,12 @@
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
+#include "kc1fsz-tools/threadsafequeue2.h"
 
-#include "Bridge.h"
 #include "Message.h"
 #include "ThreadUtil.h"
+#include "Transcoder_SLIN_48K.h"
+#include "amp/Resampler.h"
 
 using namespace std;
 

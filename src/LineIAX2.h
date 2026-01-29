@@ -163,6 +163,7 @@ public:
 
     /**
      * Drops the target node number.
+     * @returns 0 On success, -1 on failure (not found)
      */
     int drop(const char* localNumber, const char* targetNumber);
 
@@ -170,6 +171,11 @@ public:
      * Drops all connections that aren't marked as permanent.
      */
     void dropAllNonPermanent();
+
+    /**
+     * Drops all outbound connections.
+     */
+    void dropAllOutbound();
 
     void setTrace(bool a) { _trace = a; }
 
@@ -184,14 +190,7 @@ public:
     // ----- Runnable -------------------------------------------------------
 
     virtual bool run2();
-
-    /**
-     * Audio rate tick is required here because of some background (timeout)
-     * tasks that are still happening.
-     * #### TODO: REMOVE THIS
-     */
-    virtual void audioRateTick(uint32_t tickMs);
-    
+  
     virtual void oneSecTick();
     virtual void tenSecTick();
 
@@ -291,8 +290,6 @@ private:
 
         // Used to track which DNS response ID we are waiting for
         uint16_t dnsRequestId;
-        // Used for VOX keying
-        bool vox = false;
         uint32_t lastLMs = 0;
         const uint32_t L_INTERVAL_MS = 20 * 1000;
         uint32_t lastPingSentMs = 0;
@@ -311,8 +308,6 @@ private:
 
         void reset();
 
-        void audioRateTick(Log& log, Clock& clock, MessageConsumer& cons, 
-            unsigned dest, LineIAX2& line);
         void oneSecTick(Log& log, Clock& clock, LineIAX2& line);
 
         /**
@@ -409,8 +404,6 @@ private:
     unsigned int _dnsRequestIdCounter = 1;
     // Determines how much time we wait between call retries
     uint32_t _callRetryIntervalMs = 30 * 1000;
-    // How long we wait before considering a talkspurt to be finished.
-    uint32_t _voxUnkeyMs = 100;
     // Diagnostics    
     unsigned _invalidCallPacketCounter = 0;
     // Controls whether source IP validation is required
@@ -419,6 +412,12 @@ private:
     bool _authorizeWithCalltoken = true;
     bool _authorizeWithAuthreq = false;
     const bool _supportDirectedPoke = true;
+
+    /**
+     * Drops all calls that match the predicate.
+     * @returns The number of calls dropped
+     */
+    unsigned _dropIf(std::function<bool(const Call& call)> pred);
 
     /**
      * @return true if there might be more work to be done
