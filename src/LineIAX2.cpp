@@ -756,9 +756,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             char target[129];
             if (_supportDirectedPoke &&
                 frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR, target, 129)) {
-
-                _log.info("POKE had target address [%s]", target);
-
+                //_log.info("POKE had target address [%s]", target);
                 sockaddr_storage poke2Addr;
                 int parseRc = parseIPAddrAndPort(target, poke2Addr);
                 if (parseRc == 0) {
@@ -806,29 +804,23 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 // Send back the "apparent address" to help the peer figure 
                 // out how they are perceived to the outside world.
                 //
+                // We're not using the RFC-defined format for this IE.
                 // See https://datatracker.ietf.org/doc/html/rfc5456#section-8.6.17 for
                 // notes on the format of the APPARENT ADDR information element.
+                // Instead, we are doing ADDR:PORT as a string.
                 //
                 // NOTE: The use of this IE in the PONG message is not in the RFC but
                 // we are adding it as part of the firewall/CGNAT mitigation strategy.
-                unsigned addrLen = 0;
-                if (peerAddr.sa_family == AF_INET)
-                    addrLen = sizeof(sockaddr_in);
-                else if (peerAddr.sa_family == AF_INET6)
-                    addrLen = sizeof(sockaddr_in6);
-                if (addrLen != 0) {
-                    pong.addIE_raw(IEType::IAX2_IE_APPARENT_ADDR, 
-                        (const uint8_t*)&peerAddr, addrLen);
-                }
+                char sourceAddrAndPort[128];
+                formatIPAddrAndPort(peerAddr, sourceAddrAndPort, 128);
+                pong.addIE_str(IEType::IAX2_IE_APPARENT_ADDR, sourceAddrAndPort);
 
                 // If the POKE request has a "target address 2" in it then 
                 // we use that to set the target address on the PONG. This has 
                 // the effect of forwarding the PONG another hop.
                 char target2[129];
                 if (frame.getIE_str(IEType::IAX2_IE_TARGET_ADDR2, target2, 129)) {
-
-                    _log.info("POKE had target address 2 [%s]", target2);
-
+                    //_log.info("POKE had target address 2 [%s]", target2);
                     // Include the address of the original POKE requestor
                     pong.addIE_str(IEType::IAX2_IE_TARGET_ADDR, target2);
                 }
@@ -867,12 +859,12 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                         IAXSubclass::IAX2_SUBCLASS_IAX_PONG);
 
                     // If the PONG has an apparent address, copy it and forward.
-                    uint8_t apparentAddrBuf[64];
-                    int apparentAddrLen = frame.getIE_raw(IEType::IAX2_IE_APPARENT_ADDR,
-                        apparentAddrBuf, 64);
-                    if (apparentAddrLen > 0) {
-                        pong2.addIE_raw(IEType::IAX2_IE_APPARENT_ADDR, apparentAddrBuf, 
-                            apparentAddrLen);
+                    // NOTE: We are using a string format of APPARENT_ADDR.
+                    char apparentAddrBuf[65];
+                    if (frame.getIE_str(IEType::IAX2_IE_APPARENT_ADDR,
+                        apparentAddrBuf, 65)) { 
+                        pong2.addIE_str(IEType::IAX2_IE_APPARENT_ADDR, 
+                            apparentAddrBuf);
                     }
 
                     _sendFrameToPeer(pong2, (const sockaddr&)pong2Addr);
