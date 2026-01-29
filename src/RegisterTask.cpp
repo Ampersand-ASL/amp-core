@@ -84,28 +84,23 @@ void RegisterTask::_doRegister() {
     _resultArea[0] = 0;
     _resultAreaLen = 0;
 
-    //_log.info("Registering");
-
     CURLcode res = curl_easy_perform(_curl);
     if (res != CURLE_OK) {
-        _log.error("Registration failed (1) for %s %d", _nodeNumber.c_str(), res);
+        _log.error("ASL node registration failed (1) for %s %d", 
+            _nodeNumber.c_str(), res);
     }
     else {
         long http_code = 0;
         curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
-        //printf("HTTP code %ld\n", http_code);
-        //printf("GOT %s\n", _resultArea);
         char* r0 = strstr(_resultArea, "successfully registered");
         if (http_code == 200 && r0 != 0) {
-            //_log.info("Successfully registered %s", _nodeNumber.c_str());
             _lastGoodRegistrationMs = _clock.time();
-        }
-        else {
-            _log.error("Registration failed for %s", _nodeNumber.c_str());
+        } else {
+            _log.error("ASL node registration failed for %s", _nodeNumber.c_str());
+            _log.error("  HTTP code: %d", http_code);
+            _log.error("  Response body: %s", _resultArea);
         }
     }
-
-    //_log.info("Done registering");
 
     curl_slist_free_all(_headers);
     curl_easy_cleanup(_curl);
