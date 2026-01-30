@@ -16,10 +16,40 @@
  */
 #pragma once
 
-#include <string>
+#include <functional>
 
-#include "kc1fsz-tools/Log.h"
+#include "Runnable2.h"
 
-void service_thread(const std::string* cfgFileName, kc1fsz::Log* log);
+namespace kc1fsz {
 
+class Log;
+class Clock;
 
+class TimerTask : public Runnable2 {
+public:
+
+    TimerTask(Log& log, Clock& clock, unsigned freqSec, std::function<void()> cb ) 
+    :   _log(log), _clock(clock), _freqSec(freqSec), _cb(cb) { }
+
+    // ----- Runnable -----------------------------------------------------------
+
+    bool run2() { return false; }
+
+    void oneSecTick() { 
+        if (++_sec == _freqSec) {
+            _cb(); 
+            _sec = 0;
+        }
+    }
+
+private:
+
+    Log& _log;
+    Clock& _clock;
+    const unsigned _freqSec;
+    std::function<void()> _cb;
+    // Make sure we generate a callback immediately
+    unsigned _sec = _freqSec - 1;
+};
+
+}
