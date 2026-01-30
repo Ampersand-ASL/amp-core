@@ -120,6 +120,14 @@ public:
     std::string getRemoteNodeNumber() const { return _remoteNodeNumber; }
 
     /**
+     * @returns true if this call was recently the source of commands
+     * such as DTMF, remote signaling, etc. This is often used to 
+     * determine whether state change announcement should be directed
+     * to the call.
+     */
+    bool isRecentCommander() const;
+
+    /**
      * Requests a text-to-speech announcement to be sent to the call.
      */
     void requestTTS(const char* prompt);
@@ -181,7 +189,6 @@ private:
     unsigned _callId = 0;
     uint32_t _startMs = 0;
     std::string _remoteNodeNumber;
-    uint32_t _lastAudioMs = 0;
 
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
@@ -245,6 +252,10 @@ private:
     void _loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const;
 
     void _analyzeRecording(const std::vector<PCM16Frame>& audio, float* peakPower, float* avgPower);
+
+    // Last time the parrot received audio. Used to detect end of 
+    // transmission.
+    uint32_t _lastAudioRxMs = 0;
 
     // The audio captured from the caller
     std::queue<PCM16Frame> _captureQueue;
