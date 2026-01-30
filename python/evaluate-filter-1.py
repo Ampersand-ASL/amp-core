@@ -1,3 +1,4 @@
+# 8K<->48K filter
 import numpy as np
 from scipy.signal import firwin, lfilter, lfilter_zi
 import matplotlib.pyplot as plt
@@ -36,6 +37,7 @@ taps1 = firwin(N1, cutoff_hz1 / nyq_rate, window=('kaiser', beta1))
 # Calculate the frequency response
 frequencies1, frequency_response1 = fir_freq_response(taps1, sample_rate)
 db_data1 = 20 * np.log10(np.abs(frequency_response1[:len(frequencies1)//2]))
+print(taps1)
 
 # The FIR filter from the ASL code
 N2 = 31
