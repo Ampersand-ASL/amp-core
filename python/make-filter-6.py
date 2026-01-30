@@ -10,7 +10,7 @@ export PYTHONPATH=../../firpm-py
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-import firpm 
+#import firpm 
 from scipy.signal import lfilter, firwin
 
 def fir_freq_response(coefficients, sampling_rate):
@@ -38,6 +38,8 @@ beta1 = 1
 cutoff_hz1 = 7700
 # Use firwin with a Kaiser window to create a lowpass FIR filter.
 taps1 = firwin(N1, cutoff_hz1 / nyq_rate, window=('kaiser', beta1))
+print([round(t * 32767) for t in taps1])
+
 # Calculate the frequency response
 frequencies1, frequency_response1 = fir_freq_response(taps1, sample_rate)
 db_data1 = 20 * np.log10(np.abs(frequency_response1[:len(frequencies1)//2]))
