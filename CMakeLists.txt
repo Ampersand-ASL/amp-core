@@ -111,6 +111,8 @@ add_executable(unit-test
   src/Resampler.cpp
   #src/Transcoder_G711_ULAW.cpp
   #src/NodeParrot.cpp
+  src/Bridge.cpp
+  src/BridgeCall.cpp
   #src/BridgeIn.cpp
   #src/BridgeOut.cpp
   #src/Transcoder_G711_ULAW.cpp
@@ -133,7 +135,7 @@ target_include_directories(unit-test PRIVATE itu-g711-codec/src)
 target_include_directories(unit-test PRIVATE cmsis-dsp-mock/include)
 target_include_directories(unit-test PRIVATE alsa-mock/include)
 target_include_directories(unit-test PRIVATE hid-mock/include)
-target_link_libraries(unit-test -lws2_32)
+target_link_libraries(unit-test)
 
 # ----- Protocol Test
 

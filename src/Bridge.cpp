@@ -155,6 +155,7 @@ void Bridge::consume(const Message& msg) {
                 call.requestTTS(_greetingText.c_str());
 
             // Announce the new connection to all of the *other* active calls
+            // who may have commanded this connection.
             string prompt = "Node ";
             prompt += addSpaces(payload.remoteNumber);
             prompt += " connected.";
@@ -170,6 +171,9 @@ void Bridge::consume(const Message& msg) {
                     return c.isActive() && 
                         // Make sure this is a normal conference node
                         c.isNormal() &&
+                        // Make sure this is a call that has been involved in
+                        // recent command activity.
+                        c.isRecentCommander() &&
                         // Make sure this is NOT the call we just setup above
                         !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
                 }
@@ -211,6 +215,9 @@ void Bridge::consume(const Message& msg) {
                 return c.isActive() && 
                     // Make sure this is a normal conference node
                     c.isNormal() &&
+                    // Make sure this is a call that has been involved in
+                    // recent command activity.
+                    c.isRecentCommander() &&
                     // Make sure this is NOT the call we just dropped above
                     !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
             }

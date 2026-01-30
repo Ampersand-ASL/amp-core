@@ -26,6 +26,14 @@
 #include "Poker.h"
 #include "Bridge.h"
 
+// The duration of silence after which the parrot decides the 
+// recording should be ended.
+#define PARROT_RECORD_TIMEOUT_MS (5000)
+
+// The amount of time that must pass before a call is no longer considered
+// a commander (and therefore, will stop receiving status messages)
+#define COMMANDER_TIMEOUT_MS (30 * 1000)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -95,7 +103,7 @@ void BridgeCall::reset() {
     _lineId = 0;  
     _callId = 0; 
     _startMs = 0;
-    _lastAudioMs = 0;
+    _lastAudioRxMs = 0;
     _echo = false;
     _sourceAddrValidated = false;
     
@@ -130,7 +138,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _lineId = lineId;  
     _callId = callId; 
     _startMs = startMs;
-    _lastAudioMs = 0;
+    _lastAudioRxMs = 0;
     _remoteNodeNumber = remoteNodeNumber;
 
     _bridgeIn.setCodec(codec);
@@ -146,6 +154,10 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
         _parrotState = ParrotState::CONNECTED;
         _parrotStateStartMs = _clock->time();
     }
+}
+
+bool BridgeCall::isRecentCommander() const {
+    return !_clock->isPast(_lastDtmfRxMs + COMMANDER_TIMEOUT_MS);
 }
 
 void BridgeCall::consume(const Message& frame) {
@@ -428,7 +440,7 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
     bool vad = rms > 0.005;
 
     if (vad)
-        _lastAudioMs = _clock->time();
+        _lastAudioRxMs = _clock->time();
 
     if (_parrotState == ParrotState::WAITING_FOR_RECORD)  {
         if (vad) {
@@ -538,13 +550,13 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         }
     }
     else if (_parrotState == ParrotState::RECORDING) {
-        if (_clock->isPast(_lastAudioMs + 5000)) {
+        if (_clock->isPast(_lastAudioRxMs + PARROT_RECORD_TIMEOUT_MS)) {
             _log->info("Record end (Long silence)");
             _parrotState = ParrotState::PAUSE_AFTER_RECORD;
             _parrotStateStartMs = _clock->time();
         }
         else if (_bridgeIn.getLastUnkeyMs() > _lastUnkeyProcessedMs &&
-                 _clock->isPast(_bridgeIn.getLastUnkeyMs() + 250)) {
+            _clock->isPast(_bridgeIn.getLastUnkeyMs() + 250)) {
             _lastUnkeyProcessedMs = _bridgeIn.getLastUnkeyMs();
             _log->info("Record end (UNKEY)");
             _parrotState = ParrotState::PAUSE_AFTER_RECORD;
