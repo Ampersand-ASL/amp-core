@@ -41,7 +41,6 @@ public:
     static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
-    static const unsigned MAX_TAPS = 45;
 
     /** 
      * Resets internal state without changing the sample rates.
@@ -64,21 +63,24 @@ public:
 
     // Filter 1 is the LPF used for up-sampling from 8K to 
     // 48K. This runs at 48K.
-    static const unsigned F1_TAPS = 31;
+    //static const unsigned F1_TAPS = 31;
+    static const unsigned F1_TAPS = 91;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
     static const int16_t F1_COEFFS[F1_TAPS];
 
     // Filter 2 is the LPF used for down-sampling from 48K
     // to 8K. This runs at 48K.
-    static const unsigned F2_TAPS = 31;
+    //static const unsigned F2_TAPS = 31;
+    static const unsigned F2_TAPS = 91;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
     static const int16_t F2_COEFFS[F2_TAPS];
 
     // LPF used for down-sampling from 48K to 16K
     //static const unsigned F16_TAPS = 31;
-    static const unsigned F16_TAPS = 45;
+    //static const unsigned F16_TAPS = 45;
+    static const unsigned F16_TAPS = 71;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
     static const int16_t F16_COEFFS[F16_TAPS];
@@ -91,6 +93,8 @@ private:
 
     // Space for the largest possible filter
     arm_fir_instance_q15 _lpfFilter;
+    //static const unsigned MAX_TAPS = 45;
+    static const unsigned MAX_TAPS = 91;
     int16_t _lpfState[MAX_TAPS + BLOCK_SIZE_48K - 1];
 };
     }
