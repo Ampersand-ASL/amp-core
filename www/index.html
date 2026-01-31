@@ -81,6 +81,24 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     display: flex;
     gap: 20px;
 }
+
+.connection-table, .connection-table th, .connection-table td {
+  border: 1px solid #dddddd;
+  border-collapse: collapse;
+}
+
+.connection-table th, .connection-table td {
+    padding: 5px;
+}
+
+.connection-table th {
+    background-color: #444444;
+}
+
+.talker {
+    color: greenyellow;
+}
+
         </style>
     </head>
     <body>
@@ -113,10 +131,11 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                 <input class="red-button" id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
                 <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
                 <p>Connections:</p>
-                <table>
+                <table class="connection-table">
                     <thead>
                         <th>Node</th>
                         <th>Remote Node</th>
+                        <th>Talker</th>
                         <th>Connections</th>
                     </thead>
                     <tbody id="connection-table-body">
@@ -355,10 +374,12 @@ async function status_update() {
             var td0 = document.createElement('td');
             var td1 = document.createElement('td');
             var td2 = document.createElement('td');
+            var td3 = document.createElement('td');
 
             tr.appendChild(td0);
             tr.appendChild(td1);
             tr.appendChild(td2);
+            tr.appendChild(td3);
             
             var a0 = document.createElement('a');
             a0.innerHTML = c["localNode"];
@@ -370,17 +391,26 @@ async function status_update() {
             a1.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["remoteNode"]);
             td1.appendChild(a1);
 
+            var a2 = document.createElement('a');
+            a2.className = "talker"
+            a2.setAttribute("href", "https://www.qrz.com");
+            td2.appendChild(a2);
+
+            var sp2 = document.createElement('span');
+            sp2.className = "talker"
+            td2.appendChild(sp2);
+
             var first = true;
             for (c1 of c["connections"]) {
                 if (!first) {
                     var s = document.createElement("span");
                     s.innerHTML = "&nbsp;"
-                    td2.appendChild(s);
+                    td3.appendChild(s);
                 }
                 var s = document.createElement("a");
                 s.innerHTML = c1;
                 s.setAttribute("href", "https://stats.allstarlink.org/stats/" + c1);
-                td1.appendChild(s);
+                td3.appendChild(s);
                 first = false;
             }
             tbody.appendChild(tr);

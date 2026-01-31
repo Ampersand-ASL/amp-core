@@ -1204,7 +1204,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         IAX2FrameFull respFrame1;
         respFrame1.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
-            call.outSeqNo, call.expectedInSeqNo, 7, 0);
+            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
         char strmsg[64];
         snprintf(strmsg, 64, "T %s COMPLETE", call.localNumber.c_str());
         // NOTE: INCLUDING NULL!
@@ -1214,7 +1214,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         IAX2FrameFull respFrame3;
         respFrame3.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
-            call.outSeqNo, call.expectedInSeqNo, 7, 0);
+            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
         snprintf(strmsg, 64, "T %s CONNECTED,%s,%s", 
             call.localNumber.c_str(), call.localNumber.c_str(),
             call.remoteNumber.c_str());
@@ -1375,7 +1375,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         // #### TODO: IGNORED PACKET COUNT
     }
     // TEXT
-    else if (frame.getType() == 7 && frame.getSubclass() == 0) {
+    else if (frame.isTypeClass(FrameType::IAX2_TYPE_TEXT, 0)) {
 
         // Truncate/null-terminate the text
         char textMessage[80];  
@@ -1383,16 +1383,22 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         memcpy(textMessage, (const char*)frame.buf() + 12, len);
         textMessage[len] = 0;
 
+        if (len == 0) {
+            // Do nothing
+        }
         // Not sure what this means, but following the rule of sending back
         // the same message.
-        if (strcmp(textMessage, "!NEWKEY1!") == 0) {
+        else if (strcmp(textMessage, "!NEWKEY1!") == 0) {
             IAX2FrameFull respFrame0;
             respFrame0.setHeader(call.localCallId, call.remoteCallId, 
                 call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 7, 0);
+                call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
             // NOTE: INCLUDING NULL!
             respFrame0.setBody((const uint8_t*)"!NEWKEY1!", 10);
             _sendFrameToPeer(respFrame0, call);
+        }
+        else if (strcmp(textMessage, "!!DISCONNECT!!") == 0) {
+            _log.info("Call %u got forced disconnect", call.localCallId);
         }
         // 27-Jan-2026 Bruce saw this alternate method of sending DTMF
         // commands while testing on IaxRtp (Windows softphone).
@@ -1415,12 +1421,67 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
                 msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
                 _bus.consume(msg);
             }
-        } else {
-            // The "L" message contains the list of linked nodes
-            if (textMessage[0] != 'L')
-                _log.info("Text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
-            if (textMessage[0] == 'M')
-                _log.infoDump("Diagnostic", frame.buf(), frame.size());
+        } 
+        // The "T" messages contain telemetry
+        // T <NODE_NB> <CMD>,<PARAMS>
+        //   NODE_NB Node sending message
+        //   CMD Telemetry command ALLCAPS
+        //   PARAMS Optional comma separated list of command specific parameters
+        //
+        // Specifics about some commands:
+        //  
+        // T <NODE_NB> STATUS,<NODE_1>,0,<NODE_LIST>
+        //   NODE_NB Node sending message
+        //   NODE_1 Node reporting status
+        //   0 Unknown
+        //   NODE_LIST List of nodes connected to NODE_1. Each node number is 
+        //   prefixed by a connection mode as follow:
+        //       T Transceive mode, send and receive audio
+        //       R Receive audio only
+        //       C Connection is pending
+        //
+        // T <NODE_NB> CONNECTED,<NODE_1>,<NODE_2>
+        //   NODE_NB Node sending message
+        //   NODE_1 Node initiating connection
+        //   NODE_2 Other node connected to
+        //
+        // T <NODE_NB> REMALREADY
+        //
+        //   Removed Already Connected. Remote node is already part of the network. 
+        //   Note that it could be a direct connection or it could be the node is 
+        //   connected via other nodes.
+        //
+        // T <NODE_NB> CONNFAIL,<REMOTE_NODE_NB>
+        //
+        //   Connection Failed. Remote node can't be connected to.
+        //
+        // T <NODE_NB> STATS_VERSION,161.327
+        // 
+        // T <NODE_NB> TALKER,NAME
+        //
+        //   This message is used to identify the active talker on the 
+        //   designated node. 
+        //   NODE_NNB Node sending the message
+        //   NAME Arbitrary text, but should be a callsign
+        //
+        else if (textMessage[0] != 'T') {
+            _log.infoDump("Telemetry", frame.buf(), frame.size());
+        } 
+        // The "L" message contains the list of linked nodes.
+        // L <MODE><NODE_NB>,<MODE><NODE_NB>,...
+        // 
+        //  MODE Each node number is prefixed by a connection MODE as follow:
+        //    T Transceive mode, send and receive audio
+        //    R Receive audio only
+        //    C Connection is pending
+        //  NODE_NB Linked node
+        //
+        //  If no other nodes are connected, the list is empty and only L is sent.
+        else if (textMessage[0] == 'L') {
+            //_log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
+        }
+        else {
+            _log.infoDump("Unrecognized text", frame.buf(), frame.size());
         }
     }
     // HANGUP
@@ -2389,6 +2450,9 @@ void LineIAX2::Call::reset() {
     lastRxVoiceFrameMs = 0;
     lastTxVoiceFrameMs = 0;
     _callInitiatedMs = 0;
+    localTalkerName.clear();
+    remoteTalkerName.clear();
+    lastLocalTalkerNameUpdateMs = 0;
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?

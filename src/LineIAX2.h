@@ -193,6 +193,18 @@ public:
 
     void processManagementCommand(const char* msg);
 
+    /**
+     * Used to identify the active talker for outbound voice 
+     * traffic for the designed local call.
+     */
+    void setLocalTalkerName(unsigned localCallId, const char* name);
+    
+    /**
+     * @returns The name of who is talking on the other side of the 
+     * designated call.
+     */
+    fixedstring getRemoveTalkerName(unsigned localCallId);
+
     // ----- Line/MessageConsumer-----------------------------------------------------
 
     virtual void consume(const Message& m);
@@ -316,6 +328,12 @@ private:
         // When a NEW request is sent out during call initiation
         uint32_t _callInitiatedMs = 0;
 
+        fixedstring localTalkerName;
+        fixedstring remoteTalkerName;
+        // The last time that the talker identification was sent to the 
+        // peer on of this call.
+        int32_t lastLocalTalkerNameUpdateMs;
+        
         void reset();
 
         void oneSecTick(Log& log, Clock& clock, LineIAX2& line);
