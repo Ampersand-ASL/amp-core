@@ -53,6 +53,7 @@ void BridgeIn::setCodec(CODECType codecType) {
 void BridgeIn::consume(const Message& frame) {    
 
     if (frame.getType() == Message::Type::AUDIO) {
+        _lastAudioMs = _clock->timeUs() / 1000;
         // The first stop is the jitter buffer, unless it's been bypassed
         if (_bypassJitterBuffer) {
             _bypassedFrames.push(frame);

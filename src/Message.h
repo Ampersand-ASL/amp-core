@@ -64,16 +64,18 @@ public:
         RADIO_UNKEY_GEN,
         // Requests network call/drop
         CALL_NODE,
-        DROP_NODE,
-        DROP_ALL_NODES,
-        DROP_ALL_NODES_OUTBOUND,
+        DROP_CALL,
+        DROP_ALL_CALLS,
+        DROP_ALL_CALLS_OUTBOUND,
         // Tells an audio interface that the COS signal has been activated/deactivated
         COS_ON,
         COS_OFF,
         // Used to report inbound DTMF
         DTMF_PRESS,
         // Used to generate outbound DTMF
-        DTMF_GEN
+        DTMF_GEN,
+        // Used to publish the list of connected nodes
+        LINK_REPORT
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 

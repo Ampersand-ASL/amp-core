@@ -359,6 +359,20 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
     return count > 0 ? 0 : -1;
 }
 
+int LineIAX2::dropCall(unsigned callId) {
+
+    _log.info("Request to drop call %u", callId);
+
+    unsigned count = _dropIf(
+        [callId](const Call& call) {
+            return call.localCallId == callId && 
+              call.state != Call::State::STATE_TERMINATE_WAITING && 
+              call.state != Call::State::STATE_TERMINATED;
+        }
+    );
+    return count > 0 ? 0 : -1;
+}
+
 void LineIAX2::dropAllNonPermanent() {
     _dropIf([](const Call& call) {
             return call.state != Call::State::STATE_TERMINATED;
@@ -1464,7 +1478,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //   NODE_NNB Node sending the message
         //   NAME Arbitrary text, but should be a callsign
         //
-        else if (textMessage[0] != 'T') {
+        else if (textMessage[0] == 'T') {
             _log.infoDump("Telemetry", frame.buf(), frame.size());
         } 
         // The "L" message contains the list of linked nodes.
@@ -1479,6 +1493,13 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //  If no other nodes are connected, the list is empty and only L is sent.
         else if (textMessage[0] == 'L') {
             //_log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
+            Message msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT, 
+                // The initial "L " gets stripped here
+                strlen(textMessage) - 2, (const uint8_t*)textMessage + 2, 
+                0, _clock.time());
+            msg.setSource(_busId, call.localCallId);
+            msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+            _bus.consume(msg);
         }
         else {
             _log.infoDump("Unrecognized text", frame.buf(), frame.size());
@@ -2032,14 +2053,10 @@ unsigned LineIAX2::getActiveCalls() const {
 void LineIAX2::consume(const Message& msg) {  
 
     // Look at for non-call signals
-    if (msg.isSignal(Message::SignalType::DROP_ALL_NODES)) {
+    if (msg.isSignal(Message::SignalType::DROP_ALL_CALLS)) {
         dropAllNonPermanent();
-    } else if (msg.isSignal(Message::SignalType::DROP_ALL_NODES_OUTBOUND)) {
+    } else if (msg.isSignal(Message::SignalType::DROP_ALL_CALLS_OUTBOUND)) {
         dropAllOutbound();
-    } else if (msg.isSignal(Message::SignalType::DROP_NODE)) {
-        PayloadCall* payload = (PayloadCall*)msg.body();
-        assert(msg.size() == sizeof(PayloadCall));
-        drop(payload->localNumber, payload->targetNumber);
     } else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));

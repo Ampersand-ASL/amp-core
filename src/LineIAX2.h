@@ -177,6 +177,8 @@ public:
      */
     int drop(const char* localNumber, const char* targetNumber);
 
+    int dropCall(unsigned callId);
+
     /**
      * Drops all connections that aren't marked as permanent.
      */

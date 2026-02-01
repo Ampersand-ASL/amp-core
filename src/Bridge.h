@@ -19,6 +19,10 @@
 #include <string>
 #include <vector>
 
+// 3rd party
+#include <nlohmann/json.hpp>
+
+// KC1FSZ tools
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
@@ -26,6 +30,8 @@
 #include "MessageConsumer.h"
 #include "Message.h"
 #include "BridgeCall.h"
+
+using json = nlohmann::json;
 
 namespace kc1fsz {
 
@@ -47,7 +53,7 @@ public:
 
     /**
     * Takes text and adds a space between each letter. Relevant to 
-    * text-to-speach.
+    * text-to-speech.
     */
     static std::string addSpaces(const char* text);
 
@@ -74,6 +80,17 @@ public:
     void setParrotLevelThresholds(std::vector<int>& thresholds);
 
     std::vector<std::string> getConnectedNodes() const;
+
+    /**
+     * @returns True if the internal status document (JSON) has been 
+     * updated and a newer one should be distributed.
+     */
+    bool isStatusDocUpdated(uint64_t lastUpdateMs) const;
+
+    /**
+     * @returns The latest live status document in JSON format.
+     */
+    json getStatusDoc() const;
 
     // ----- MessageConsumer --------------------------------------------------
 
@@ -107,6 +124,38 @@ private:
     fixedvector<BridgeCall> _calls;
 
     std::vector<int> _parrotLevelThresholds;
+};
+
+/**
+ * A utility that polls for changes to the status document and fires a lambda
+ * callback whenever something new is available. Would probably be used to 
+ * keep UIs up to date efficiently.
+ */
+class BridgeStatusDocPoller : public Runnable2 {
+public:
+
+    BridgeStatusDocPoller(Clock& clock, const Bridge& bridge, 
+        std::function<void(const json& doc)> cb) 
+    :   _clock(clock), _bridge(bridge), _cb(cb) { }
+
+    // ----- Runnable2 ----------------------------------------------------
+
+    void oneSecTick() { 
+        uint64_t nowMs = _clock.timeUs() / 1000;
+        if (_bridge.isStatusDocUpdated(nowMs)) {
+            _cb(_bridge.getStatusDoc());
+            _lastUpdateMs = nowMs;
+        }
+    }
+
+    bool run2() { return false; }
+
+private:
+
+    Clock& _clock;
+    const Bridge& _bridge;
+    std::function<void(const json& doc)> _cb;
+    uint64_t _lastUpdateMs = 0;
 };
 
     }

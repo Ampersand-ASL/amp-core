@@ -11,7 +11,12 @@ input[type="submit"] {
     border: 1px solid white;
     font-weight: bold;
     color: white;
-    padding: 5px;
+    padding: 3px;
+}
+
+input[type="submit"]:active {
+    background-color: grey;
+    color: white;
 }
 
 input[type="text"] {

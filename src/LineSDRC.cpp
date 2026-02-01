@@ -131,16 +131,7 @@ int LineSDRC::open(const char* serialDevice) {
     msg.setDest(_destLineId, Message::BROADCAST);
     _bus.consume(msg);
 
-    // Send the magic code to enter audio-streaming mode
-    uint8_t cmd[1] = { 4 };
-    int rc1 = write(_fd, cmd, 1);
-    if (rc1 != 1) {
-        _log.error("SDRC write failed %d", rc1);
-        ::close(_fd);
-        _fd = -1;
-    } else {
-        _log.info("LineSDRC %d/%d opened on %s", _lineId, _callId, serialDevice);
-    }
+    _log.info("LineSDRC %d/%d opened on %s", _lineId, _callId, serialDevice);
 
     _originMsCounter = 100;
 
@@ -152,8 +143,11 @@ void LineSDRC::close() {
         ::close(_fd);
         _fd = -1;
     }
+    PayloadCallEnd payload;
+    payload.localNumber[0] = 0;
+    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "sdrc-%d", _lineId);
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-        0, 0, 0, _clock.time());
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_lineId, _callId);
     msg.setDest(_destLineId, Message::BROADCAST);
     _bus.consume(msg);

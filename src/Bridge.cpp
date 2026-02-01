@@ -108,6 +108,34 @@ string Bridge::addSpaces(const char* text) {
     return result;
 }
 
+bool Bridge::isStatusDocUpdated(uint64_t lastUpdateMs) const {
+    return true;    
+}
+
+json Bridge::getStatusDoc() const {
+
+    json root;
+
+    // Bridge-level status
+
+    // Add call-level status
+    auto calls = json::array();
+
+    _calls.visitIf(
+        // Visitor
+        [&calls](const BridgeCall& call) { 
+            calls.push_back(call.getStatusDoc());
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+
+    root["calls"] = calls;
+
+    return root;
+}
+
 void Bridge::consume(const Message& msg) {
     if (msg.isSignal(Message::SignalType::CALL_START)) {        
 
@@ -148,7 +176,8 @@ void Bridge::consume(const Message& msg) {
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
-                payload.sourceAddrValidated, _defaultMode, payload.remoteNumber);
+                payload.sourceAddrValidated, _defaultMode, 
+                payload.localNumber, payload.remoteNumber);
 
             // Play the greeting to the new caller
             if (!_greetingText.empty())                
@@ -231,6 +260,8 @@ void Bridge::consume(const Message& msg) {
              msg.getType() == Message::NET_DIAG_1_RES || 
              (msg.getType() == Message::SIGNAL && 
               msg.getFormat() == Message::SignalType::RADIO_UNKEY) ||
+             (msg.getType() == Message::SIGNAL && 
+              msg.getFormat() == Message::SignalType::LINK_REPORT) ||
              (msg.getType() == Message::SIGNAL && 
               msg.getFormat() == Message::SignalType::DTMF_PRESS)) {
 

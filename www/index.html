@@ -82,23 +82,67 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     gap: 20px;
 }
 
-.connection-table, .connection-table th, .connection-table td {
-  border: 1px solid #dddddd;
-  border-collapse: collapse;
+/* ----- Connection Table ------ */
+
+.connection-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border: 1px solid #dddddd;
+    font-size: 12px;
 }
 
 .connection-table th, .connection-table td {
-    padding: 5px;
+  padding: 3px;
+  xoverflow: hidden;
+  border: 1px solid #dddddd;
+}
+
+.connection-table td {
+  xwhite-space: nowrap;
+  text-overflow: ellipsis;  /* 5. Optional: Display "..." for truncated text */
+  font-family: monospace;
+}
+
+.connection-table th:nth-child(1),
+.connection-table td:nth-child(1) {
+  width: 60px;
+}
+
+.connection-table th:nth-child(2),
+.connection-table td:nth-child(2) {
+  width: 60px;
+}
+
+.connection-table th:nth-child(3),
+.connection-table td:nth-child(3) {
+  width: 150px;
+}
+
+/* Nothing specified for column 4, floats to fill width */
+
+.connection-table th:nth-child(5),
+.connection-table td:nth-child(5) {
+  width: 50px;
+  text-align: center;    
 }
 
 .connection-table th {
     background-color: #444444;
 }
 
-.talker {
-    color: greenyellow;
+.connection-active {
+    background-color: rgb(1, 58, 1);
 }
 
+.connection-node {
+    margin: 2px;
+}
+
+.connection-node-active {
+    color: greenyellow;
+    font-weight: bold;
+}
         </style>
     </head>
     <body>
@@ -118,34 +162,33 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
         </div>
         <div class="content-row" role="tabpanel">
             <form id="status-form">
-                <input class="green-button" name="fav1" type="submit" value="ASL Parrot"/>
-                <input class="green-button" name="fav0" type="submit" value="TX Parrot"/>
-                <input class="green-button" name="fav2" type="submit" value="East Cost Reflector"/>
+                <input class="green-button" type="submit" value="ASL Parrot" data-user-info='{ "action": "call", "node": "61057" }'/>
+                <input class="green-button" type="submit" value="TX Parrot"  data-user-info='{ "action": "call", "node": "55553" }'/>
                 <br/>
                 <br/>
                 <input id="node" name="node" type="text" placeholder="Node Number"/>
-                <input class="green-button" id="connect-button" name="call" type="submit" value="Connect"/>
-                <input class="red-button" id="drop-button" name="drop" type="submit" value="Disconnect"/>
+                <input class="green-button" id="connect-button" type="submit" value="Connect" data-user-info='{ "action": "call", "node": "_ENTRY" }'/>
                 <br/>
                 <br/>
-                <input class="red-button" id="disconnect-button" name="dropall" type="submit" value="Disconnect All"/>
+                <input class="red-button" id="disconnect-button" type="submit" value="Disconnect All"data-user-info='{ "action": "dropall" }'/>
                 <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
                 <p>Connections:</p>
                 <table class="connection-table">
                     <thead>
-                        <th>Node</th>
+                        <th>Local Node</th>
                         <th>Remote Node</th>
-                        <th>Talker</th>
+                        <th>Last Talker</th>
                         <th>Connections</th>
+                        <th></th>
                     </thead>
                     <tbody id="connection-table-body">
                     </tbody>
                 </table>
                 <br/>
-                <input class="grey-button" id="ptt-button" name="ptt" type="submit" value="PTT"/>
+                <input class="grey-button" id="ptt-button" type="submit" value="PTT" data-user-info='{ "action": "ptt" }'/>
                 <br/>
                 <br/>
-                <input class="grey-button" id="capture-button" name="capture" type="submit" value="Capture"/>
+                <input class="grey-button" id="capture-button" type="submit" value="Capture" data-user-info='{ "action": "capture" }'/>
                 <br/>
                 <br/>
                 <br/>
@@ -155,28 +198,28 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                     <div>
                         <table>
                             <tr>
-                                <td><input class="grey-button dtmf-button" id="dtmf1-button" name="dtmf1" type="submit" value="1"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf2-button" name="dtmf2" type="submit" value="2"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf3-button" name="dtmf3" type="submit" value="3"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmfA-button" name="dtmfA" type="submit" value="A"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf1-button" type="submit" value="1" data-user-info='{ "action": "dtmf", "symbol": "1" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf2-button" type="submit" value="2" data-user-info='{ "action": "dtmf", "symbol": "2" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf3-button" type="submit" value="3" data-user-info='{ "action": "dtmf", "symbol": "3" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfA-button" type="submit" value="A" data-user-info='{ "action": "dtmf", "symbol": "A" }'/></td>
                             </tr>
                             <tr>
-                                <td><input class="grey-button dtmf-button" id="dtmf4-button" name="dtmf4" type="submit" value="4"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf5-button" name="dtmf5" type="submit" value="5"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf6-button" name="dtmf6" type="submit" value="6"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmfB-button" name="dtmfB" type="submit" value="B"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf4-button" type="submit" value="4" data-user-info='{ "action": "dtmf", "symbol": "4" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf5-button" type="submit" value="5" data-user-info='{ "action": "dtmf", "symbol": "5" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf6-button" type="submit" value="6" data-user-info='{ "action": "dtmf", "symbol": "6" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfB-button" type="submit" value="B" data-user-info='{ "action": "dtmf", "symbol": "B" }'/></td>
                             </tr>
                             <tr>
-                                <td><input class="grey-button dtmf-button" id="dtmf7-button" name="dtmf7" type="submit" value="7"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf8-button" name="dtmf8" type="submit" value="8"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf9-button" name="dtmf9" type="submit" value="9"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmfc-button" name="dtmfC" type="submit" value="C"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf7-button" type="submit" value="7" data-user-info='{ "action": "dtmf", "symbol": "7" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf8-button" type="submit" value="8" data-user-info='{ "action": "dtmf", "symbol": "8" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf9-button" type="submit" value="9" data-user-info='{ "action": "dtmf", "symbol": "9" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfc-button" type="submit" value="C" data-user-info='{ "action": "dtmf", "symbol": "C" }'/></td>
                             </tr>
                             <tr>
-                                <td><input class="grey-button dtmf-button" id="dtmfstar-button" name="dtmf*" type="submit" value="*"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmf0-button" name="dtmf0" type="submit" value="0"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmfpound-button" name="dtmf#" type="submit" value="#"/></td>
-                                <td><input class="grey-button dtmf-button" id="dtmfD-button" name="dtmfD" type="submit" value="D"/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfstar-button"  type="submit" value="*" data-user-info='{ "action": "dtmf", "symbol": "*" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmf0-button"     type="submit" value="0" data-user-info='{ "action": "dtmf", "symbol": "0" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfpound-button" type="submit" value="#" data-user-info='{ "action": "dtmf", "symbol": "#" }'/></td>
+                                <td><input class="grey-button dtmf-button" id="dtmfD-button"     type="submit" value="D" data-user-info='{ "action": "dtmf", "symbol": "D" }'/></td>
                             </tr>
                         </table>
                     </div>
@@ -347,12 +390,13 @@ async function status_update() {
 
         const data = await response.json();
 
-        setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
-        setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
-        setAudioLevel("net-rx-meter", data["net-rx-meter"]);
-        setAudioLevel("net-tx-meter", data["net-tx-meter"]);
+        //setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
+        //setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
+        //setAudioLevel("net-rx-meter", data["net-rx-meter"]);
+        //setAudioLevel("net-tx-meter", data["net-tx-meter"]);
         
         // #### CLEAN UP
+        /*
         if (data["cos"]) {
             document.getElementById("cos-active").hidden = false
             document.getElementById("cos-inactive").hidden = true
@@ -360,6 +404,7 @@ async function status_update() {
             document.getElementById("cos-active").hidden = true
             document.getElementById("cos-inactive").hidden = false
         }
+        */
         if (data["ptt"]) {
             document.getElementById("ptt-button").classList.add("selected")
         } else {
@@ -368,80 +413,107 @@ async function status_update() {
 
         tbody = document.getElementById("connection-table-body")
         tbody.replaceChildren();
-        for (c of data["connections"]) {
-
-            var tr = document.createElement('tr');
-            var td0 = document.createElement('td');
-            var td1 = document.createElement('td');
-            var td2 = document.createElement('td');
-            var td3 = document.createElement('td');
-
-            tr.appendChild(td0);
-            tr.appendChild(td1);
-            tr.appendChild(td2);
-            tr.appendChild(td3);
-            
-            var a0 = document.createElement('a');
-            a0.innerHTML = c["localNode"];
-            a0.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["localNode"]);
-            td0.appendChild(a0);
-
-            var a1 = document.createElement('a');
-            a1.innerHTML = c["remoteNode"];
-            a1.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["remoteNode"]);
-            td1.appendChild(a1);
-
-            var a2 = document.createElement('a');
-            a2.className = "talker"
-            a2.setAttribute("href", "https://www.qrz.com");
-            td2.appendChild(a2);
-
-            var sp2 = document.createElement('span');
-            sp2.className = "talker"
-            td2.appendChild(sp2);
-
-            var first = true;
-            for (c1 of c["connections"]) {
-                if (!first) {
-                    var s = document.createElement("span");
-                    s.innerHTML = "&nbsp;"
-                    td3.appendChild(s);
-                }
-                var s = document.createElement("a");
-                s.innerHTML = c1;
-                s.setAttribute("href", "https://stats.allstarlink.org/stats/" + c1);
-                td3.appendChild(s);
-                first = false;
-            }
-            tbody.appendChild(tr);
-        }
+        console.log(data)
+        if ("calls" in data)
+            for (c of data["calls"]) 
+                tbody.appendChild(make_connection_row(c));
     }
 }
 
-function status_save(buttonName) {
+// Creates a row that looks like this:
+//
+// <tr>
+//   <td>
+//     <span></span>
+//   </td
+//   <td>
+//     <a></a>
+//   </td
+// </tr>
+
+function make_connection_row(conn) {
+
+    var tr = document.createElement('tr');
+    if (conn["rxActive"]) 
+        tr.classList.add("connection-active");
+    var td0 = document.createElement('td');
+    var td1 = document.createElement('td');
+    var td2 = document.createElement('td');
+    var td3 = document.createElement('td');
+    var td4 = document.createElement('td');
+
+    tr.appendChild(td0);
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    tr.appendChild(td3);
+    tr.appendChild(td4);
+
+    var sp0 = document.createElement('span');
+    sp0.innerHTML = c["localNode"];
+    td0.appendChild(sp0);
+
+    var a1 = document.createElement('a');
+    a1.innerHTML = c["remoteNode"];
+    a1.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["remoteNode"]);
+    td1.appendChild(a1);
+
+    // The first token in the talker string gets treated like a callsign
+    var talkerid = c["talkerid"].trim()
+    if (talkerid.length > 0) {
+        var sp2 = document.createElement('span');
+        sp2.innerHTML = talkerid;
+        td2.appendChild(sp2);
+    }
+
+    for (c1 of c["connections"]) {
+        var a = document.createElement("a");
+        a.classList.add("connection-node");
+        if (c1["active"]) 
+            a.classList.add("connection-node-active");
+        a.innerHTML = c1["node"];
+        a.setAttribute("href", "https://stats.allstarlink.org/stats/" + c1["node"]);
+        td3.appendChild(a);
+    }
+
+    // Disconnect button
+    b = document.createElement("input")
+    b.classList.add("red-button")
+    b.type = "submit"
+    b.value = "Disc"
+    // Attach the command that will be send on press
+    b.setAttribute('data-user-info', JSON.stringify({
+        "action": "dropcall",
+        "lineId": conn["lineId"],
+        "callId": conn["callId"]
+    }));
+    td4.appendChild(b)
+
+    return tr;
+}
+
+// The same handler is put on all of the submit buttons on the screen.
+// Everything is driven by the name of the button that was pressed.
+function status_pressed(button) {
+
     const form = document.getElementById('status-form');
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
 
-    if (buttonName == "fav0") {
-        buttonName = "call"
-        formObject["node"] = "55553"
-    } else if (buttonName == "fav1") {
-        buttonName = "call"
-        formObject["node"] = "61057"
-    } else if (buttonName == "fav2") {
-        buttonName = "call"
-        formObject["node"] = "27339"
-    }
-
-    formObject["button"] = buttonName;
-    const jsonString = JSON.stringify(formObject, null, 2);
-    fetch('/status-save', {
+    // Take a copy of the event object off the button
+    console.log(button.getAttribute("data-user-info"));
+    msg = JSON.parse(button.getAttribute("data-user-info"));
+    console.log(msg)
+    // Look for the magic string _ENTRY in the command message that indicates
+    // that we should read from ehe input box.
+    if ("node" in msg && msg["node"] == "_ENTRY")
+        msg["node"] = formObject["node"]
+    // Post down
+    fetch('/status-pressed', {
         method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: jsonString,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(msg, null, 2)
         }
     );
 }
@@ -457,16 +529,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fast timer to get live updates from the server
     setInterval(async () => {
         status_update();
-    }, 250);
+    }, 10000);
 
     // Handler for push buttons
     document.getElementById('status-form').addEventListener('submit', function (event) {
         event.preventDefault();
-        status_save(event.submitter.name);
-        // Clear the entry 
+        status_pressed(event.submitter);
+        // Clear the entry field
         document.getElementById('node').value = ""
         status_update();
     });   
+
+    status_update();
 });
     </script>
 </html>

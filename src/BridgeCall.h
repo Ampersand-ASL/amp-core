@@ -19,6 +19,9 @@
 #include <queue>
 #include <string>
 
+// 3rd party
+#include <nlohmann/json.hpp>
+
 #include "kc1fsz-tools/threadsafequeue.h"
 
 #include "PCM16Frame.h"
@@ -28,6 +31,8 @@
 #include "BridgeIn.h"
 #include "BridgeOut.h"
 #include "Poker.h"
+
+using json = nlohmann::json;
 
 namespace kc1fsz {
 
@@ -95,13 +100,13 @@ public:
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
         bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-        const char* remoteNodeNumber);
+        const char* localNodeNumber, const char* remoteNodeNumber);
 
-    bool isActive() const { 
-        return _active; 
-    }
+    bool isActive() const { return _active; }
 
     bool isNormal() const { return _mode == Mode::NORMAL; }
+
+    uint64_t getLastAudioRxMs() const { return _bridgeIn.getLastAudioMs(); }
 
     bool equals(const BridgeCall& other) const { 
         return _active && _lineId == other._lineId && _callId == other._callId; 
@@ -158,6 +163,17 @@ public:
      */
     void produceOutput(uint32_t tickMs);
 
+    /**
+     * @returns True if the internal status document (JSON) has been 
+     * updated and a newer one should be distributed.
+     */
+    bool isStatusDocUpdated(uint64_t lastUpdateMs) const;
+
+    /**
+     * @returns The latest live status document in JSON format.
+     */
+    json getStatusDoc() const;
+
     // ----- MessageConsumer -------------------------------------------------
 
     void consume(const Message& frame);
@@ -174,8 +190,16 @@ private:
     Log* _traceLog;
     Clock* _clock;
     MessageConsumer* _sink;
+
+    bool _active = false;
+    unsigned _lineId = 0;
+    unsigned _callId = 0;
+    std::string _localNodeNumber;
+    std::string _remoteNodeNumber;
+
     unsigned _bridgeLineId = 0;
     unsigned _bridgeCallId = 0;
+
     unsigned _ttsLineId = 0;
     unsigned _netTestLineId = 0;
     std::string _netTestBindAddr;
@@ -184,11 +208,7 @@ private:
     bool _sourceAddrValidated = false;
     Mode _mode = Mode::NORMAL;
 
-    bool _active = false;
-    unsigned _lineId = 0;
-    unsigned _callId = 0;
     uint32_t _startMs = 0;
-    std::string _remoteNodeNumber;
 
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
@@ -198,6 +218,7 @@ private:
 
     std::string _dtmfAccumulator;
     uint32_t _lastDtmfRxMs = 0;
+    std::string _linkReport;
 
     void _processTTSAudio(const Message& msg);
 

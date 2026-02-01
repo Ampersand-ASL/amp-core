@@ -98,55 +98,14 @@ WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
     _configFileName(configFileName),
     _version(version),
     _traceLog(traceLog) {
-
-#ifdef _WIN32
-    _beginthread(_uiThread, 0, (void*)this);
-#else
-    // Get the service thread running
-    pthread_t new_thread_id;
-    if (pthread_create(&new_thread_id, NULL, _uiThreadPosix, (void*)this)!= 0) {
-        perror("Error creating thread");
-    }
-#endif
 }
 
 void WebUi::consume(const Message& msg) {   
-    // Some selected message types will be copied and sent over to the UI 
-    // thread for processing
-    if (msg.isSignal(Message::COS_ON)) {
-        _cos.store(true);
-    } else if (msg.isSignal(Message::COS_OFF)) {
-        _cos.store(false);
-    } else if (msg.isSignal(Message::SignalType::CALL_START)) {
-        assert(msg.size() == sizeof(PayloadCallStart));
-        const PayloadCallStart* payload = (const PayloadCallStart*)msg.body();
-        _status.manipulateUnderLock([msg, payload](std::vector<Peer>& v) {
-            Peer peer;
-            peer.lineId = msg.getSourceBusId();
-            peer.callId = msg.getSourceCallId();
-            peer.localNumber = payload->localNumber;
-            peer.remoteNumber = payload->remoteNumber;
-            // #### TODO: NEED TO MAKE THIS 64-bit!
-            peer.startMs = payload->startMs;
-            v.push_back(peer);
-        });
-    } else if (msg.isSignal(Message::SignalType::CALL_END)) {
-        _status.manipulateUnderLock([msg](std::vector<Peer>& v) {
-            v.erase(
-                std::remove_if(v.begin(), v.end(),
-                    [msg](Peer& p) { 
-                        return p.lineId == msg.getSourceBusId() &&
-                            p.callId == msg.getSourceCallId(); 
-                    }
-                ), 
-                v.end());                 
-        });
-    }
-    else if (msg.isSignal(Message::SignalType::CALL_LEVELS)) {
+    if (msg.isSignal(Message::SignalType::CALL_LEVELS)) {
         assert(msg.size() == sizeof(PayloadCallLevels));
-        _status.manipulateUnderLock([msg](std::vector<Peer>& v) {
+        _levels.manipulateUnderLock([msg](std::vector<CallLevels>& v) {
             const PayloadCallLevels* payload = (const PayloadCallLevels*)msg.body();
-            for (Peer& p : v) 
+            for (CallLevels& p : v) 
                 if (p.lineId == msg.getSourceBusId() &&
                     p.callId == msg.getSourceCallId()) {
                     p.rx0Db = payload->rx0Db;
@@ -158,24 +117,11 @@ void WebUi::consume(const Message& msg) {
     }
 }
 
-bool WebUi::run2() {
-    Message msg;
-    if (_outQueue.try_pop(msg)) {
-        _consumer.consume(msg);
-        return true;
-    }
-    else return false;
-}
-
-void WebUi::_uiThread(void* o) {
-    ((WebUi*)o)->_thread();
-}
-
-void WebUi::_thread() {
+void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
     amp::setThreadName("amp-ui");
     
-    _log.info("ui_thread start (HTTP port is %d)", _listenPort);
+    ui->_log.info("ui_thread start (HTTP port is %d)", ui->_listenPort);
 
     // HTTP
     httplib::Server svr;
@@ -183,81 +129,60 @@ void WebUi::_thread() {
     // ------ Common -----------------------------------------------------------
 
     svr.Get("/main.css", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
-            "text/css");
-        //res.set_file_content("../amp-core/www/main.css");
+        //res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
+        //    "text/css");
+        res.set_file_content("../amp-core/www/main.css");
     });
 
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-            "text/html");
-        //res.set_file_content("../amp-core/www/index.html");
+        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/index.html");
     });
-    svr.Get("/status", [this](const httplib::Request &, httplib::Response &res) {
 
+    svr.Get("/levels", [](const httplib::Request &, httplib::Response &res) {
         json o;
         o["usb-rx-meter"] = -99;
         o["usb-tx-meter"] = -99;
         o["net-rx-meter"] = -99;
         o["net-tx-meter"] = -99;
+        res.set_content(o.dump(), "application/json");
+    });
 
-        vector<Peer> peerList = _status.getCopy();
-        // Find the radio and pull out some stats
-        for (auto peer : peerList) {
-            if (peer.remoteNumber == "Radio") {
-                o["usb-rx-meter"] = peer.rx0Db;
-                o["usb-tx-meter"] = peer.tx0Db;
-                o["net-rx-meter"] = peer.rx1Db;
-                o["net-tx-meter"] = peer.tx1Db;
-            }
-        }
+    svr.Get("/status", [ui](const httplib::Request &, httplib::Response &res) {
 
-        o["cos"] = _cos.load();
-        o["ptt"] = _ptt;
-
-        // Build the list of nodes that we are connected to 
-        auto a = json::array();
-        for (Peer peer : peerList) {
-            if (peer.remoteNumber == "Radio")
-                continue;
-            json o2;
-            o2["localNode"] = peer.localNumber;
-            o2["remoteNode"] = peer.remoteNumber;
-            auto b = json::array();
-            // #### TODO: NEED TO ADD CONNECTIONS
-            o2["connections"] = b;
-            a.push_back(o2);
-        }
-        o["connections"] = a;
+        // Get a copy of the latest status and add a few things
+        json o = ui->_status.getCopy();
+        o["ptt"] = ui->_ptt;
 
         res.set_content(o.dump(), "application/json");
     });
-    svr.Post("/status-save", [this](const httplib::Request &, httplib::Response &res, 
+    svr.Post("/status-pressed", [ui, bus](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
+
         // Pull out the JSON content from the post body
         std::string body;
         content_reader([&body](const char *data, size_t data_length) {
             body.append(data, data_length);
             return true;
         });
-
         json data = json::parse(body);
 
-        if (data.contains("button")) {
-            if (data["button"] == "ptt") {
-                _ptt = !_ptt;
+        if (data.contains("action")) {
+            if (data["action"] == "ptt") {
+                ui->_ptt = !ui->_ptt;
                 Message msg;
-                if (_ptt) 
+                if (ui->_ptt) 
                     msg = Message::signal(Message::SignalType::COS_ON);
                 else 
                     msg = Message::signal(Message::SignalType::COS_OFF);
-                msg.setDest(_radioDestLineId, DEST_CALL_ID);
-                _outQueue.push(msg);
+                msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
+                bus->consume(msg);
             } 
-            else if (data["button"] == "call") {
-                json cfgDoc = _config.getCopy();
+            else if (data["action"] == "call") {
+                json cfgDoc = ui->_config.getCopy();
                 string localNode;
                 if (cfgDoc.contains("node"))
                     localNode = cfgDoc["node"];
@@ -270,44 +195,37 @@ void WebUi::_thread() {
                     strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
                     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                    msg.setDest(_networkDestLineId, DEST_CALL_ID);
-                    _outQueue.push(msg);
+                    msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                    bus->consume(msg);
                 } else {
                     // ### TODO: ERROR MESSAGE
                 }
-            } else if (data["button"].get<std::string>().starts_with("dtmf")) {
-                string symbol = data["button"].get<std::string>().substr(4);
+            } else if (data["action"] == "dtmf") {
+                string symbol = data["symbol"].get<std::string>();
                 if (symbol.size() >= 1) {
                     PayloadDtmfGen payload;
                     payload.symbol = symbol[0];
                     Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                    msg.setDest(_networkDestLineId, DEST_CALL_ID);
-                    _outQueue.push(msg);
+                    msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                    bus->consume(msg);
                 }
             }
-            else if (data["button"] == "drop") {
-                string localNode = "*";
-                string targetNode = data["node"];
-                if (!targetNode.empty()) {
-                    // NOTE: Drop uses the same payload as call
-                    PayloadCall payload;
-                    strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
-                    strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
-                    Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_NODE, 
-                        sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                    msg.setDest(_networkDestLineId, DEST_CALL_ID);
-                    _outQueue.push(msg);
-                }
+            else if (data["action"] == "dropcall") {
+                Message msg = Message::signal(Message::SignalType::DROP_CALL);
+                int lineId = data["lineId"].get<int>();
+                int callId = data["callId"].get<int>();
+                msg.setDest(lineId, callId);
+                bus->consume(msg);
             }
-            else if (data["button"] == "dropall") {
-                Message msg = Message::signal(Message::SignalType::DROP_ALL_NODES);
-                msg.setDest(_networkDestLineId, DEST_CALL_ID);
-                _outQueue.push(msg);
+            else if (data["action"] == "dropall") {
+                Message msg = Message::signal(Message::SignalType::DROP_ALL_CALLS);
+                msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                bus->consume(msg);
             }
-            else if (data["button"] == "capture") {
+            else if (data["action"] == "capture") {
                 ofstream trace("./capture.txt");
-                _traceLog.visitAll([&trace](const string& str) {
+                ui->_traceLog.visitAll([&trace](const string& str) {
                     trace << str << endl;
                 });
             }
@@ -321,22 +239,22 @@ void WebUi::_thread() {
             "text/html");
         //res.set_file_content("../amp-core/www/config.html");
     });
-    svr.Get("/config-load", [this](const httplib::Request &, httplib::Response &res) {
-        json j = _config.getCopy();
+    svr.Get("/config-load", [ui](const httplib::Request &, httplib::Response &res) {
+        json j = ui->_config.getCopy();
          res.set_content(j.dump(), "application/json");
     });
-    svr.Post("/config-save", [this](const httplib::Request &, httplib::Response &res, 
+    svr.Post("/config-save", [ui](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
         std::string body;
         content_reader([&](const char *data, size_t data_length) {
             body.append(data, data_length);
             return true;
         });
-        _log.info("Saving configuration");
+        ui->_log.info("Saving configuration");
         cout << body << endl;
         json jBody = json::parse(body);
-        jBody["lastUpdateMs"] = _clock.timeUs() / 1000;
-        ofstream cf(_configFileName);
+        jBody["lastUpdateMs"] = ui->_clock.timeUs() / 1000;
+        ofstream cf(ui->_configFileName);
         cf << jBody.dump(4) << endl;
     });
     svr.Get("/config-select-options", [](const httplib::Request& req, httplib::Response &res) {
@@ -474,11 +392,10 @@ void WebUi::_thread() {
         res.set_content(a.dump(), "application/json");
     });
 
-
     // OK to use this const
-    svr.listen("0.0.0.0", _listenPort);
+    svr.listen("0.0.0.0", ui->_listenPort);
 
-    _log.info("ui_thread end");
+    ui->_log.info("ui_thread end");
 }
 
     }

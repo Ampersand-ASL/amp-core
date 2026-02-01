@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <string> 
 #include <random>
+#include <sstream>
 
 #include "Message.h"
 #include "BridgeCall.h"
@@ -132,13 +133,14 @@ void BridgeCall::reset() {
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
     bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-    const char* remoteNodeNumber) {
+    const char* localNodeNumber, const char* remoteNodeNumber) {
 
     _active = true;
     _lineId = lineId;  
     _callId = callId; 
     _startMs = startMs;
     _lastAudioRxMs = 0;
+    _localNodeNumber = localNodeNumber;
     _remoteNodeNumber = remoteNodeNumber;
 
     _bridgeIn.setCodec(codec);
@@ -160,10 +162,46 @@ bool BridgeCall::isRecentCommander() const {
     return !_clock->isPast(_lastDtmfRxMs + COMMANDER_TIMEOUT_MS);
 }
 
+bool BridgeCall::isStatusDocUpdated(uint64_t lastUpdateMs) const {
+    return true;
+}
+
+json BridgeCall::getStatusDoc() const {
+
+    json o2;
+
+    o2["lineId"] = _lineId;
+    o2["callId"] = _callId;
+    o2["rxActive"] = true;
+    o2["txActive"] = true;
+    o2["localNode"] = _localNodeNumber;
+    o2["remoteNode"] = _remoteNodeNumber;
+    o2["talkerid"] = "KC1FSZ Bruce!";
+
+    auto b = json::array();
+    // Link list is comma-delimited
+    if (!_linkReport.empty()) {
+        std::istringstream tokenStream(_linkReport);
+        string token;
+        while (std::getline(tokenStream, token, ',')) {
+            json o3;
+            o3["node"] = token;
+            o3["active"] = false;
+            b.push_back(o3);
+        }
+    }
+    o2["connections"] = b;
+
+    return o2;
+}
+
 void BridgeCall::consume(const Message& frame) {
     if (frame.getType() == Message::Type::TTS_AUDIO ||
         frame.getType() == Message::Type::TTS_END) {
         _processTTSAudio(frame);
+    } 
+    else if (frame.isSignal(Message::SignalType::LINK_REPORT)) {
+        _linkReport = string((const char*)frame.body(), frame.size());
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
 
@@ -327,7 +365,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         _log->info("Request to disconnect all");
 
         // Create a signal and publish it to the LineIAX2 for processing
-        Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_ALL_NODES_OUTBOUND, 
+        Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_ALL_CALLS_OUTBOUND, 
             0, 0, 0, 0);
         msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
         _bridge->_bus.consume(msg);

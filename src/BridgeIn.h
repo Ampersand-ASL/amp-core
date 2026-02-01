@@ -84,6 +84,7 @@ public:
         _bypassJitterBuffer = false;
         _bypassedFrames = std::queue<Message>();
         _startTime = 0;
+        _lastAudioMs = 0;
         _jitBuf.reset();
         _lastUnkeyMs = 0;
         _transcoder0a.reset(); 
@@ -107,6 +108,11 @@ public:
      * @returns Average power across trailing second in dBFS
      */
     float getAvgPower() const;
+
+    /**
+     * @returns The last time any audio was processed
+     */
+    uint64_t getLastAudioMs() const { return _lastAudioMs; }
 
     // ----- Runnable2 --------------------------------------------------------
 
@@ -132,6 +138,9 @@ private:
     CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
     // In ms
     uint32_t _startTime = 0;
+    // Last time audio was processed 
+    uint64_t _lastAudioMs = 0;
+
     bool _bypassJitterBuffer = false;
 
     // This is the Jitter Buffer used to address timing/sequencing
