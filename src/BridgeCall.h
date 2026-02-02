@@ -100,7 +100,7 @@ public:
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
         bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-        const char* remoteNodeNumber);
+        const char* remoteNodeNumber, bool permanent);
 
     bool isActive() const { return _active; }
 
@@ -170,9 +170,21 @@ public:
     uint64_t getStatusDocStampMs() const;
 
     /**
-     * @returns The latest live status document in JSON format.
+     * @returns The latest live status document in JSON format. Generally
+     * used for UI display.
      */
     json getStatusDoc() const;
+
+    /**
+     * @returns True if this call has audio levels to contribute.
+     */
+    bool hasAudioLevels() const;
+
+    /**
+     * @returns The latest audio levels in JSON format. Generally used for 
+     * UI display.
+     */
+    json getLevelsDoc() const;
 
     // ----- MessageConsumer -------------------------------------------------
 
@@ -209,6 +221,7 @@ private:
     bool _echo = false;
     bool _sourceAddrValidated = false;
     Mode _mode = Mode::NORMAL;
+    bool _permanent = false;
 
     uint32_t _startMs = 0;
 
@@ -237,6 +250,12 @@ private:
     std::string _keyedNode;
     // The last time the keyed node changed
     uint64_t _keyedNodeChangeMs;
+
+    // Audio levels
+    int _rx0Db = 0;
+    int _rx1Db = 0;
+    int _tx0Db = 0;
+    int _tx1Db = 0;
 
     void _processTTSAudio(const Message& msg);
 

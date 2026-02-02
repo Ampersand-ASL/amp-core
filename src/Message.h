@@ -138,6 +138,7 @@ struct PayloadCallStart {
     bool echo = false;
     bool originated = false;
     bool sourceAddrValidated = false;
+    bool permanent = false;
 };
 
 struct PayloadCallEnd {

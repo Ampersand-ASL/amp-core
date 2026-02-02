@@ -49,6 +49,7 @@ public:
 
     void setConfig(const json& j) { _config.set(j); }
     void setBridgeStatus(const json& j) { _status.set(j); }
+    void setBridgeLevels(const json& j) { _levels.set(j); }
 
     /**
      * Start this on a background thread.
@@ -59,22 +60,7 @@ public:
 
     void consume(const Message& msg);
 
-    // ----- Runnable2 ---------------------------------------------------
-    
-    virtual bool run2() { return false; }
-
 private:
-
-    struct CallLevels { 
-        unsigned lineId = 0;
-        unsigned callId = 0;
-        int rx0Db = 0;
-        int rx1Db = 0;
-        int tx0Db = 0;
-        int tx1Db = 0;
-    };
-
-    copyableatomic<std::vector<CallLevels>> _levels;
 
     Log& _log;
     Clock& _clock;
@@ -90,6 +76,7 @@ private:
 
     copyableatomic<json> _config;
     copyableatomic<json> _status;
+    copyableatomic<json> _levels;
 };
 
     }

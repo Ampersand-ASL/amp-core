@@ -92,6 +92,12 @@ public:
      */
     json getStatusDoc() const;
 
+    /**
+     * @returns The latest audio levels in JSON format. Generally used for 
+     * UI display.
+     */
+    json getLevelsDoc() const;
+
     // ----- MessageConsumer --------------------------------------------------
 
     void consume(const Message& frame);
@@ -155,7 +161,6 @@ public:
         // which ever comes first.
         if (stampMs > _lastUpdateMs || nowMs > (_lastUpdateMs + _maxIntervalMs)) {
             _lastUpdateMs = max(stampMs, nowMs);
-            _log.info("Status Update");
             _cb(_bridge.getStatusDoc());
         }
     }

@@ -153,6 +153,23 @@ json Bridge::getStatusDoc() const {
     return root;
 }
 
+json Bridge::getLevelsDoc() const {
+    json levels;
+    // Find the first call that has audio levels to provide.
+    // TODO: The logic here needs work.
+    _calls.visitIf(
+        // Visitor
+        [&levels](const BridgeCall& call) { 
+            levels = call.getLevelsDoc();
+            // Stop on the first hit
+            return false;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.hasAudioLevels(); }
+    );
+    return levels;
+}
+
 void Bridge::consume(const Message& msg) {
     if (msg.isSignal(Message::SignalType::CALL_START)) {        
 
@@ -196,7 +213,7 @@ void Bridge::consume(const Message& msg) {
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
                 payload.sourceAddrValidated, _defaultMode, 
-                payload.remoteNumber);
+                payload.remoteNumber, payload.permanent);
 
             // Play the greeting to the new caller, but not for calls that 
             // we originated in the first place
@@ -282,13 +299,10 @@ void Bridge::consume(const Message& msg) {
              msg.getType() == Message::TTS_AUDIO || 
              msg.getType() == Message::TTS_END || 
              msg.getType() == Message::NET_DIAG_1_RES || 
-             (msg.getType() == Message::SIGNAL && 
-              msg.getFormat() == Message::SignalType::RADIO_UNKEY) ||
-             (msg.getType() == Message::SIGNAL && 
-              msg.getFormat() == Message::SignalType::LINK_REPORT) ||
-             (msg.getType() == Message::SIGNAL && 
-              msg.getFormat() == Message::SignalType::DTMF_PRESS)) {
-
+             msg.isSignal(Message::SignalType::CALL_LEVELS) ||
+             msg.isSignal(Message::SignalType::RADIO_UNKEY) ||
+             msg.isSignal(Message::SignalType::LINK_REPORT) ||
+             msg.isSignal(Message::SignalType::DTMF_PRESS)) {
         _calls.visitIf(
             // Visitor
             [msg](BridgeCall& call) { 

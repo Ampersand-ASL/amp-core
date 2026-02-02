@@ -103,17 +103,13 @@ WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
 void WebUi::consume(const Message& msg) {   
     if (msg.isSignal(Message::SignalType::CALL_LEVELS)) {
         assert(msg.size() == sizeof(PayloadCallLevels));
-        _levels.manipulateUnderLock([msg](std::vector<CallLevels>& v) {
-            const PayloadCallLevels* payload = (const PayloadCallLevels*)msg.body();
-            for (CallLevels& p : v) 
-                if (p.lineId == msg.getSourceBusId() &&
-                    p.callId == msg.getSourceCallId()) {
-                    p.rx0Db = payload->rx0Db;
-                    p.tx0Db = payload->tx0Db;
-                    p.rx1Db = payload->rx1Db;
-                    p.tx1Db = payload->tx1Db;
-                }
-        });
+        const PayloadCallLevels* payload = (const PayloadCallLevels*)msg.body();
+        json o;
+        o["usb-rx-meter"] = payload->rx0Db;
+        o["usb-tx-meter"] = payload->tx0Db;
+        o["net-rx-meter"] = payload->rx1Db;
+        o["net-tx-meter"] = payload->tx1Db;
+        _levels.set(o);
     }
 }
 
@@ -142,17 +138,12 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         res.set_file_content("../amp-core/www/index.html");
     });
 
-    svr.Get("/levels", [](const httplib::Request &, httplib::Response &res) {
-        json o;
-        o["usb-rx-meter"] = -99;
-        o["usb-tx-meter"] = -99;
-        o["net-rx-meter"] = -99;
-        o["net-tx-meter"] = -99;
-        res.set_content(o.dump(), "application/json");
+    svr.Get("/levels", [ui](const httplib::Request &, httplib::Response &res) {
+        // The levels document gets posted in periodically
+        res.set_content(ui->_levels.getCopy().dump(), "application/json");
     });
 
     svr.Get("/status", [ui](const httplib::Request &, httplib::Response &res) {
-
         // Get a copy of the latest status and add a few things
         json o = ui->_status.getCopy();
         o["ptt"] = ui->_ptt;
@@ -240,8 +231,8 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         //res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [ui](const httplib::Request &, httplib::Response &res) {
-        json j = ui->_config.getCopy();
-         res.set_content(j.dump(), "application/json");
+        // The config document gets posted in whenever it changes
+        res.set_content(ui->_config.getCopy().dump(), "application/json");
     });
     svr.Post("/config-save", [ui](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {

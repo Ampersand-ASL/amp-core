@@ -125,6 +125,7 @@ int LineSDRC::open(const char* serialDevice) {
     payload.localNumber[0] = 0;
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "sdrc-%d", _lineId);
     payload.originated = true;
+    payload.permanent = true;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_lineId, _callId);

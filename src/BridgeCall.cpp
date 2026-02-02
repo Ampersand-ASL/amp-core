@@ -109,6 +109,7 @@ void BridgeCall::reset() {
     _lastAudioRxMs = 0;
     _echo = false;
     _sourceAddrValidated = false;
+    _permanent = false;
     
     _bridgeIn.reset();
     _bridgeOut.reset();
@@ -137,11 +138,16 @@ void BridgeCall::reset() {
     _talkerIdChangeMs = 0;
     _keyedNode.clear();
     _keyedNodeChangeMs = 0;
+
+    _rx0Db = -99;
+    _tx0Db = -99;
+    _rx1Db = -99;
+    _tx1Db = -99;
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
     bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-    const char* remoteNodeNumber) {
+    const char* remoteNodeNumber, bool permanent) {
 
     _active = true;
     _lineId = lineId;  
@@ -159,14 +165,12 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _echo = echo;
     _sourceAddrValidated = sourceAddrValidated;
     _mode = initialMode;
+    _permanent = permanent;
 
     if (_mode == Mode::PARROT) {
         _parrotState = ParrotState::CONNECTED;
         _parrotStateStartMs = _clock->time();
     }
-
-    // #### TEMP
-    _talkerId = "KC1FSZ Bruce";
 }
 
 bool BridgeCall::isRecentCommander() const {
@@ -195,11 +199,11 @@ json BridgeCall::getStatusDoc() const {
     o2["lineId"] = _lineId;
     o2["callId"] = _callId;
     o2["remoteNode"] = _remoteNodeNumber;
+    o2["permanent"] = _permanent;
 
     // Dynamic
     bool active = !_clock->isPast(_bridgeIn.getLastAudioMs() + 5000);
     o2["rxActive"] = active;
-    _log->info("Node %s active %d", _remoteNodeNumber.c_str(), active);
     uint64_t sinceLastActiveMs = 0;
     if (_bridgeIn.getLastAudioMs() > 0) 
         sinceLastActiveMs = (_clock->timeUs() / 1000) - _bridgeIn.getLastAudioMs();
@@ -238,14 +242,34 @@ json BridgeCall::getStatusDoc() const {
     return o2;
 }
 
+bool BridgeCall::hasAudioLevels() const {
+    // At the moment, the radio is the hard-coded source of audio level
+    // information.
+    // #### TODO: Improve this logic
+    return _remoteNodeNumber.starts_with("radio");
+}
+
+json BridgeCall::getLevelsDoc() const {
+    json o;
+    o["usb-rx-meter"] = _rx0Db;
+    o["usb-tx-meter"] = _tx0Db;
+    o["net-rx-meter"] = _rx1Db;
+    o["net-tx-meter"] = _tx1Db;
+    return o;
+}
+
 void BridgeCall::consume(const Message& frame) {
     if (frame.getType() == Message::Type::TTS_AUDIO ||
         frame.getType() == Message::Type::TTS_END) {
         _processTTSAudio(frame);
     } 
     else if (frame.isSignal(Message::SignalType::LINK_REPORT)) {
-        _linkReport = string((const char*)frame.body(), frame.size());
-        _linkReportChangeMs = _clock->timeUs() / 1000;
+        string r((const char*)frame.body(), frame.size());
+        // Only update the report if it's different from last time
+        if (_linkReport != r) {
+            _linkReport = r;
+            _linkReportChangeMs = _clock->timeUs() / 1000;
+        }
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
 
@@ -286,6 +310,14 @@ void BridgeCall::consume(const Message& frame) {
             _netTestResult.code);
         _parrotState = ParrotState::READY_FOR_GREETING;
         _parrotStateStartMs = _clock->time();
+    }
+    else if (frame.isSignal(Message::SignalType::CALL_LEVELS)) {
+        assert(frame.size() == sizeof(PayloadCallLevels));
+        const PayloadCallLevels* payload = (const PayloadCallLevels*)frame.body();
+        _rx0Db = payload->rx0Db;
+        _tx0Db = payload->tx0Db;
+        _rx1Db = payload->rx1Db;
+        _tx1Db = payload->tx1Db;
     }
 }
 

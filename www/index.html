@@ -366,6 +366,17 @@ function setAudioLevel(meterClass, levelDb) {
     }
 }
 
+async function levels_update() {
+    const response = await fetch('levels');
+    if (response.ok) {
+        const data = await response.json();
+        setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
+        setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
+        setAudioLevel("net-rx-meter", data["net-rx-meter"]);
+        setAudioLevel("net-tx-meter", data["net-tx-meter"]);
+    }
+}
+
 async function status_update() {
     const response = await fetch('status');
     if (response.ok) {
@@ -445,17 +456,19 @@ function makeCallRow(conn) {
     td2.appendChild(cd);
 
     // Disconnect button
-    b = document.createElement("input")
-    b.classList.add("red-button")
-    b.type = "submit"
-    b.value = "Disc"
-    // Attach the command that will be send on press
-    b.setAttribute('data-user-info', JSON.stringify({
-        "action": "dropcall",
-        "lineId": conn["lineId"],
-        "callId": conn["callId"]
-    }));
-    td3.appendChild(b)
+    if (!conn["permanent"]) {
+        b = document.createElement("input")
+        b.classList.add("red-button")
+        b.type = "submit"
+        b.value = "Disc"
+        // Attach the command that will be send on press
+        b.setAttribute('data-user-info', JSON.stringify({
+            "action": "dropcall",
+            "lineId": conn["lineId"],
+            "callId": conn["callId"]
+        }));
+        td3.appendChild(b)
+    }
 
     return tr;
 }
@@ -497,6 +510,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fast timer to get live updates from the server
     setInterval(async () => {
         status_update();
+    }, 500);
+    setInterval(async () => {
+        levels_update();
     }, 500);
 
     // Handler for push buttons

@@ -206,8 +206,9 @@ void LineRadio::_open(bool echo) {
     payload.echo = echo;
     payload.startMs = _clock.time();
     payload.localNumber[0] = 0;
-    strcpy(payload.remoteNumber, "Radio");
+    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio-%d", 0);
     payload.originated = true;
+    payload.permanent = true;
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
@@ -216,8 +217,11 @@ void LineRadio::_open(bool echo) {
 }
 
 void LineRadio::_close() {
+    PayloadCallEnd payload;
+    payload.localNumber[0] = 0;
+    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio-%d", 0);
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
-        0, 0, 0, _clock.time());
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
