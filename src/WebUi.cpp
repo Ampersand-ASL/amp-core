@@ -23,7 +23,9 @@
 #include <iostream>
 #include <thread>
 #include <fstream>
+#include <sstream>
 
+// 3rd Party
 #include <nlohmann/json.hpp>
 
 #include "kc1fsz-tools/Log.h"
@@ -138,6 +140,27 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         res.set_file_content("../amp-core/www/index.html");
     });
 
+    svr.Get("/favorites", [ui](const httplib::Request &, httplib::Response &res) {
+        auto l = json::array();
+        // Parse
+        json cfg = ui->_config.getCopy();
+        if (cfg.contains("favorites")) {
+            string favorites = cfg["favorites"].get<std::string>();
+            // This is a comma-delimited list
+            std::istringstream tokenStream(favorites);
+            string token;
+            while (std::getline(tokenStream, token, ',')) {
+                trim(token);
+                if (token.empty())
+                    continue;
+                l.push_back(token);
+            }
+        }
+
+        // The levels document gets posted in periodically
+        res.set_content(l.dump(), "application/json");
+    });
+
     svr.Get("/levels", [ui](const httplib::Request &, httplib::Response &res) {
         // The levels document gets posted in periodically
         res.set_content(ui->_levels.getCopy().dump(), "application/json");
@@ -226,9 +249,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
-            "text/html");
-        //res.set_file_content("../amp-core/www/config.html");
+        //res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [ui](const httplib::Request &, httplib::Response &res) {
         // The config document gets posted in whenever it changes

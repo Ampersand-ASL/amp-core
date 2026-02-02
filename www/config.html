@@ -21,6 +21,11 @@
 .save-button {
     width: 100px;
 }
+
+#favorites {
+    resize: none;
+}
+
         </style>
     </head>
     <body>
@@ -47,6 +52,8 @@
                     <input type="text" id="password" name="password"/>
                     <label for="iaxPort">IAX Port:</label>
                     <input type="text" id="iaxPort" name="iaxPort"/>
+                    <label for="favorites">Favorites:</label>
+                    <textarea name="favorites" id="favorites" rows="4"></textarea>
                 </div>
                 <div class="form2">
                     <div>Radio 0:</div><div></div>
@@ -149,6 +156,8 @@
                     </select>                
                 -->
                 </div>
+                <div class="form2">
+                </div>
                 <span></span>
                 <input type="submit" value="Save" class="green-button save-button"/>
             </form>
@@ -239,6 +248,7 @@ async function configLoad() {
         loadUi("node", data, document)
         loadUi("password", data, document)
         loadUi("iaxPort", data, document)
+        loadUi("favorites", data, document)
 
         // ----- Radio 0 Section --------------------------------------------------
 
@@ -273,6 +283,7 @@ function configStore() {
     storeUi("node", formObject, fullConfig)
     storeUi("password", formObject, fullConfig)
     storeUi("iaxPort", formObject, fullConfig)
+    storeUi("favorites", formObject, fullConfig)
 
     // ----- Radio 0 Section --------------------------------------------------
 

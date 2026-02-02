@@ -1493,7 +1493,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //
         //  If no other nodes are connected, the list is empty and only L is sent.
         else if (textMessage[0] == 'L') {
-            _log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
+            //_log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
             Message msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT, 
                 // The initial "L " gets stripped here
                 strlen(textMessage) - 2, (const uint8_t*)textMessage + 2, 

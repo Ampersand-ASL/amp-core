@@ -68,6 +68,10 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     gap: 20px;
 }
 
+.favorite-button {
+    margin-right: 10px;
+}
+
 /* ----- Connection Table ------ */
 
 .connection-table {
@@ -123,7 +127,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     font-weight: bold;
 }
 
-.node-container {
+.wrap-container {
   display: flex;
   flex-wrap: wrap;
 }
@@ -146,9 +150,8 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
         </div>
         <div class="content-row" role="tabpanel">
             <form id="status-form">
-                <input class="green-button" type="submit" value="ASL Parrot" data-user-info='{ "action": "call", "node": "61057" }'/>
-                <input class="green-button" type="submit" value="TX Parrot"  data-user-info='{ "action": "call", "node": "55553" }'/>
-                <br/>
+                <div id="favorites-div" class="wrap-container">
+                </div>
                 <br/>
                 <input id="node" name="node" type="text" placeholder="Node Number"/>
                 <input class="green-button" id="connect-button" type="submit" value="Connect" data-user-info='{ "action": "call", "node": "_ENTRY" }'/>
@@ -366,6 +369,45 @@ function setAudioLevel(meterClass, levelDb) {
     }
 }
 
+// Favorites are in node[:label] format
+function parse_favorites(data) {
+    result = []
+    for (const f of data) {
+        tokens = f.split(":");
+        nodeNumber = tokens[0].trim();
+        label = nodeNumber;
+        if (tokens.length >= 2) {
+            label = tokens[1].trim() + " (" + nodeNumber + ")"
+        }
+        result.push({ "node": nodeNumber, "label": label })
+    }
+    return result
+}
+
+async function favorites_update() {
+    const response = await fetch('favorites');
+    if (response.ok) {
+        const data = await response.json();
+        div = document.getElementById("favorites-div")
+        div.replaceChildren();
+
+        for (const f of parse_favorites(data)) {
+            // Make a button that generates the call
+            b = document.createElement("input")
+            b.classList.add("green-button")
+            b.classList.add("favorite-button")
+            b.type = "submit"
+            b.value = f.label
+            // Attach the command that will be send on press
+            b.setAttribute('data-user-info', JSON.stringify({
+                "action": "call",
+                "node": f.node
+            }));
+            div.appendChild(b);
+        }
+    }
+}
+
 async function levels_update() {
     const response = await fetch('levels');
     if (response.ok) {
@@ -383,11 +425,6 @@ async function status_update() {
 
         const data = await response.json();
 
-        //setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
-        //setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
-        //setAudioLevel("net-rx-meter", data["net-rx-meter"]);
-        //setAudioLevel("net-tx-meter", data["net-tx-meter"]);
-        
         if (data["ptt"]) {
             document.getElementById("ptt-button").classList.add("selected")
         } else {
@@ -397,8 +434,10 @@ async function status_update() {
         tbody = document.getElementById("connection-table-body")
         tbody.replaceChildren();
         if ("calls" in data)
-            for (c of data["calls"]) 
-                tbody.appendChild(makeCallRow(c));
+            for (c of data["calls"]) {
+                if (!c["permanent"])
+                    tbody.appendChild(makeCallRow(c));
+            }
     }
 }
 
@@ -443,7 +482,7 @@ function makeCallRow(conn) {
     }
 
     var cd = document.createElement("div");
-    cd.classList.add("node-container");
+    cd.classList.add("wrap-container");
     for (c1 of c["connections"]) {
         var a = document.createElement("a");
         a.classList.add("connection-node");
@@ -525,6 +564,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });   
 
     status_update();
+    favorites_update();
 });
     </script>
 </html>

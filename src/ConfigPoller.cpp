@@ -35,7 +35,7 @@ using json = nlohmann::json;
 namespace kc1fsz {
     namespace amp {
 
-const char* ConfigPoller::DEFAULT_CONFIG = "{ \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"-10\", \"aslTxMixBSet\":\"-10\", \"aslRxMixerSet\":\"0\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
+const char* ConfigPoller::DEFAULT_CONFIG = "{ \"favorites\": \"2002:ASL Parrot\", \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"-10\", \"aslTxMixBSet\":\"-10\", \"aslRxMixerSet\":\"0\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
 
 ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, 
     std::function<void(const json& cfg)> cb,
@@ -100,6 +100,9 @@ void ConfigPoller::_populateDefaults(json& j) {
                 }
             });
 #endif            
+    }
+    if (!j.contains("favorites")) {
+        j["favorites"] = "test2";
     }
 }
 

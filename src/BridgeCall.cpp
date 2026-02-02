@@ -227,8 +227,17 @@ json BridgeCall::getStatusDoc() const {
                 o2["connectionsLimited"] = true;
                 break;
             }
-            // Clear off the prefixes
-            token = token.substr(1);
+            // Clear off the prefixes. Two important things to note here:
+            // 1. This document mentions three valid prefixes: 
+            //    https://wiki.allstarlink.org/wiki/IAX_Text_Protocol#Status
+            // 2. When connected to the ECR I noticed this link line:
+            //    L T521191,T45192,T64746,T633233,KE8VKY,T457030,T56999,T618282,
+            //    T648770,TK4GDS,T67151,T29734,T29719,T63005
+            //    (Notice that some of these things appear to be callsigns)
+            if (token.starts_with("T") || token.starts_with("R") ||
+                token.starts_with("C")) {
+                token = token.substr(1);
+            }
             // Add to list
             json o3;
             o3["node"] = token;
