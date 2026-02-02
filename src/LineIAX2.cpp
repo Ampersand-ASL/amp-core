@@ -270,7 +270,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     _visitActiveCallsIf(
         // Visitor
         [&found, localNumber, targetNumber, &log = _log](const Call& call) {
-            log.info("%s -> %s already linked in call %d", localNumber, targetNumber, call.localCallId);
+            log.info("%s -> %s already linked in call %u", localNumber, targetNumber, call.localCallId);
             found = true;
         },
         // Predicate
@@ -334,7 +334,7 @@ unsigned LineIAX2::_dropIf(std::function<bool(const Call& call)> pred) {
     _visitActiveCallsIf(
         // Visitor
         [this, &count](Call& call) {
-            _log.info("Hanging up call %d to node %s", 
+            _log.info("Hanging up call %u to node %s", 
                 call.localCallId, call.remoteNumber.c_str());
             _hangupCall(call);
             count++;
@@ -1244,6 +1244,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         payload.startMs = call.localStartMs;
         strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
         strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+        payload.originated = true;
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
@@ -1392,8 +1393,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.isTypeClass(FrameType::IAX2_TYPE_TEXT, 0)) {
 
         // Truncate/null-terminate the text
-        char textMessage[80];  
-        unsigned len = min(79, (int)(frame.size() - 12));
+        char textMessage[Message::MAX_SIZE];
+        unsigned len = min((unsigned)(sizeof(textMessage) - 1), (frame.size() - 12));
         memcpy(textMessage, (const char*)frame.buf() + 12, len);
         textMessage[len] = 0;
 
@@ -1492,7 +1493,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //
         //  If no other nodes are connected, the list is empty and only L is sent.
         else if (textMessage[0] == 'L') {
-            //_log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
+            _log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
             Message msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT, 
                 // The initial "L " gets stripped here
                 strlen(textMessage) - 2, (const uint8_t*)textMessage + 2, 
@@ -1950,6 +1951,7 @@ bool LineIAX2::_progressCall(Call& call) {
             payload.sourceAddrValidated = call.sourceAddrValidated;
             strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
             strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+            payload.originated = false;
 
             Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
@@ -2057,6 +2059,8 @@ void LineIAX2::consume(const Message& msg) {
         dropAllNonPermanent();
     } else if (msg.isSignal(Message::SignalType::DROP_ALL_CALLS_OUTBOUND)) {
         dropAllOutbound();
+    } else if (msg.isSignal(Message::SignalType::DROP_CALL)) {
+        dropCall(msg.getDestCallId());
     } else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
@@ -2156,7 +2160,7 @@ void LineIAX2::consume(const Message& msg) {
             // Predicate (filters the calls)
             [msg](const Call& call) {
                 return call.state == Call::State::STATE_UP &&
-                    (int)msg.getDestCallId() == call.localCallId;
+                    msg.getDestCallId() == call.localCallId;
             }
         );
     }

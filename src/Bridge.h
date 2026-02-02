@@ -66,11 +66,11 @@ public:
         const char* netTestBindAddr,
         unsigned networkDestLineId);
 
-    unsigned getCallCount() const;
-
     void reset();
 
     void setLocalNodeNumber(const char* nodeNumber);
+
+    unsigned getCallCount() const;
 
     /**
      * Sets optional text greeting that will be spoken to any new caller.
@@ -82,10 +82,10 @@ public:
     std::vector<std::string> getConnectedNodes() const;
 
     /**
-     * @returns True if the internal status document (JSON) has been 
-     * updated and a newer one should be distributed.
+     * @returns Effective time of the status document for this call. Used
+     * to track changes.
      */
-    bool isStatusDocUpdated(uint64_t lastUpdateMs) const;
+    uint64_t getStatusDocStampMs() const;
 
     /**
      * @returns The latest live status document in JSON format.
@@ -98,10 +98,8 @@ public:
 
     // ----- Runnable2 --------------------------------------------------------
     
-    bool run2();
     void audioRateTick(uint32_t tickMs);
     void oneSecTick();
-    void tenSecTick();
 
 private:
 
@@ -122,9 +120,13 @@ private:
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
+    // The list time a change was made to the call list
+    uint64_t _lastCallListChangeMs;
 
     std::vector<int> _parrotLevelThresholds;
 };
+
+// #### TODO: CAN WE CONSOLIDATE THE CONFIG POLLER WITH THIS?
 
 /**
  * A utility that polls for changes to the status document and fires a lambda
@@ -134,27 +136,38 @@ private:
 class BridgeStatusDocPoller : public Runnable2 {
 public:
 
-    BridgeStatusDocPoller(Clock& clock, const Bridge& bridge, 
+    /**
+     * @param maxIntervalMs The maximum interval that is allowed before a
+     * event will be fired.
+     */
+    BridgeStatusDocPoller(Log& log, Clock& clock, const Bridge& bridge, 
+        unsigned maxIntervalMs,
         std::function<void(const json& doc)> cb) 
-    :   _clock(clock), _bridge(bridge), _cb(cb) { }
+    :   _log(log), _clock(clock), _bridge(bridge), _maxIntervalMs(maxIntervalMs), 
+        _cb(cb) { }
 
     // ----- Runnable2 ----------------------------------------------------
 
-    void oneSecTick() { 
+    void oneSecTick() {     
+        uint64_t stampMs = _bridge.getStatusDocStampMs();
         uint64_t nowMs = _clock.timeUs() / 1000;
-        if (_bridge.isStatusDocUpdated(nowMs)) {
+        // We fire an update whenever the bridge changes or every 10 seconds,
+        // which ever comes first.
+        if (stampMs > _lastUpdateMs || nowMs > (_lastUpdateMs + _maxIntervalMs)) {
+            _lastUpdateMs = max(stampMs, nowMs);
+            _log.info("Status Update");
             _cb(_bridge.getStatusDoc());
-            _lastUpdateMs = nowMs;
         }
     }
 
-    bool run2() { return false; }
-
 private:
 
+    Log& _log;
     Clock& _clock;
     const Bridge& _bridge;
-    std::function<void(const json& doc)> _cb;
+    const unsigned _maxIntervalMs;
+    const std::function<void(const json& doc)> _cb;
+
     uint64_t _lastUpdateMs = 0;
 };
 

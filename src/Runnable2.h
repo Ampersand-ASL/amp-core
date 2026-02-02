@@ -46,7 +46,7 @@ public:
      * 
      * @returns If any work might still be pending
      */
-    virtual bool run2() = 0;
+    virtual bool run2() { return false; }
 
     /**
      * Called at the audio interval (usually every 20ms), as precisely

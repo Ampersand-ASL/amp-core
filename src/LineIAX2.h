@@ -272,8 +272,8 @@ private:
         State state = State::STATE_NONE;
         bool trusted = false;
         bool sourceAddrValidated = false;
-        int localCallId = 0;
-        int remoteCallId = 0;
+        unsigned localCallId = 0;
+        unsigned remoteCallId = 0;
         uint32_t localStartMs = 0;
         // Used by dispenseElapsed() function. 
         uint32_t lastElapsedMsDispensed = 0;

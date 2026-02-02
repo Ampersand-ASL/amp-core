@@ -15,20 +15,6 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     margin-right: 10px;
 }
 
-#cos-active {
-    text-align: center;
-    width: 120px;
-    padding: 3px;
-    color: #00FF00;
-    background-color: black;
-}
-
-#cos-inactive {
-    text-align: center;
-    width: 120px;
-    padding: 3px;
-}
-
 #ptt-button {
     width: 200px;
     height: 40px;
@@ -94,13 +80,11 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 
 .connection-table th, .connection-table td {
   padding: 3px;
-  xoverflow: hidden;
+  overflow: hidden;
   border: 1px solid #dddddd;
 }
 
 .connection-table td {
-  xwhite-space: nowrap;
-  text-overflow: ellipsis;  /* 5. Optional: Display "..." for truncated text */
   font-family: monospace;
 }
 
@@ -111,18 +95,13 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 
 .connection-table th:nth-child(2),
 .connection-table td:nth-child(2) {
-  width: 60px;
-}
-
-.connection-table th:nth-child(3),
-.connection-table td:nth-child(3) {
   width: 150px;
 }
 
-/* Nothing specified for column 4, floats to fill width */
+/* Nothing specified for column 3, floats to fill width */
 
-.connection-table th:nth-child(5),
-.connection-table td:nth-child(5) {
+.connection-table th:nth-child(4),
+.connection-table td:nth-child(4) {
   width: 50px;
   text-align: center;    
 }
@@ -142,6 +121,11 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 .connection-node-active {
     color: greenyellow;
     font-weight: bold;
+}
+
+.node-container {
+  display: flex;
+  flex-wrap: wrap;
 }
         </style>
     </head>
@@ -171,12 +155,10 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                 <br/>
                 <br/>
                 <input class="red-button" id="disconnect-button" type="submit" value="Disconnect All"data-user-info='{ "action": "dropall" }'/>
-                <p><div id="cos-inactive"> COS Inactive </div><div id="cos-active"> COS Active </div></p>
                 <p>Connections:</p>
                 <table class="connection-table">
                     <thead>
-                        <th>Local Node</th>
-                        <th>Remote Node</th>
+                        <th>Node</th>
                         <th>Last Talker</th>
                         <th>Connections</th>
                         <th></th>
@@ -395,16 +377,6 @@ async function status_update() {
         //setAudioLevel("net-rx-meter", data["net-rx-meter"]);
         //setAudioLevel("net-tx-meter", data["net-tx-meter"]);
         
-        // #### CLEAN UP
-        /*
-        if (data["cos"]) {
-            document.getElementById("cos-active").hidden = false
-            document.getElementById("cos-inactive").hidden = true
-        } else {
-            document.getElementById("cos-active").hidden = true
-            document.getElementById("cos-inactive").hidden = false
-        }
-        */
         if (data["ptt"]) {
             document.getElementById("ptt-button").classList.add("selected")
         } else {
@@ -413,10 +385,9 @@ async function status_update() {
 
         tbody = document.getElementById("connection-table-body")
         tbody.replaceChildren();
-        console.log(data)
         if ("calls" in data)
             for (c of data["calls"]) 
-                tbody.appendChild(make_connection_row(c));
+                tbody.appendChild(makeCallRow(c));
     }
 }
 
@@ -431,40 +402,37 @@ async function status_update() {
 //   </td
 // </tr>
 
-function make_connection_row(conn) {
+function makeCallRow(conn) {
 
     var tr = document.createElement('tr');
-    if (conn["rxActive"]) 
+    // Row-level styling
+    if (conn["rxActive"])
         tr.classList.add("connection-active");
     var td0 = document.createElement('td');
     var td1 = document.createElement('td');
     var td2 = document.createElement('td');
     var td3 = document.createElement('td');
-    var td4 = document.createElement('td');
 
     tr.appendChild(td0);
     tr.appendChild(td1);
     tr.appendChild(td2);
     tr.appendChild(td3);
-    tr.appendChild(td4);
 
-    var sp0 = document.createElement('span');
-    sp0.innerHTML = c["localNode"];
-    td0.appendChild(sp0);
-
-    var a1 = document.createElement('a');
-    a1.innerHTML = c["remoteNode"];
-    a1.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["remoteNode"]);
-    td1.appendChild(a1);
+    var a0 = document.createElement('a');
+    a0.innerHTML = c["remoteNode"];
+    a0.setAttribute("href", "https://stats.allstarlink.org/stats/" + c["remoteNode"]);
+    td0.appendChild(a0);
 
     // The first token in the talker string gets treated like a callsign
     var talkerid = c["talkerid"].trim()
     if (talkerid.length > 0) {
-        var sp2 = document.createElement('span');
-        sp2.innerHTML = talkerid;
-        td2.appendChild(sp2);
+        var sp1 = document.createElement('span');
+        sp1.innerHTML = talkerid;
+        td1.appendChild(sp1);
     }
 
+    var cd = document.createElement("div");
+    cd.classList.add("node-container");
     for (c1 of c["connections"]) {
         var a = document.createElement("a");
         a.classList.add("connection-node");
@@ -472,8 +440,9 @@ function make_connection_row(conn) {
             a.classList.add("connection-node-active");
         a.innerHTML = c1["node"];
         a.setAttribute("href", "https://stats.allstarlink.org/stats/" + c1["node"]);
-        td3.appendChild(a);
+        cd.appendChild(a);
     }
+    td2.appendChild(cd);
 
     // Disconnect button
     b = document.createElement("input")
@@ -486,7 +455,7 @@ function make_connection_row(conn) {
         "lineId": conn["lineId"],
         "callId": conn["callId"]
     }));
-    td4.appendChild(b)
+    td3.appendChild(b)
 
     return tr;
 }
@@ -520,7 +489,6 @@ function status_pressed(button) {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-    document.getElementById("cos-active").hidden = true
     setAudioLevel("usb-rx-meter", -99);
     setAudioLevel("usb-tx-meter", -99);
     setAudioLevel("net-rx-meter", -99);
@@ -529,7 +497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fast timer to get live updates from the server
     setInterval(async () => {
         status_update();
-    }, 10000);
+    }, 500);
 
     // Handler for push buttons
     document.getElementById('status-form').addEventListener('submit', function (event) {

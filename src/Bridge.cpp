@@ -52,6 +52,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
 
 void Bridge::reset() {
     _calls.visitAll(RESET_VISITOR);
+    _lastCallListChangeMs = 0;
 }
 
 unsigned Bridge::getCallCount() const {
@@ -108,8 +109,24 @@ string Bridge::addSpaces(const char* text) {
     return result;
 }
 
-bool Bridge::isStatusDocUpdated(uint64_t lastUpdateMs) const {
-    return true;    
+uint64_t Bridge::getStatusDocStampMs() const {
+
+    // The idea here is to find the maximum change stamp of any of
+    // the possibly dynamic elements of the Bridge.
+    uint64_t maxStampMs = _lastCallListChangeMs;
+
+    // Check each call for more recent activity
+    _calls.visitIf(
+        // Visitor
+        [&maxStampMs](const BridgeCall& call) { 
+            maxStampMs = max(call.getStatusDocStampMs(), maxStampMs);
+            return true;
+        },
+        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+
+    return maxStampMs;
 }
 
 json Bridge::getStatusDoc() const {
@@ -118,7 +135,7 @@ json Bridge::getStatusDoc() const {
 
     // Bridge-level status
 
-    // Add call-level status
+    // Call-level status
     auto calls = json::array();
 
     _calls.visitIf(
@@ -138,6 +155,8 @@ json Bridge::getStatusDoc() const {
 
 void Bridge::consume(const Message& msg) {
     if (msg.isSignal(Message::SignalType::CALL_START)) {        
+
+        _lastCallListChangeMs = _clock.timeUs() / 1000;
 
         // Remove old/existing session for this call (if any)
         _calls.visitIf(
@@ -177,11 +196,16 @@ void Bridge::consume(const Message& msg) {
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
                 payload.sourceAddrValidated, _defaultMode, 
-                payload.localNumber, payload.remoteNumber);
+                payload.remoteNumber);
 
-            // Play the greeting to the new caller
-            if (!_greetingText.empty())                
-                call.requestTTS(_greetingText.c_str());
+            // Play the greeting to the new caller, but not for calls that 
+            // we originated in the first place
+            if (!payload.originated) {
+                if (!_greetingText.empty())       
+                    call.requestTTS(_greetingText.c_str());
+            } else 
+                // #### TODO: REMOVE TEMP
+                _log.info("Not playing greeting since we originated call");
 
             // Announce the new connection to all of the *other* active calls
             // who may have commanded this connection.
@@ -206,13 +230,12 @@ void Bridge::consume(const Message& msg) {
                         // Make sure this is NOT the call we just setup above
                         !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
                 }
-            );
-
-
-
+            );            
         }
     }
     else if (msg.isSignal(Message::SignalType::CALL_END)) {
+
+        _lastCallListChangeMs = _clock.timeUs() / 1000;
 
         PayloadCallEnd payload;
         assert(msg.size() == sizeof(payload));
@@ -253,6 +276,7 @@ void Bridge::consume(const Message& msg) {
         );
     }
     // These are all the message types that get passed directly to the call.
+    // #### TODO: JUST PASS EVERYTHING IN AND SORT IT OUT AT THE CALL LEVEL?
     else if (msg.getType() == Message::AUDIO || 
              msg.getType() == Message::AUDIO_INTERPOLATE || 
              msg.getType() == Message::TTS_AUDIO || 
@@ -275,10 +299,6 @@ void Bridge::consume(const Message& msg) {
             [msg](const BridgeCall& s) { return s.belongsTo(msg); }
         );
     }
-}
-
-bool Bridge::run2() { 
-    return false;
 }
 
 /**
@@ -362,7 +382,6 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 }
 
 void Bridge::oneSecTick() {
-     // Tick each call so that we have an input frame for each.
     _calls.visitIf(
         // Visitor
         [](BridgeCall& call) { 
@@ -373,9 +392,5 @@ void Bridge::oneSecTick() {
         [](const BridgeCall& s) { return s.isActive(); }
     );
 }
-
-void Bridge::tenSecTick() {
-}
-
     }
 }

@@ -46,7 +46,7 @@ class Bridge;
 /**
  * Each participant in a conference (i.e. any Line) has an instance of this class
  */
-class BridgeCall {
+class BridgeCall : public Runnable2 {
 public:
 
     friend class Bridge;
@@ -100,7 +100,7 @@ public:
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
         bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-        const char* localNodeNumber, const char* remoteNodeNumber);
+        const char* remoteNodeNumber);
 
     bool isActive() const { return _active; }
 
@@ -164,10 +164,10 @@ public:
     void produceOutput(uint32_t tickMs);
 
     /**
-     * @returns True if the internal status document (JSON) has been 
-     * updated and a newer one should be distributed.
+     * @returns Effective time of the status document for this call. Used
+     * to track changes.
      */
-    bool isStatusDocUpdated(uint64_t lastUpdateMs) const;
+    uint64_t getStatusDocStampMs() const;
 
     /**
      * @returns The latest live status document in JSON format.
@@ -194,9 +194,11 @@ private:
     bool _active = false;
     unsigned _lineId = 0;
     unsigned _callId = 0;
-    std::string _localNodeNumber;
     std::string _remoteNodeNumber;
 
+    // These are the IDs for the call from the perspective of the Bridge
+    // and are used when communicating with things like the TTS or the
+    // network tester.
     unsigned _bridgeLineId = 0;
     unsigned _bridgeCallId = 0;
 
@@ -216,9 +218,25 @@ private:
     // The audio waiting to be sent to the caller in PCM16 48K format.
     std::queue<PCM16Frame> _playQueue;
 
+    // Used to gather DTMF symbols from the peer
     std::string _dtmfAccumulator;
-    uint32_t _lastDtmfRxMs = 0;
+    // The last time a DTMF symbol was received
+    uint32_t _lastDtmfRxMs;
+
+    // The latest list of linked nodes received from this call's peer.
     std::string _linkReport;
+    // The last time the link report changed
+    uint64_t _linkReportChangeMs;
+
+    // The latest talker ID reported by this call's peer.
+    std::string _talkerId;
+    // The last time the talker ID changed
+    uint64_t _talkerIdChangeMs;
+
+    // The latest keyed node number reported by this call's peer.
+    std::string _keyedNode;
+    // The last time the keyed node changed
+    uint64_t _keyedNodeChangeMs;
 
     void _processTTSAudio(const Message& msg);
 

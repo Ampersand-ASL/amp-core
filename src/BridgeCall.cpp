@@ -22,6 +22,8 @@
 #include <random>
 #include <sstream>
 
+#include "kc1fsz-tools/Common.h"
+
 #include "Message.h"
 #include "BridgeCall.h"
 #include "Poker.h"
@@ -123,25 +125,31 @@ void BridgeCall::reset() {
     _parrotStateStartMs = 0;
     _lastUnkeyProcessedMs = 0;
 
-    _dtmfAccumulator.clear();
-    _lastDtmfRxMs = 0;
-
     _stageInSet = false;
     _stageOutSet = false;
     _lastCycleGeneratedOutput = false;
+
+    _dtmfAccumulator.clear();
+    _lastDtmfRxMs = 0;
+    _linkReport.clear();
+    _linkReportChangeMs = 0;
+    _talkerId.clear();
+    _talkerIdChangeMs = 0;
+    _keyedNode.clear();
+    _keyedNodeChangeMs = 0;
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
     bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-    const char* localNodeNumber, const char* remoteNodeNumber) {
+    const char* remoteNodeNumber) {
 
     _active = true;
     _lineId = lineId;  
     _callId = callId; 
+    _remoteNodeNumber = remoteNodeNumber;
+
     _startMs = startMs;
     _lastAudioRxMs = 0;
-    _localNodeNumber = localNodeNumber;
-    _remoteNodeNumber = remoteNodeNumber;
 
     _bridgeIn.setCodec(codec);
     _bridgeIn.setBypassJitterBuffer(bypassJitterBuffer);
@@ -156,38 +164,73 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
         _parrotState = ParrotState::CONNECTED;
         _parrotStateStartMs = _clock->time();
     }
+
+    // #### TEMP
+    _talkerId = "KC1FSZ Bruce";
 }
 
 bool BridgeCall::isRecentCommander() const {
     return !_clock->isPast(_lastDtmfRxMs + COMMANDER_TIMEOUT_MS);
 }
 
-bool BridgeCall::isStatusDocUpdated(uint64_t lastUpdateMs) const {
-    return true;
+uint64_t BridgeCall::getStatusDocStampMs() const {
+    // The idea here is to find the maximum time that anything 
+    // has changed.
+    // The last RX audio is only allowed to update every 5 
+    // seconds to avoid generating too many update events.
+    uint64_t lastRxGranularity = 1000 * 5;
+    uint64_t ms = (_bridgeIn.getLastAudioMs() / lastRxGranularity) * 
+        lastRxGranularity;
+    ms = max(ms, _linkReportChangeMs);
+    ms = max(ms, _talkerIdChangeMs);
+    ms = max(ms, _keyedNodeChangeMs);
+    return ms;
 }
 
 json BridgeCall::getStatusDoc() const {
 
     json o2;
 
+    // Static
     o2["lineId"] = _lineId;
     o2["callId"] = _callId;
-    o2["rxActive"] = true;
-    o2["txActive"] = true;
-    o2["localNode"] = _localNodeNumber;
     o2["remoteNode"] = _remoteNodeNumber;
-    o2["talkerid"] = "KC1FSZ Bruce!";
 
+    // Dynamic
+    bool active = !_clock->isPast(_bridgeIn.getLastAudioMs() + 5000);
+    o2["rxActive"] = active;
+    _log->info("Node %s active %d", _remoteNodeNumber.c_str(), active);
+    uint64_t sinceLastActiveMs = 0;
+    if (_bridgeIn.getLastAudioMs() > 0) 
+        sinceLastActiveMs = (_clock->timeUs() / 1000) - _bridgeIn.getLastAudioMs();
+    o2["lastRxActive"] = sinceLastActiveMs;
+    o2["talkerid"] = _talkerId;
+
+    // Build the connection list
     auto b = json::array();
-    // Link list is comma-delimited
     if (!_linkReport.empty()) {
+        unsigned bLen = 0;
+        unsigned bLimit = 30;
+        // Link report is comma-delimited
         std::istringstream tokenStream(_linkReport);
         string token;
         while (std::getline(tokenStream, token, ',')) {
+            trim(token);
+            if (token.empty())
+                continue;
+            // Check to see if limit was exceeded
+            if (bLen == bLimit) {
+                o2["connectionsLimited"] = true;
+                break;
+            }
+            // Clear off the prefixes
+            token = token.substr(1);
+            // Add to list
             json o3;
             o3["node"] = token;
-            o3["active"] = false;
+            o3["keyed"] = (token == _keyedNode);
             b.push_back(o3);
+            bLen++;
         }
     }
     o2["connections"] = b;
@@ -202,6 +245,7 @@ void BridgeCall::consume(const Message& frame) {
     } 
     else if (frame.isSignal(Message::SignalType::LINK_REPORT)) {
         _linkReport = string((const char*)frame.body(), frame.size());
+        _linkReportChangeMs = _clock->timeUs() / 1000;
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
 
