@@ -271,6 +271,13 @@ void BridgeCall::consume(const Message& frame) {
         frame.getType() == Message::Type::TTS_END) {
         _processTTSAudio(frame);
     } 
+    else if (frame.getType() == Message::Type::NET_DIAG_1_RES) {
+        assert(frame.size() == sizeof(_netTestResult));
+        memcpy(&_netTestResult, frame.body(), sizeof(_netTestResult));
+        _log->info("Got a network diagnostic response %d", _netTestResult.code);
+        _parrotState = ParrotState::GREETING_0;
+        _parrotStateStartMs = _clock->time();
+    }
     else if (frame.isSignal(Message::SignalType::LINK_REPORT)) {
         string r((const char*)frame.body(), frame.size());
         // Only update the report if it's different from last time
@@ -289,18 +296,18 @@ void BridgeCall::consume(const Message& frame) {
             if (symbol == '1') {
                 _log->info("Starting sweep");
                 _loadSweep(_playQueue);
-                _parrotState = ParrotState::PLAYING;            
+                _parrotState = ParrotState::PLAYING_AFTER_RECORD;            
             } else if (symbol == '2') {
                 _log->info("Starting tone");
                 // A 5 second tone at 440 Hz
                 _loadCw(0.5, 440, 50 * 5, _playQueue);
-                _parrotState = ParrotState::PLAYING;            
+                _parrotState = ParrotState::PLAYING_AFTER_RECORD;            
             } else if (symbol == '3') {
                 _log->info("Generating white noise");
                 for (auto it = whiteNoise.begin(); it != whiteNoise.end(); it++)
                     _playQueue.push(PCM16Frame(*it));
                 _log->info("Done");
-                _parrotState = ParrotState::PLAYING;            
+                _parrotState = ParrotState::PLAYING_AFTER_RECORD;            
             }
         } else {
             if (symbol == '*') 
@@ -310,14 +317,6 @@ void BridgeCall::consume(const Message& frame) {
         }
     } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
         _bridgeIn.consume(frame);       
-    }
-    else if (frame.getType() == Message::Type::NET_DIAG_1_RES) {
-        assert(frame.size() == sizeof(_netTestResult));
-        memcpy(&_netTestResult, frame.body(), sizeof(_netTestResult));
-        _log->info("Got a network diagnostic response %d",
-            _netTestResult.code);
-        _parrotState = ParrotState::READY_FOR_GREETING;
-        _parrotStateStartMs = _clock->time();
     }
     else if (frame.isSignal(Message::SignalType::CALL_LEVELS)) {
         assert(frame.size() == sizeof(PayloadCallLevels));
@@ -623,17 +622,32 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     else if (_parrotState == ParrotState::WAITING_FOR_NET_TEST) {
         // Check for timeout
         if (_clock->isPast(_parrotStateStartMs + 5000))
-            _parrotState = ParrotState::READY_FOR_GREETING;
-    } else if (_parrotState == ParrotState::READY_FOR_GREETING) {
-
+            _parrotState = ParrotState::GREETING_0;
+    } 
+    else if (_parrotState == ParrotState::GREETING_0) {
         // We only start after a bit of silence to address any initial
         // clicks or pops on key.
-        if (_clock->isPast(_parrotStateStartMs + 1000)) {
-
+        if (_clock->isPast(_parrotStateStartMs + 250)) {
             // Create the speech that will be sent to the caller
             string prompt;
-            prompt = "Parrot connected. ";
-
+            prompt = "Parrot connected, stand by. ";
+            requestTTS(prompt.c_str());
+            // Wait for the TTS_END signal
+            _parrotState = ParrotState::TTS_GREETING_0;
+            _parrotStateStartMs = _clock->time();
+        }
+    }
+    else if (_parrotState == ParrotState::PLAYING_GREETING_0) {
+        if (_playQueue.empty()) {
+            _parrotState = ParrotState::GREETING_1;
+            _parrotStateStartMs = _clock->time();
+        }
+    }
+    else if (_parrotState == ParrotState::GREETING_1) {
+        // Per Jason N8EI, we only start after a bit of silence to let 
+        // the telemetry pass.
+        if (_clock->isPast(_parrotStateStartMs + 3000)) {
+            string prompt;
             if (!_sourceAddrValidated) 
                 prompt += "Node is unregistered. ";
             else {
@@ -659,14 +673,13 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
             // Queue a TTS request
             requestTTS(prompt.c_str());
-
-            _parrotState = ParrotState::TTS_AFTER_CONNECTED;
+            // Waiting for TTS_END
+            _parrotState = ParrotState::TTS_GREETING_1;
             _parrotStateStartMs = _clock->time();
         }
     }
-    else if (_parrotState == ParrotState::PLAYING_PROMPT_GREETING) {
+    else if (_parrotState == ParrotState::PLAYING_GREETING_1) {
         if (_playQueue.empty()) {
-            _log->info("Greeting end");
             _parrotState = ParrotState::WAITING_FOR_RECORD;
             _parrotStateStartMs = _clock->time();
         }
@@ -756,7 +769,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _parrotStateStartMs = _clock->time();
         }
     }
-    else if (_parrotState == ParrotState::PLAYING) {
+    else if (_parrotState == ParrotState::PLAYING_AFTER_RECORD) {
         if (_playQueue.empty()) {
             _log->info("Play end");
             // TODO
@@ -766,11 +779,16 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
 }
 
+// These are the places where we are waiting for the TTS to complete
 void BridgeCall::_processParrotTTSAudio(const Message& frame) {
-    if (_parrotState == ParrotState::TTS_AFTER_CONNECTED) {
+    if (_parrotState == ParrotState::TTS_GREETING_0 ||
+        _parrotState == ParrotState::TTS_GREETING_1) {
         if (frame.getType() == Message::Type::TTS_END) {
             _log->info("Greeting start");
-            _parrotState = ParrotState::PLAYING_PROMPT_GREETING;
+            if (_parrotState == ParrotState::TTS_GREETING_0)
+                _parrotState = ParrotState::PLAYING_GREETING_0;
+            else if (_parrotState == ParrotState::TTS_GREETING_1)
+                _parrotState = ParrotState::PLAYING_GREETING_1;
             _parrotStateStartMs = _clock->time();
         }        
     }
@@ -784,9 +802,8 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
                 _playQueue.push(_captureQueue.front());
                 _captureQueue.pop();
             }
-
             _log->info("Playback start");
-            _parrotState = ParrotState::PLAYING;
+            _parrotState = ParrotState::PLAYING_AFTER_RECORD;
             _parrotStateStartMs = _clock->time();
         }        
     }

@@ -325,14 +325,17 @@ private:
         ACTIVE,
         CONNECTED,
         WAITING_FOR_NET_TEST,
-        READY_FOR_GREETING,
-        TTS_AFTER_CONNECTED,
-        PLAYING_PROMPT_GREETING,
+        GREETING_0,
+        TTS_GREETING_0,
+        PLAYING_GREETING_0,
+        GREETING_1,
+        TTS_GREETING_1,
+        PLAYING_GREETING_1,
         WAITING_FOR_RECORD,
         RECORDING,
         PAUSE_AFTER_RECORD,
         TTS_AFTER_RECORD,
-        PLAYING,
+        PLAYING_AFTER_RECORD,
         TIMEDOUT
     };
 
