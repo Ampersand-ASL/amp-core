@@ -304,6 +304,7 @@ private:
 
     // ----- Parrot Mode Related ----------------------------------------------
 
+    void _enterParrotMode();
     void _processParrotAudio(const Message& msg);
     void _parrotAudioRateTick(uint32_t tickMs);
     void _processParrotTTSAudio(const Message& msg);

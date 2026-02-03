@@ -166,16 +166,21 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 
     _echo = echo;
     _sourceAddrValidated = sourceAddrValidated;
-    _mode = initialMode;
     _permanent = permanent;
-
-    if (_mode == Mode::PARROT) {
-        _parrotState = ParrotState::CONNECTED;
-        _parrotStateStartMs = _clock->time();
-    }
 
     _bridgeIn.setKerchunkFilterEnabled(useKerchunkFilter);
     _bridgeIn.setKerchunkFilterEvaluationIntervalMs(kerchunkFilterEvaluationIntervalMs);
+
+    if (initialMode == Mode::PARROT)
+        _enterParrotMode();
+    else 
+        _mode = initialMode;
+}
+
+void BridgeCall::_enterParrotMode() {
+    _mode = Mode::PARROT;
+    _parrotState = ParrotState::CONNECTED;
+    _parrotStateStartMs = _clock->time();
 }
 
 bool BridgeCall::isRecentCommander() const {
@@ -505,6 +510,9 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         }
         prompt += ".";
         requestTTS(prompt.c_str());
+    }
+    else if (cmd == "*76") {
+        _enterParrotMode();
     }
     else {
         _log->info("Unrecognized DTMF command ignored %s", cmd.c_str());
