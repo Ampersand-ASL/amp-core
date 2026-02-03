@@ -355,6 +355,7 @@ private:
     uint32_t _parrotStateStartMs = 0;
     uint32_t _lastUnkeyProcessedMs = 0;
     Poker::Result _netTestResult;
+    static constexpr const char* PARROT_TALKER_ID = "ASL Parrot";
 };
 
     }

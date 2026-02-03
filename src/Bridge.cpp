@@ -435,7 +435,8 @@ void Bridge::oneSecTick() {
     // Find the most recent
     _calls.visitIf(
         [&maxMs, &talkerId](const BridgeCall& call) { 
-            if (call.getLastAudioRxMs() > maxMs) {
+            if (call.getLastAudioRxMs() != 0 && 
+                call.getLastAudioRxMs() > maxMs) {
                 maxMs = call.getLastAudioRxMs();
                 talkerId = call.getInputTalkerId();
             }

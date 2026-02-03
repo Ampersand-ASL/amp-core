@@ -646,9 +646,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
     else if (_parrotState == ParrotState::CONNECTED) {
 
-        // Assert the talker
-        _outputTalkerId = "ASL Parrot";
-        _signalTalker();
+        setOutputTalkerId(PARROT_TALKER_ID);
 
         // Launch the network test for this new connection
         Poker::Request req;
@@ -811,11 +809,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             // Queue a request for TTS
             requestTTS(prompt.c_str());
 
-            // Assert the talker (parrot it back!)
-            _outputTalkerId = _talkerId;
-            _signalTalker();
-
-            _log->info("Parrot setting talker %s", _outputTalkerId.c_str());
+            // Assert the talker
+            setOutputTalkerId(PARROT_TALKER_ID);
 
             // Get into the state waiting for the TTS to complete
             _parrotState = ParrotState::TTS_AFTER_RECORD;
@@ -855,9 +850,14 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
                 _playQueue.push(_captureQueue.front());
                 _captureQueue.pop();
             }
-            _log->info("Playback start");
+
+            // Assert the talker (echo)
+            setOutputTalkerId(_talkerId.c_str());
+
             _parrotState = ParrotState::PLAYING_AFTER_RECORD;
             _parrotStateStartMs = _clock->time();
+
+            _log->info("Playback start");
         }        
     }
 }
