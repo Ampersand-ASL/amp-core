@@ -115,6 +115,12 @@ public:
 
     bool hasInputAudio() const { return _stageInSet; }
 
+    std::string getInputTalkerId() const { return _talkerId; }
+    
+    uint64_t getInputTalkerIdChangeMs() const { return _talkerIdChangeMs; }
+
+    void setOutputTalkerId(const char* talkerId);
+
     bool belongsTo(const Message& msg) const {
         return _active && 
             ((msg.getSourceBusId() == _lineId && msg.getSourceCallId() == _callId) ||
@@ -195,6 +201,7 @@ public:
 
     void audioRateTick(uint32_t tickMs);
     void oneSecTick();
+    void tenSecTick();
 
 private:
 
@@ -242,10 +249,13 @@ private:
     // The last time the link report changed
     uint64_t _linkReportChangeMs;
 
-    // The latest talker ID reported by this call's peer.
+    // The latest input talker ID asserted by this call's peer.
     std::string _talkerId;
-    // The last time the talker ID changed
+    // The last time the input talker ID changed
     uint64_t _talkerIdChangeMs;
+
+    // The most recent output talker ID that has been asserted.
+    std::string _outputTalkerId;
 
     // The latest keyed node number reported by this call's peer.
     std::string _keyedNode;
@@ -259,6 +269,7 @@ private:
     int _tx1Db = 0;
 
     void _processTTSAudio(const Message& msg);
+    void _signalTalker();
 
     // ----- Normal Mode Related ----------------------------------------------
 

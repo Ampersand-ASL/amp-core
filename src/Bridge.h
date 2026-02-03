@@ -109,8 +109,8 @@ public:
     // ----- Runnable2 --------------------------------------------------------
     
     void audioRateTick(uint32_t tickMs);
-
     void oneSecTick();
+    void tenSecTick();
 
 private:
 

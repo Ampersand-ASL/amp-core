@@ -136,6 +136,7 @@ void BridgeCall::reset() {
     _linkReportChangeMs = 0;
     _talkerId.clear();
     _talkerIdChangeMs = 0;
+    _outputTalkerId.clear();
     _keyedNode.clear();
     _keyedNodeChangeMs = 0;
 
@@ -286,6 +287,15 @@ void BridgeCall::consume(const Message& frame) {
             _linkReportChangeMs = _clock->timeUs() / 1000;
         }
     } 
+    else if (frame.isSignal(Message::SignalType::CALL_TALKERID)) {
+        string r((const char*)frame.body(), frame.size());
+        // Only update the talker ID if it's different from last time
+        if (_talkerId != r) {
+            _talkerId = r;
+            _talkerIdChangeMs = _clock->timeUs() / 1000;
+            _log->info("Input talker ID set %s", _talkerId.c_str());
+        }
+    } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
 
         assert(frame.size() == sizeof(PayloadDtmfPress));
@@ -409,6 +419,31 @@ void BridgeCall::oneSecTick() {
     if (!_dtmfAccumulator.empty() && _clock->isPast(_lastDtmfRxMs + 3000)) {
         _processDtmfCommand(_dtmfAccumulator);
         _dtmfAccumulator.clear();
+    }
+}
+
+void BridgeCall::tenSecTick() {
+    _signalTalker();
+}
+
+void BridgeCall::setOutputTalkerId(const char* talkerId) {
+    if (_outputTalkerId != talkerId) {
+        _outputTalkerId = talkerId;
+        // Since the talker was changed we generate a signal immediately
+        _signalTalker();
+        _log->info("Output talker ID set %s", _outputTalkerId.c_str());
+    }
+}
+
+void BridgeCall::_signalTalker() {
+    if (!_talkerId.empty()) {
+        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+            // Include the null termination
+            _outputTalkerId.length() + 1, (const uint8_t*)_outputTalkerId.c_str(), 
+            0, 0);
+        msg.setSource(LINE_ID, CALL_ID);
+        msg.setDest(_lineId, _callId);
+        _bridgeOut.consume(msg);
     }
 }
 
@@ -603,6 +638,10 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
     else if (_parrotState == ParrotState::CONNECTED) {
 
+        // Assert the talker
+        _outputTalkerId = "ASL Parrot";
+        _signalTalker();
+
         // Launch the network test for this new connection
         Poker::Request req;
         strcpyLimited(req.bindAddr, _netTestBindAddr.c_str(), sizeof(_netTestBindAddr));
@@ -763,6 +802,12 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
             // Queue a request for TTS
             requestTTS(prompt.c_str());
+
+            // Assert the talker (parrot it back!)
+            _outputTalkerId = _talkerId;
+            _signalTalker();
+
+            _log->info("Parrot setting talker %s", _outputTalkerId.c_str());
 
             // Get into the state waiting for the TTS to complete
             _parrotState = ParrotState::TTS_AFTER_RECORD;

@@ -57,6 +57,8 @@ public:
         // and update on the status of teh call.
         CALL_STATUS,
         CALL_TERMINATE,
+        // Used to report the active talker ID
+        CALL_TALKERID,
         RADIO_KEY,
         // Used to report an inbound unkey
         RADIO_UNKEY,

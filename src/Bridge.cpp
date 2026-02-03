@@ -319,6 +319,7 @@ void Bridge::consume(const Message& msg) {
              msg.getType() == Message::TTS_END || 
              msg.getType() == Message::NET_DIAG_1_RES || 
              msg.isSignal(Message::SignalType::CALL_LEVELS) ||
+             msg.isSignal(Message::SignalType::CALL_TALKERID) ||
              msg.isSignal(Message::SignalType::RADIO_UNKEY) ||
              msg.isSignal(Message::SignalType::LINK_REPORT) ||
              msg.isSignal(Message::SignalType::DTMF_PRESS)) {
@@ -344,6 +345,7 @@ void Bridge::consume(const Message& msg) {
  *    customized because not all participants will want to hear their own audio
  *    in the mix.
  * 3. Give each participant an output audio frame.
+ * 4. Clear the contributors' audio so its not used the next time.
  */
 void Bridge::audioRateTick(uint32_t tickMs) {
 
@@ -415,15 +417,53 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 }
 
 void Bridge::oneSecTick() {
+
+    // Tick each call
     _calls.visitIf(
-        // Visitor
         [](BridgeCall& call) { 
             call.oneSecTick();
             return true;
         },
-        // Predicate
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+
+    // Set the outbound talker ID for every call based on the 
+    // most recently asserted inbound talker ID.
+    uint64_t maxMs = 0;
+    string talkerId;
+
+    // Find the most recent
+    _calls.visitIf(
+        [&maxMs, &talkerId](const BridgeCall& call) { 
+            if (call.getInputTalkerIdChangeMs() > maxMs) {
+                maxMs = call.getInputTalkerIdChangeMs();
+                talkerId = call.getInputTalkerId();
+            }
+            return true;
+        },
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+
+    // Assert on all calls
+    _calls.visitIf(
+        [&talkerId](BridgeCall& call) { 
+            call.setOutputTalkerId(talkerId.c_str());
+            return true;
+        },
         [](const BridgeCall& s) { return s.isActive(); }
     );
 }
+
+void Bridge::tenSecTick() {
+    // Tick each call
+    _calls.visitIf(
+        [](BridgeCall& call) { 
+            call.tenSecTick();
+            return true;
+        },
+        [](const BridgeCall& s) { return s.isActive(); }
+    );
+}
+
     }
 }

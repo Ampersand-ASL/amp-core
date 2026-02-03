@@ -1532,15 +1532,64 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //
         // T <NODE_NB> STATS_VERSION,161.327
         // 
-        // T <NODE_NB> TALKER,NAME
+        // T <NODE_NB> TALKERID,NAME
         //
+        //   (Ampersand extension)
         //   This message is used to identify the active talker on the 
         //   designated node. 
         //   NODE_NNB Node sending the message
-        //   NAME Arbitrary text, but should be a callsign
+        //   NAME Arbitrary text, but should be a callsign and name, only
+        //   the first 32 characters are used.
         //
         else if (textMessage[0] == 'T') {
-            _log.infoDump("Telemetry", frame.buf(), frame.size());
+
+            const unsigned cmdCapacity = 17;
+            char cmd[cmdCapacity] = { 0 };
+            unsigned cmdLen = 0;
+            const unsigned paramsCapacity = 65;
+            char params[paramsCapacity] = { 0 };
+            unsigned paramsLen = 0;
+
+            int state = 0;
+            for (unsigned i = 0; i < strlen(textMessage); i++) {
+                char c = textMessage[i];
+                if (state == 0) {
+                    if (c == ' ')
+                        state = 1;
+                } else if (state == 1) {
+                    if (c == ' ')
+                        state = 2;
+                } else if (state == 2) {
+                    if (c == ',') {
+                        cmd[cmdLen] = 0;
+                        state = 3;
+                    } else {
+                        // Always leave space for the null
+                        if (cmdLen < cmdCapacity - 1)
+                            cmd[cmdLen++] = c;
+                    }
+                } else if (state == 3) {
+                    // Always leave space for the null
+                    if (paramsLen < paramsCapacity - 1)
+                        params[paramsLen++] = c;
+                }
+            }
+            params[paramsLen] = 0;
+
+            if (strcmp(cmd,"TALKERID") == 0) {
+                _log.info("Talker ID from %s: [%s]", call.remoteNumber.c_str(), 
+                    params);
+                Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+                    // Include the null
+                    paramsLen + 1, (const uint8_t*)params, 
+                    0, _clock.time());
+                msg.setSource(_busId, call.localCallId);
+                msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+                _bus.consume(msg);
+            }
+            else {
+                //_log.infoDump("Telemetry", frame.buf(), frame.size());
+            }
         } 
         // The "L" message contains the list of linked nodes.
         // L <MODE><NODE_NB>,<MODE><NODE_NB>,...
@@ -2213,6 +2262,21 @@ void LineIAX2::consume(const Message& msg) {
                             call.outSeqNo, call.expectedInSeqNo, 
                             FrameType::IAX2_TYPE_CONTROL,
                             ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY);
+                        line->_sendFrameToPeer(frame, call);
+                    }
+                    // This is the case when the TALKERID is being asserted
+                    else if (msg.getFormat() == Message::SignalType::CALL_TALKERID) {                        
+                        line->_log.info("Call %u sending talker ID", call.localCallId);
+                        // A text telemetry frame is used for this control
+                        IAX2FrameFull frame;
+                        frame.setHeader(call.localCallId, call.remoteCallId, 
+                            call.dispenseElapsedMs(line->_clock), 
+                            call.outSeqNo, call.expectedInSeqNo, 
+                            FrameType::IAX2_TYPE_TEXT, 0);
+                        char text[64];
+                        snprintf(text, sizeof(text), "T %s TALKERID,%s", 
+                            call.localNumber.c_str(), msg.body());
+                        frame.setBody((const uint8_t*)text, strlen(text));
                         line->_sendFrameToPeer(frame, call);
                     }
                 }
