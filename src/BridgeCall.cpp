@@ -296,10 +296,14 @@ void BridgeCall::consume(const Message& frame) {
         string r((const char*)frame.body(), frame.size());
         // Only update the talker ID if it's different from last time
         // and if there is active audio being received on this call.
-        if (_talkerId != r && _bridgeIn.isActive()) {
+        uint64_t sinceLastAudio = (_clock->timeUs() / 1000) - 
+            _bridgeIn.getLastAudioMs();
+        if (_talkerId != r && sinceLastAudio < 10 * 1000) {
             _talkerId = r;
             _talkerIdChangeMs = _clock->timeUs() / 1000;
             _log->info("Input talker ID set %s", _talkerId.c_str());
+        } else {
+            _log->info("NOT SET");
         }
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
