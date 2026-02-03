@@ -209,11 +209,21 @@ void LineRadio::_open(bool echo) {
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio");
     payload.originated = true;
     payload.permanent = true;
+
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
+
+    // Assert the talker
+    // #### TEMP
+    const char talkerId[32] = "KC1FSZ Bruce";
+    Message msg2(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+        strlen(talkerId) + 1, (const uint8_t*)talkerId, 0, _clock.time());
+    msg2.setSource(_busId, _callId);
+    msg2.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg2);
 }
 
 void LineRadio::_close() {
