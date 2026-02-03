@@ -295,7 +295,8 @@ void BridgeCall::consume(const Message& frame) {
     else if (frame.isSignal(Message::SignalType::CALL_TALKERID)) {
         string r((const char*)frame.body(), frame.size());
         // Only update the talker ID if it's different from last time
-        if (_talkerId != r) {
+        // and if there is active audio being received on this call.
+        if (_talkerId != r && _bridgeIn.isActive()) {
             _talkerId = r;
             _talkerIdChangeMs = _clock->timeUs() / 1000;
             _log->info("Input talker ID set %s", _talkerId.c_str());
@@ -761,6 +762,9 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             for (auto it = captureCopy.begin(); it != captureCopy.end(); it++)
                 _captureQueue.push((*it));
 
+            // Capture the talker that was active during the recording
+            _recordedTalkerId = _talkerId;
+
             // Create the speech that will be sent to the caller
             string prompt;
             char sp[64];
@@ -852,7 +856,7 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
             }
 
             // Assert the talker (echo)
-            setOutputTalkerId(_talkerId.c_str());
+            setOutputTalkerId(_recordedTalkerId.c_str());
 
             _parrotState = ParrotState::PLAYING_AFTER_RECORD;
             _parrotStateStartMs = _clock->time();
@@ -882,48 +886,6 @@ void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& q
         buffer += 2;
     }
     queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-}
-
-void BridgeCall::_loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const {    
-    
-    string fullPath("../media");
-    if (getenv("AMP_MEDIA_DIR"))
-        fullPath = getenv("AMP_MEDIA_DIR");
-    fullPath += "/16k/";
-    fullPath += fn;
-    fullPath += ".pcm";
-
-    ifstream aud(fullPath, std::ios::binary);
-    if (!aud.is_open()) {
-        _log->info("Failed to open %s", fullPath.c_str());
-        return;
-    }
-
-    int16_t pcm16k[BLOCK_SIZE_16K];
-    unsigned pcmPtr = 0;
-    char buffer[2];
-    amp::Resampler resampler;
-    resampler.setRates(16000, 48000);
-
-    while (aud.read(buffer, 2)) {
-        pcm16k[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
-        if (pcmPtr == BLOCK_SIZE_16K) {
-            int16_t pcm48k[BLOCK_SIZE_48K];
-            resampler.resample(pcm16k, BLOCK_SIZE_16K, pcm48k, BLOCK_SIZE_48K);
-            queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-            pcmPtr = 0;
-        }
-    }
-
-    // Clean up last frame
-    if (pcmPtr < BLOCK_SIZE_16K) {
-        for (unsigned i = 0; i < BLOCK_SIZE_16K - pcmPtr; i++)
-            pcm16k[pcmPtr++] = 0;
-        int16_t pcm48k[BLOCK_SIZE_48K];
-        resampler.resample(pcm16k, BLOCK_SIZE_16K, pcm48k, BLOCK_SIZE_48K);
-        queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-        pcmPtr = 0;
-    }
 }
 
 void BridgeCall::_loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const {    

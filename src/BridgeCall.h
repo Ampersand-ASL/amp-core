@@ -309,12 +309,10 @@ private:
     void _parrotAudioRateTick(uint32_t tickMs);
     void _processParrotTTSAudio(const Message& msg);
 
-    void _loadAudioFile(const char* fn, std::queue<PCM16Frame>& queue) const;
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
     void _loadSweep(std::queue<PCM16Frame>& queue);
     void _loadCw(float amp, float hz, unsigned ticks, std::queue<PCM16Frame>& queue);
-
     void _loadWhite(float amp, unsigned ticks, std::queue<PCM16Frame>& queue) const;
 
     /**
@@ -356,6 +354,8 @@ private:
     uint32_t _lastUnkeyProcessedMs = 0;
     Poker::Result _netTestResult;
     static constexpr const char* PARROT_TALKER_ID = "ASL Parrot";
+    // The talker ID is captured at the end of the recording period
+    std::string _recordedTalkerId;
 };
 
     }
