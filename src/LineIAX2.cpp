@@ -2276,7 +2276,7 @@ void LineIAX2::consume(const Message& msg) {
                         snprintf(text, sizeof(text), "T %s TALKERID,%s", 
                             call.localNumber.c_str(), msg.body());
                         line->_log.info("Talker ID to %s [%s]", 
-                            call.localNumber.c_str(), text);
+                            call.remoteNumber.c_str(), text);
                         frame.setBody((const uint8_t*)text, strlen(text));
                         line->_sendFrameToPeer(frame, call);
                     }

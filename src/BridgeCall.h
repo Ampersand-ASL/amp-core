@@ -113,7 +113,7 @@ public:
         return _active && _lineId == other._lineId && _callId == other._callId; 
     }
 
-    bool hasInputAudio() const { return _stageInSet; }
+    bool hasInputAudio() const { return isNormal() && _stageInSet; }
 
     std::string getInputTalkerId() const { return _talkerId; }
     

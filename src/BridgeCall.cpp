@@ -434,9 +434,9 @@ void BridgeCall::tenSecTick() {
 void BridgeCall::setOutputTalkerId(const char* talkerId) {
     if (_outputTalkerId != talkerId) {
         _outputTalkerId = talkerId;
+        _log->info("Output talker ID set %s", _outputTalkerId.c_str());
         // Since the talker was changed we generate a signal immediately
         _signalTalker();
-        _log->info("Output talker ID set %s", _outputTalkerId.c_str());
     }
 }
 
