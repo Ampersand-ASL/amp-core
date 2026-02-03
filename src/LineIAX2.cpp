@@ -2266,7 +2266,6 @@ void LineIAX2::consume(const Message& msg) {
                     }
                     // This is the case when the TALKERID is being asserted
                     else if (msg.getFormat() == Message::SignalType::CALL_TALKERID) {                        
-                        line->_log.info("Call %u sending talker ID", call.localCallId);
                         // A text telemetry frame is used for this control
                         IAX2FrameFull frame;
                         frame.setHeader(call.localCallId, call.remoteCallId, 
@@ -2276,6 +2275,8 @@ void LineIAX2::consume(const Message& msg) {
                         char text[64];
                         snprintf(text, sizeof(text), "T %s TALKERID,%s", 
                             call.localNumber.c_str(), msg.body());
+                        line->_log.info("Call %u sending talker ID %s", 
+                            call.localCallId, text);
                         frame.setBody((const uint8_t*)text, strlen(text));
                         line->_sendFrameToPeer(frame, call);
                     }

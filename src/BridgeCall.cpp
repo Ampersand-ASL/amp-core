@@ -436,7 +436,7 @@ void BridgeCall::setOutputTalkerId(const char* talkerId) {
 }
 
 void BridgeCall::_signalTalker() {
-    if (!_talkerId.empty()) {
+    if (!_outputTalkerId.empty()) {
         Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
             // Include the null termination
             _outputTalkerId.length() + 1, (const uint8_t*)_outputTalkerId.c_str(), 
