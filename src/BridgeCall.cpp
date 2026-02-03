@@ -630,7 +630,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         if (_clock->isPast(_parrotStateStartMs + 250)) {
             // Create the speech that will be sent to the caller
             string prompt;
-            prompt = "Parrot connected, stand by. ";
+            prompt = "Parrot connected. Stand by.";
             requestTTS(prompt.c_str());
             // Wait for the TTS_END signal
             _parrotState = ParrotState::TTS_GREETING_0;

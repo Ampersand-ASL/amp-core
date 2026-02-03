@@ -236,7 +236,7 @@ void Bridge::consume(const Message& msg) {
 
             // Play the greeting to the new caller, but not for calls that 
             // we originated in the first place
-            if (!payload.originated) {
+            if (!payload.originated && call.isNormal()) {
                 if (!_greetingText.empty())       
                     call.requestTTS(_greetingText.c_str());
             } else 
@@ -258,7 +258,7 @@ void Bridge::consume(const Message& msg) {
                 // Predicate
                 [msg](const BridgeCall& c) { 
                     return c.isActive() && 
-                        // Make sure this is a normal conference node
+                        // Make sure this is a normal conference node (not a parrot)
                         c.isNormal() &&
                         // Make sure this is a call that has been involved in
                         // recent command activity.
@@ -301,7 +301,7 @@ void Bridge::consume(const Message& msg) {
             // Predicate
             [msg](const BridgeCall& c) { 
                 return c.isActive() && 
-                    // Make sure this is a normal conference node
+                    // Make sure this is a normal conference node (not parrot)
                     c.isNormal() &&
                     // Make sure this is a call that has been involved in
                     // recent command activity.
