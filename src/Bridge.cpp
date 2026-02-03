@@ -428,15 +428,15 @@ void Bridge::oneSecTick() {
     );
 
     // Set the outbound talker ID for every call based on the 
-    // most recently asserted inbound talker ID.
+    // which call has most recently contributed audio.
     uint64_t maxMs = 0;
     string talkerId;
 
     // Find the most recent
     _calls.visitIf(
         [&maxMs, &talkerId](const BridgeCall& call) { 
-            if (call.getInputTalkerIdChangeMs() > maxMs) {
-                maxMs = call.getInputTalkerIdChangeMs();
+            if (call.getLastAudioRxMs() > maxMs) {
+                maxMs = call.getLastAudioRxMs();
                 talkerId = call.getInputTalkerId();
             }
             return true;
