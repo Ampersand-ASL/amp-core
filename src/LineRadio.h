@@ -114,6 +114,7 @@ protected:
     void _analyzeCapturedAudio(const int16_t* frame, unsigned frameLen);
     void _processCapturedAudio(const int16_t* frame, unsigned frameLen,
         uint32_t actualCaptureMs, uint32_t idealCaptureMs);
+    void _sendTalkerId();
 
     void _captureStart();
     void _captureEnd();
@@ -143,6 +144,7 @@ protected:
     bool _capturing = false;
     uint32_t _lastPlayedFrameMs = 0;
     uint32_t _lastCapturedFrameMs = 0;
+    uint64_t _lastCaptureMs = 0;
     // If we go silent for this amount of time the playback is assumed
     // to have ended. 
     uint32_t _playSilenceIntervalMs = 20 * 4;

@@ -302,8 +302,6 @@ void BridgeCall::consume(const Message& frame) {
             _talkerId = r;
             _talkerIdChangeMs = _clock->timeUs() / 1000;
             _log->info("Input talker ID set %s", _talkerId.c_str());
-        } else {
-            _log->info("NOT SET");
         }
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
@@ -433,6 +431,8 @@ void BridgeCall::oneSecTick() {
 }
 
 void BridgeCall::tenSecTick() {
+    // #### TODO: SHOULD ONLY BE SENDING THIS IF THERE IS ACTIVE AUDIO
+    // #### FLOWING AS WELL.
     _signalTalker();
 }
 

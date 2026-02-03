@@ -169,6 +169,11 @@ void LineRadio::oneSecTick() {
     _captureConsumer.consume(msg);
 
     resetStatistics();
+
+    // Send the talker ID if we are actively capturing audio
+    uint64_t nowMs = _clock.timeUs() / 1000;
+    if (nowMs - _lastCaptureMs < 1000)
+        _sendTalkerId();
 }
 
 void LineRadio::audioRateTick(uint32_t tickMs) {
@@ -197,6 +202,16 @@ void LineRadio::_checkTimeouts() {
     }
 }
 
+void LineRadio::_sendTalkerId() {
+    // ### TEMP
+    const char talkerId[32] = "KC1FSZ Bruce";
+    Message msg2(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+        strlen(talkerId) + 1, (const uint8_t*)talkerId, 0, _clock.time());
+    msg2.setSource(_busId, _callId);
+    msg2.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg2);
+}
+
 void LineRadio::_open(bool echo) {    
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
@@ -216,14 +231,7 @@ void LineRadio::_open(bool echo) {
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
 
-    // Assert the talker
-    // #### TEMP
-    const char talkerId[32] = "KC1FSZ Bruce";
-    Message msg2(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
-        strlen(talkerId) + 1, (const uint8_t*)talkerId, 0, _clock.time());
-    msg2.setSource(_busId, _callId);
-    msg2.setDest(_destBusId, _destCallId);
-    _captureConsumer.consume(msg2);
+    _sendTalkerId();
 }
 
 void LineRadio::_close() {
@@ -240,6 +248,7 @@ void LineRadio::_close() {
 void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
 
     _lastFullCaptureMs = _clock.time();
+    _lastCaptureMs = _clock.timeUs() / 1000;
 
     // Power
     for (unsigned i = 0; i < frameLen; i++) {

@@ -1577,8 +1577,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             params[paramsLen] = 0;
 
             if (strcmp(cmd,"TALKERID") == 0) {
-                _log.info("Talker ID from %s: [%s]", call.remoteNumber.c_str(), 
-                    params);
+                //_log.info("Talker ID from %s: [%s]", call.remoteNumber.c_str(), 
+                //    params);
                 Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
                     // Include the null
                     paramsLen + 1, (const uint8_t*)params, 
@@ -2275,8 +2275,8 @@ void LineIAX2::consume(const Message& msg) {
                         char text[64];
                         snprintf(text, sizeof(text), "T %s TALKERID,%s", 
                             call.localNumber.c_str(), msg.body());
-                        line->_log.info("Talker ID to %s [%s]", 
-                            call.remoteNumber.c_str(), text);
+                        //line->_log.info("Talker ID to %s [%s]", 
+                        //    call.remoteNumber.c_str(), text);
                         frame.setBody((const uint8_t*)text, strlen(text));
                         line->_sendFrameToPeer(frame, call);
                     }
