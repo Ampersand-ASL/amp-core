@@ -147,7 +147,8 @@ void BridgeCall::reset() {
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
     bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-    const char* remoteNodeNumber, bool permanent) {
+    const char* remoteNodeNumber, bool permanent, bool useKerchunkFilter,
+    unsigned kerchunkFilterEvaluationIntervalMs) {
 
     _active = true;
     _lineId = lineId;  
@@ -171,6 +172,9 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
         _parrotState = ParrotState::CONNECTED;
         _parrotStateStartMs = _clock->time();
     }
+
+    _bridgeIn.setKerchunkFilterEnabled(useKerchunkFilter);
+    _bridgeIn.setKerchunkFilterEvaluationIntervalMs(kerchunkFilterEvaluationIntervalMs);
 }
 
 bool BridgeCall::isRecentCommander() const {
@@ -180,11 +184,7 @@ bool BridgeCall::isRecentCommander() const {
 uint64_t BridgeCall::getStatusDocStampMs() const {
     // The idea here is to find the maximum time that anything 
     // has changed.
-    // The last RX audio is only allowed to update every 5 
-    // seconds to avoid generating too many update events.
-    uint64_t lastRxGranularity = 1000 * 5;
-    uint64_t ms = (_bridgeIn.getLastAudioMs() / lastRxGranularity) * 
-        lastRxGranularity;
+    uint64_t ms = _bridgeIn.getActiveStatusChangedMs();
     ms = max(ms, _linkReportChangeMs);
     ms = max(ms, _talkerIdChangeMs);
     ms = max(ms, _keyedNodeChangeMs);
@@ -202,8 +202,7 @@ json BridgeCall::getStatusDoc() const {
     o2["permanent"] = _permanent;
 
     // Dynamic
-    bool active = !_clock->isPast(_bridgeIn.getLastAudioMs() + 5000);
-    o2["rxActive"] = active;
+    o2["rxActive"] = _bridgeIn.isActive();
     uint64_t sinceLastActiveMs = 0;
     if (_bridgeIn.getLastAudioMs() > 0) 
         sinceLastActiveMs = (_clock->timeUs() / 1000) - _bridgeIn.getLastAudioMs();

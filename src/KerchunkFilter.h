@@ -51,10 +51,16 @@ public:
     void reset();
     void setEnabled(bool e) { _enabled = e; }
 
+    /**
+     * @param ms The number of milliseconds the filter waits before deciding
+     * whether the transmission is legit. This is also the playout delay
+     * for the first transmission.
+     */
+    void setEvaluationIntervalMs(unsigned ms) { _evaluationIntervalMs = ms; }
+
     // ----- Runnable2 --------------------------------------------------------
 
     void audioRateTick(uint32_t tickMs);
-    bool run2() { return false; }
 
     // ----- MessageConsumer ---------------------------------------------------
 

@@ -43,7 +43,6 @@ public:
 
     // ----- Runnable -------
 
-    bool run2() { return false; }
     void tenSecTick();
 
 private:

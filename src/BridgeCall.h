@@ -100,8 +100,9 @@ public:
 
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
         bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
-        const char* remoteNodeNumber, bool permanent);
-
+        const char* remoteNodeNumber, bool permanent, bool useKerchunkFilter,
+        unsigned kerchunkFilterEvaluationIntervalMs);
+        
     bool isActive() const { return _active; }
 
     bool isNormal() const { return _mode == Mode::NORMAL; }

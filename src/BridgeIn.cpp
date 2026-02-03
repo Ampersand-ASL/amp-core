@@ -20,6 +20,10 @@
 #include "Message.h"
 #include "BridgeIn.h"
 
+// How long after the last audio packet until we decide the link is 
+// inactive.
+#define ACTIVE_TIMEOUT_MS (100)
+
 namespace kc1fsz {
 
     namespace amp {
@@ -27,7 +31,6 @@ namespace kc1fsz {
 BridgeIn::BridgeIn() {
     // #### TODO: FIGURE OUT WHERE TO MOVE THIS
     _jitBuf.setInitialMargin(20 * 10);
-
     // Kerchunk filter just passes through
     _kerchunkFilter.setSink(
         [this](const Message& frame) { _sink(frame); }
@@ -53,7 +56,15 @@ void BridgeIn::setCodec(CODECType codecType) {
 void BridgeIn::consume(const Message& frame) {    
 
     if (frame.getType() == Message::Type::AUDIO) {
+
         _lastAudioMs = _clock->timeUs() / 1000;
+
+        // Look for leading edge of active status
+        if (!_activeStatus) {
+            _activeStatus = true;
+            _lastActiveStatusChangedMs = _lastAudioMs;
+        }
+
         // The first stop is the jitter buffer, unless it's been bypassed
         if (_bypassJitterBuffer) {
             _bypassedFrames.push(frame);
@@ -116,6 +127,12 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
 
     // Let the kerchunk filter contribute output if necessary
     _kerchunkFilter.audioRateTick(tickMs);
+
+    // Look for trailing edge of active status
+    if (_activeStatus && _clock->isPast(_lastAudioMs + ACTIVE_TIMEOUT_MS)) {
+        _activeStatus = false;
+        _lastActiveStatusChangedMs = _clock->timeUs() / 1000;
+    }
 }
 
 /**

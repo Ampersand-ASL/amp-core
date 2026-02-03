@@ -51,7 +51,6 @@ public:
 
     // ----- Runnable2 --------------------------------------------------------
 
-    bool run2() { return false; }
     void oneSecTick();
 
 private: 

@@ -37,10 +37,12 @@ void EventLoop::run(Log& log, Clock& clock,
     std::function<bool(Log& log, Clock& clock)> cb, bool trace) {
 
     StdPollTimer timer20ms(clock, 20000);
+    StdPollTimer timer250ms(clock, 250000);
     StdPollTimer timer1s(clock, 1000000);
     StdPollTimer timer10s(clock, 10000000);
 
     timer20ms.reset();
+    timer250ms.reset();
     timer1s.reset();
     timer10s.reset();
 
@@ -115,6 +117,11 @@ void EventLoop::run(Log& log, Clock& clock,
         for (unsigned i = 0; i < taskCount; i++)
             tasks[i]->run2();             
 
+        if (timer250ms.poll()) {
+            for (unsigned i = 0; i < taskCount; i++)
+                tasks[i]->quarterSecTick();
+        }
+
         if (timer1s.poll()) {
             for (unsigned i = 0; i < taskCount; i++)
                 tasks[i]->oneSecTick();
@@ -156,7 +163,6 @@ void EventLoop::run(Log& log, Clock& clock,
             slowestLoopUs = 0;
             loopCount = 0;            
         }
-
 
         loopCount++;
     }

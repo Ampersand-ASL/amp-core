@@ -60,6 +60,8 @@ public:
      */
     virtual void audioRateTick(uint32_t tickTimeMs) { }
 
+    virtual void quarterSecTick() { }
+
     virtual void oneSecTick() { }
     
     virtual void tenSecTick() { }

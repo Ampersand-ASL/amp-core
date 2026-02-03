@@ -127,17 +127,17 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     // ------ Common -----------------------------------------------------------
 
     svr.Get("/main.css", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
-        //    "text/css");
-        res.set_file_content("../amp-core/www/main.css");
+        res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
+            "text/css");
+        //res.set_file_content("../amp-core/www/main.css");
     });
 
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/index.html");
+        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/index.html");
     });
 
     svr.Get("/favorites", [ui](const httplib::Request &, httplib::Response &res) {
@@ -166,13 +166,17 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         res.set_content(ui->_levels.getCopy().dump(), "application/json");
     });
 
-    svr.Get("/status", [ui](const httplib::Request &, httplib::Response &res) {
-        // Get a copy of the latest status and add a few things
-        json o = ui->_status.getCopy();
+    svr.Get("/controls", [ui](const httplib::Request &, httplib::Response &res) {
+        json o;
         o["ptt"] = ui->_ptt;
-
         res.set_content(o.dump(), "application/json");
     });
+
+    svr.Get("/status", [ui](const httplib::Request &, httplib::Response &res) {
+        // The status document gets posted in periodically
+        res.set_content(ui->_status.getCopy().dump(), "application/json");
+    });
+
     svr.Post("/status-pressed", [ui, bus](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
 
@@ -249,9 +253,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     // ------ Config Page-------------------------------------------------------
 
     svr.Get("/config", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/config.html");
+        res.set_content((const char*)_amp_core_www_config_html, _amp_core_www_config_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/config.html");
     });
     svr.Get("/config-load", [ui](const httplib::Request &, httplib::Response &res) {
         // The config document gets posted in whenever it changes
@@ -265,7 +269,6 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             return true;
         });
         ui->_log.info("Saving configuration");
-        cout << body << endl;
         json jBody = json::parse(body);
         jBody["lastUpdateMs"] = ui->_clock.timeUs() / 1000;
         ofstream cf(ui->_configFileName);

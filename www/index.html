@@ -9,6 +9,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
         <style>
 #node {
     margin-right: 10px;
+    width: 250px;
 }
 
 #connect-button {
@@ -324,6 +325,9 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     </body>
     <script>
 
+// Used to prevent unnecessary rendering updates
+var lastStatusUpdateMs = 0;
+
 // This array establishes the top power level for each LED
 const audioLevels = [
     { top: -50 },
@@ -408,36 +412,55 @@ async function favorites_update() {
     }
 }
 
+async function controls_update() {
+    try {
+        const response = await fetch('controls');
+        if (response.ok) {
+            const data = await response.json();
+            if (data["ptt"]) {
+                document.getElementById("ptt-button").classList.add("selected")
+            } else {
+                document.getElementById("ptt-button").classList.remove("selected")
+            }
+        }
+    } catch (error) {
+    }
+}
+
 async function levels_update() {
-    const response = await fetch('levels');
-    if (response.ok) {
-        const data = await response.json();
-        setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
-        setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
-        setAudioLevel("net-rx-meter", data["net-rx-meter"]);
-        setAudioLevel("net-tx-meter", data["net-tx-meter"]);
+    try {
+        const response = await fetch('levels');
+        if (response.ok) {
+            const data = await response.json();
+            setAudioLevel("usb-rx-meter", data["usb-rx-meter"]);
+            setAudioLevel("usb-tx-meter", data["usb-tx-meter"]);
+            setAudioLevel("net-rx-meter", data["net-rx-meter"]);
+            setAudioLevel("net-tx-meter", data["net-tx-meter"]);
+        }
+    } catch (error) {
     }
 }
 
 async function status_update() {
-    const response = await fetch('status');
-    if (response.ok) {
-
-        const data = await response.json();
-
-        if (data["ptt"]) {
-            document.getElementById("ptt-button").classList.add("selected")
-        } else {
-            document.getElementById("ptt-button").classList.remove("selected")
-        }
-
-        tbody = document.getElementById("connection-table-body")
-        tbody.replaceChildren();
-        if ("calls" in data)
-            for (c of data["calls"]) {
-                if (!c["permanent"])
-                    tbody.appendChild(makeCallRow(c));
+    try {
+        const response = await fetch('status');
+        if (response.ok) {
+            const data = await response.json();
+            // An optimization to avoid updating the same status twice
+            if (data["stamp"] != lastStatusUpdateMs) {
+                lastStatusUpdateMs = data["stamp"]
+                tbody = document.getElementById("connection-table-body")
+                tbody.replaceChildren();
+                if ("calls" in data) {
+                    for (c of data["calls"]) {
+                        if (!c["permanent"])
+                            tbody.appendChild(makeCallRow(c));
+                    }
+                }
+                lastStatusUpdateMs = data["stamp"];
             }
+        }
+    } catch (error) {
     }
 }
 
@@ -521,9 +544,7 @@ function status_pressed(button) {
     const formObject = Object.fromEntries(formData.entries());
 
     // Take a copy of the event object off the button
-    console.log(button.getAttribute("data-user-info"));
     msg = JSON.parse(button.getAttribute("data-user-info"));
-    console.log(msg)
     // Look for the magic string _ENTRY in the command message that indicates
     // that we should read from ehe input box.
     if ("node" in msg && msg["node"] == "_ENTRY")
@@ -535,8 +556,7 @@ function status_pressed(button) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(msg, null, 2)
-        }
-    );
+    });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -549,7 +569,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fast timer to get live updates from the server
     setInterval(async () => {
         status_update();
-    }, 500);
+    }, 1000);
     setInterval(async () => {
         levels_update();
     }, 500);
@@ -565,6 +585,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     status_update();
     favorites_update();
+    controls_update();
 });
     </script>
 </html>

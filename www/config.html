@@ -157,6 +157,11 @@
                 -->
                 </div>
                 <div class="form2">
+                    <div>Advanced Settings:</div><div></div>
+                    <label for="kfnodes">Kerchunk Filter Nodes:</label>
+                    <textarea name="kfnodes" id="kfnodes" rows="2"></textarea>
+                    <label for="kfdelay">Kerchunk Filter Delay (ms):</label>
+                    <input type="number" id="kfdelay" name="kfdelay"/>
                 </div>
                 <span></span>
                 <input type="submit" value="Save" class="green-button save-button"/>
@@ -214,6 +219,8 @@ async function loadSelectOptions(baseElId, selectId, arg) {
 function loadUi(name, data, doc) {
     if (name in data)
         doc.getElementById(name).value = data[name]
+    else 
+        doc.getElementById(name).value = null
 }
 
 function storeUi(name, formObject, data) {
@@ -262,6 +269,11 @@ async function configLoad() {
         loadUi("aslTxMixBSet", data, document)
         loadUi("aslRxMixerSet", data, document)
 
+        // ----- Advanced Section --------------------------------------------------
+
+        loadUi("kfnodes", data, document);
+        loadUi("kfdelay", data, document);
+
     } catch (error) {
         console.error('Error fetching data:', error.message);
     }
@@ -296,6 +308,11 @@ function configStore() {
     storeUi("aslTxMixASet", formObject, fullConfig)
     storeUi("aslTxMixBSet", formObject, fullConfig)
     storeUi("aslRxMixerSet", formObject, fullConfig)
+
+    // ----- Advanced Section --------------------------------------------------
+
+    storeUi("kfnodes", formObject, fullConfig);
+    storeUi("kfdelay", formObject, fullConfig);
 
     // Push back to the server
     fetch('/config-save', {

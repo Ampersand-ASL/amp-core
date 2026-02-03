@@ -166,10 +166,16 @@ public:
     void close();
 
     /**
-     * Calls the target node. This will use DNS to convert the target number 
-     * to an IP address.
+     * Calls the target node. This will use either (a) the explicit target
+     * information (b) the local registry (c) DNS to convert the target 
+     * public node number to an IP address/port.
+     * 
+     * @param targetNode Can be a node number or an explicit target address 
+     *   in the format of: user@address:port/number,password
+     * @returns 0 on success, -2 call limit exceeded, -4 for explicit target 
+     * parsing error
      */
-    int call(const char* localNumber, const char* targetNumber);
+    int call(const char* localNumber, const char* targetNode);
 
     /**
      * Drops the target node number.

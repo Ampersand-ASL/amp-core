@@ -74,6 +74,14 @@ void Bridge::setLocalNodeNumber(const char* nodeNumber) {
     _nodeNumber = nodeNumber; 
 }
 
+void Bridge::setKerchunkFilterNodes(std::vector<std::string> nodes) {
+    _kerchunkFilterNodes = nodes;
+}
+
+void Bridge::setKerchunkFilterDelayMs(unsigned ms) {
+    _kerchunkFilterDelayMs = ms;
+}
+
 void Bridge::setGreeting(const char* greeting) { 
     if (greeting)
         _greetingText = greeting; 
@@ -149,6 +157,7 @@ json Bridge::getStatusDoc() const {
     );
 
     root["calls"] = calls;
+    root["stamp"] = getStatusDocStampMs();
 
     return root;
 }
@@ -209,11 +218,21 @@ void Bridge::consume(const Message& msg) {
                 payload.echo, 
                 payload.sourceAddrValidated);
 
+            // Check to see if this node should be using the kerchunk filter
+            string remoteNodeNumber = payload.remoteNumber;
+            auto it = std::find(_kerchunkFilterNodes.begin(), _kerchunkFilterNodes.end(),
+                remoteNodeNumber);
+            bool useKerchunkFilter = it != _kerchunkFilterNodes.end();
+            if (useKerchunkFilter)
+                _log.info("Enabling kerchunk filter, delay %u ms", 
+                    _kerchunkFilterDelayMs);
+
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
                 payload.sourceAddrValidated, _defaultMode, 
-                payload.remoteNumber, payload.permanent);
+                payload.remoteNumber, payload.permanent, useKerchunkFilter,
+                _kerchunkFilterDelayMs);
 
             // Play the greeting to the new caller, but not for calls that 
             // we originated in the first place

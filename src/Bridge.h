@@ -70,7 +70,9 @@ public:
 
     void setLocalNodeNumber(const char* nodeNumber);
 
-    unsigned getCallCount() const;
+    void setKerchunkFilterNodes(std::vector<std::string> nodes);
+
+    void setKerchunkFilterDelayMs(unsigned ms);
 
     /**
      * Sets optional text greeting that will be spoken to any new caller.
@@ -78,6 +80,8 @@ public:
     void setGreeting(const char* greeting);
 
     void setParrotLevelThresholds(std::vector<int>& thresholds);
+
+    unsigned getCallCount() const;
 
     std::vector<std::string> getConnectedNodes() const;
 
@@ -105,6 +109,7 @@ public:
     // ----- Runnable2 --------------------------------------------------------
     
     void audioRateTick(uint32_t tickMs);
+
     void oneSecTick();
 
 private:
@@ -122,6 +127,8 @@ private:
     unsigned _networkDestLineId;
     std::string _nodeNumber;
     std::string _greetingText;
+    std::vector<std::string> _kerchunkFilterNodes;
+    unsigned _kerchunkFilterDelayMs;
 
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
@@ -154,15 +161,18 @@ public:
 
     // ----- Runnable2 ----------------------------------------------------
 
-    void oneSecTick() {     
+    void quarterSecTick() {     
         uint64_t stampMs = _bridge.getStatusDocStampMs();
-        uint64_t nowMs = _clock.timeUs() / 1000;
-        // We fire an update whenever the bridge changes or every 10 seconds,
-        // which ever comes first.
-        if (stampMs > _lastUpdateMs || nowMs > (_lastUpdateMs + _maxIntervalMs)) {
-            _lastUpdateMs = max(stampMs, nowMs);
+        if (stampMs > _lastUpdateMs) {
+            _lastUpdateMs = stampMs;
             _cb(_bridge.getStatusDoc());
         }
+    }
+
+    void tenSecTick() {     
+        uint64_t stampMs = _bridge.getStatusDocStampMs();
+        _lastUpdateMs = stampMs;
+        _cb(_bridge.getStatusDoc());
     }
 
 private:

@@ -260,17 +260,64 @@ void LineIAX2::close() {
     _addrFamily = 0;
 } 
 
-int LineIAX2::call(const char* localNumber, const char* targetNumber) {  
+// TEST: radio@52.8.197.124:4569/61057,NONE
+int LineIAX2::call(const char* localNumber, const char* targetNode) {  
 
-    _log.info("Request to call %s -> %s", localNumber, targetNumber);
+    // It's possible that the node has been specified in explicit 
+    // format: radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
+    // pieces so 
+    fixedstring targetUser = _defaultUser;
+    fixedstring targetNumber = targetNode;
+    fixedstring targetAddrAndPort;
+    fixedstring targetPassword;
+    bool targetExplicit = false;
+
+    // Look for the case where explicit target information was provided.
+    const char* slash = strchr(targetNode, '/');
+    if (slash != 0) {
+        targetExplicit = true;
+        int state = 0;
+        targetUser.clear();
+        targetNumber.clear();
+        for (unsigned i = 0; i < strlen(targetNode); i++) {
+            char c = targetNode[i];
+            if (state == 0) {
+                if (c == '@') {
+                    state = 1;
+                } else {
+                    targetUser.append(c);
+                }
+            } else if (state == 1) {
+                if (c == '/') {
+                    state = 2;
+                } else {
+                    targetAddrAndPort.append(c);
+                }
+            } else if (state == 2) {
+                if (c == ',') {
+                    state = 3;
+                } else {   
+                    targetNumber.append(c);
+                }
+            } else if (state == 3) {
+                targetPassword.append(c);
+            }
+        }
+        if (targetUser.empty() || targetAddrAndPort.empty() ||
+            targetNumber.empty() || targetPassword.empty())
+            return -4;
+    }
+
+    _log.info("Request to call %s -> %s", localNumber, targetNode);
 
     // Make sure we don't have an active call already to the same target number.
     bool found = false;
 
     _visitActiveCallsIf(
         // Visitor
-        [&found, localNumber, targetNumber, &log = _log](const Call& call) {
-            log.info("%s -> %s already linked in call %u", localNumber, targetNumber, call.localCallId);
+        [&found, localNumber, &targetNumber, &log = _log](const Call& call) {
+            log.info("%s -> %s already linked in call %u", localNumber, 
+                targetNumber.c_str(), call.localCallId);
             found = true;
         },
         // Predicate
@@ -285,10 +332,11 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     if (found)
         return -1;
 
+    // Allocate a call
     int callIx = _allocateCallIx();
     if (callIx == -1) {
         _log.error("No calls available");
-        return -1;
+        return -2;
     }
     
     Call& call = _calls[callIx];
@@ -306,11 +354,22 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
     call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
     // This may get overridden later
-    call.callUser = _defaultUser;
+    call.callUser = targetUser;
 
+    // If an explicit address was specified 
+    if (targetExplicit) {
+        struct sockaddr_storage targetAddr;
+        memset(&targetAddr, 0, sizeof(sockaddr_storage));
+        if (parseIPAddrAndPort(targetAddrAndPort.c_str(), targetAddr) != 0) 
+            return -5;
+        memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
+        call.callUser = targetUser;
+        call.callPassword = targetPassword;
+        call.state = Call::State::STATE_INITIATION_WAIT;
+    }
     // Check the local registration (if available) to see if we can resolve the target 
     // without going out to the DNS/directory.
-    if (_locReg) {
+    else if (_locReg) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
         fixedstring targetUser;
@@ -325,6 +384,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNumber) {
             call.state = Call::State::STATE_INITIATION_WAIT;
         }
     }
+    // Otherwise, we in a state that will trigger a DNS lookup
 
     return 0;
 }

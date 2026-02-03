@@ -102,7 +102,13 @@ void ConfigPoller::_populateDefaults(json& j) {
 #endif            
     }
     if (!j.contains("favorites")) {
-        j["favorites"] = "test2";
+        j["favorites"] = "2002:ASL Parrot";
+    }
+    if (!j.contains("kfnodes")) {
+        j["kfnodes"] = "";
+    }
+    if (!j.contains("kfdelay")) {
+        j["kfdelay"] = "2000";
     }
 }
 

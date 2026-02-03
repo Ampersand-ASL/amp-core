@@ -158,7 +158,8 @@ struct PayloadCallStatus {
 
 struct PayloadCall {
     char localNumber[16];
-    char targetNumber[16];
+    // This could potentially be an explicit address
+    char targetNumber[64];
 };
 
 struct PayloadDtmfPress {

@@ -84,9 +84,11 @@ public:
         _bypassJitterBuffer = false;
         _bypassedFrames = std::queue<Message>();
         _startTime = 0;
-        _lastAudioMs = 0;
         _jitBuf.reset();
         _lastUnkeyMs = 0;
+        _lastAudioMs = 0;
+        _activeStatus = false;
+        _lastActiveStatusChangedMs = 0;
         _transcoder0a.reset(); 
         _transcoder0c.reset(); 
         _transcoder0d.reset(); 
@@ -114,6 +116,25 @@ public:
      */
     uint64_t getLastAudioMs() const { return _lastAudioMs; }
 
+    /**
+     * @returns True if audio is actively being received.
+     */
+    bool isActive() const { return _activeStatus; }
+
+    /** 
+     * @returns The last time the active status transitioned (in either
+     * direction).
+     */
+    uint64_t getActiveStatusChangedMs() const { return _lastActiveStatusChangedMs; }
+
+    void setKerchunkFilterEnabled(bool b) {
+        _kerchunkFilter.setEnabled(b);
+    }
+
+    void setKerchunkFilterEvaluationIntervalMs(unsigned ms) { 
+        _kerchunkFilter.setEvaluationIntervalMs(ms); 
+    }
+
     // ----- Runnable2 --------------------------------------------------------
 
     void audioRateTick(uint32_t tickMs);
@@ -139,7 +160,11 @@ private:
     // In ms
     uint32_t _startTime = 0;
     // Last time audio was processed 
-    uint64_t _lastAudioMs = 0;
+    uint64_t _lastAudioMs = 0; 
+    // Current status, used to detect transitions  
+    bool _activeStatus = false;
+    // The last time the status was changed in either direction.
+    uint64_t _lastActiveStatusChangedMs = 0;
 
     bool _bypassJitterBuffer = false;
 
