@@ -492,7 +492,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         // Parse off the node number
         string targetNode = cmd.substr(2);
 
-        _log->info("Request to call %s -> %s", 
+        _log->info("DTMF request to call %s -> %s", 
             _bridge->_nodeNumber.c_str(), targetNode.c_str());
 
         // Create a signal and publish it to the LineIAX2 for processing
@@ -507,7 +507,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
     // *71 drop all outbound calls
     else if (cmd.starts_with("*71")) {
 
-        _log->info("Request to disconnect all");
+        _log->info("DTMF request to disconnect all");
 
         // Create a signal and publish it to the LineIAX2 for processing
         Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_ALL_CALLS_OUTBOUND, 
@@ -518,7 +518,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
     // *70 status
     else if (cmd.starts_with("*70")) {
 
-        _log->info("Request for status");
+        _log->info("DTMF request for status");
 
         // Get a list of the nodes connected
         vector<string> nodes = _bridge->getConnectedNodes();
@@ -534,6 +534,9 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         requestTTS(prompt.c_str());
     }
     else if (cmd == "*76") {
+        
+        _log->info("DTMF request for parrot");
+
         _enterParrotMode();
     }
     else {

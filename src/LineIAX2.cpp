@@ -321,9 +321,9 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
             found = true;
         },
         // Predicate
-        [localNumber, targetNumber](const Call& call) {
-            return call.remoteNumber == targetNumber && 
-              call.localNumber == localNumber &&
+        [&localNumber, &targetNumber](const Call& call) {
+            return 
+              call.remoteNumber == targetNumber && 
               call.state != Call::State::STATE_TERMINATE_WAITING && 
               call.state != Call::State::STATE_TERMINATED;
         }
