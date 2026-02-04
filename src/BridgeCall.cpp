@@ -233,7 +233,7 @@ json BridgeCall::getStatusDoc() const {
     o2["permanent"] = _permanent;
 
     // Dynamic
-    o2["rxActive"] = _bridgeIn.isActive();
+    o2["rxActive"] = _bridgeIn.isActiveRecently();
     o2["talkerid"] = _talkerId;
 
     // Build the connection list

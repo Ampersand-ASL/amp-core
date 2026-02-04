@@ -192,12 +192,44 @@ json Bridge::getLevelsDoc() const {
 
 void Bridge::consume(const Message& msg) {
 
+    // This signal is generated when a call that was originated from this 
+    // node fails to establish.
     if (msg.isSignal(Message::SignalType::CALL_FAILED)) {   
 
         PayloadCallFailed payload;
         assert(msg.size() == sizeof(payload));
         memcpy(&payload, msg.body(), sizeof(payload));
 
+        // Announce the failure connection to all of the *other* active calls
+        // who may have commanded this connection.
+        string prompt = "Unable to connect to node ";
+        // Make sure the target isn't too long since we're speaking this
+        string target = payload.targetNumber;
+        if (target.length() > 10)
+            target = target.substr(0, 10);
+        prompt += addSpaces(target.c_str());
+        prompt += ". ";
+        prompt += payload.message;
+        prompt += ". ";
+        
+        _calls.visitIf(
+            // Visitor
+            [&prompt](BridgeCall& call) { 
+                call.requestTTS(prompt.c_str());
+                return true;
+            },
+            // Predicate
+            [msg](const BridgeCall& c) { 
+                return c.isActive() && 
+                    // Make sure this is a normal conference node (not a parrot)
+                    c.isNormal() &&
+                    // Make sure this is a call that has been involved in
+                    // recent command activity.
+                    c.isRecentCommander();
+            }
+        );
+
+        // Build a message for display on the UI
         char msg[128];
         snprintf(msg, sizeof(msg), "Call to %s failed: %s",
             payload.targetNumber, payload.message);

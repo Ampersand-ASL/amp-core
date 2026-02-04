@@ -1955,8 +1955,10 @@ bool LineIAX2::_progressCall(Call& call) {
         }
         else if (call.state == Call::State::STATE_INITIATION_WAIT) { 
             
-            _log.info("Initiating a call %s -> %s", 
-                call.localNumber.c_str(), call.remoteNumber.c_str()); 
+            char addr[64];
+            formatIPAddrAndPort((const sockaddr&)call.peerAddr, addr, 64);
+            _log.info("Initiating a call %s -> %s (%s)", 
+                call.localNumber.c_str(), call.remoteNumber.c_str(), addr); 
             
             // Put sequence back to the beginning and generate a new call ID
             // #### TODO: THIS IS PROBLEMATIC BECAUSE SOME THINGS IN THE 
