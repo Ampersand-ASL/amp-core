@@ -604,6 +604,7 @@ function status_pressed(button) {
         },
         body: JSON.stringify(msg, null, 2)
     });
+    controls_update();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
