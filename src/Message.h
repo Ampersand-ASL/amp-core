@@ -148,11 +148,6 @@ struct PayloadCallEnd {
     char remoteNumber[16];
 };
 
-struct PayloadCallFailed {
-    char localNumber[16];
-    char remoteNumber[16];
-};
-
 struct PayloadCallStatus {
     uint64_t lastRxMs;
     uint64_t lastTxMs;
@@ -178,5 +173,13 @@ struct PayloadCallLevels {
 struct PayloadDtmfGen {
     char symbol;
 };
+
+struct PayloadCallFailed {
+    // This could potentially be an explicit address
+    char targetNumber[64];
+    // Must be null-terminated
+    char message[80];
+};
+
 
 }

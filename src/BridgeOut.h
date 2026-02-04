@@ -30,6 +30,7 @@
 namespace kc1fsz {
 
 class Log;
+class Clock;
 
 /**
  * Transcodes from internal SLIN_48K to whatever CODEC is needed for 
@@ -46,17 +47,28 @@ public:
 
     void setCodec(CODECType codecType);
 
+    void init(Log* log, Clock* clock) { 
+        _log = log; 
+        _clock = clock; 
+    }
+
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
         _transcoder0.reset(); 
         _transcoder1a.reset(); 
         _transcoder1c.reset(); 
         _resampler.reset(); 
+        _lastActivityMs = 0;
     }
 
     virtual void consume(const Message& frame);
 
+    bool isActiveRecently() const;
+
 private:
+
+    Log* _log; 
+    Clock* _clock;
 
     CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
     std::function<void(const Message& msg)> _sink = nullptr;
@@ -65,6 +77,7 @@ private:
     Transcoder_SLIN_16K _transcoder1c;
     Transcoder_SLIN_8K _transcoder1d;
     amp::Resampler _resampler;
+    uint64_t _lastActivityMs;
 };
 
 }

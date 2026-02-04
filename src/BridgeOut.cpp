@@ -22,6 +22,9 @@
 #include "Message.h"
 #include "BridgeOut.h"
 
+// The definition of "recent"
+#define RECENT_TIMEOUT_MS (2000)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -34,9 +37,15 @@ void BridgeOut::setCodec(CODECType codecType) {
     _resampler.setRates(48000, rate);
 }
 
+bool BridgeOut::isActiveRecently() const {
+    return _clock->isInWindow(_lastActivityMs, RECENT_TIMEOUT_MS);
+}
+
 void BridgeOut::consume(const Message& frame) {
 
     if (frame.getType() == Message::Type::AUDIO) {
+
+        _lastActivityMs = _clock->timeMs();
 
         assert(frame.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
         assert(frame.size() == BLOCK_SIZE_48K * 2);

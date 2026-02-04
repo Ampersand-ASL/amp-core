@@ -37,6 +37,10 @@
 // a commander (and therefore, will stop receiving status messages)
 #define COMMANDER_TIMEOUT_MS (30 * 1000)
 
+// The number of milliseconds of inactivity before a DTMF command tring is 
+// considered complete.
+#define DTMF_WINDOW_MS (2500)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -97,6 +101,27 @@ BridgeCall::BridgeCall() {
     _bridgeOut.setSink([this](const Message& msg) {
         _sink->consume(msg);
     });
+}
+
+void BridgeCall::init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock, 
+    MessageConsumer* sink, 
+    unsigned bridgeLineId, unsigned bridgeCallId, 
+    unsigned ttsLineId, unsigned netTestLineId, const char* netTestBindAddr) {
+    _bridge = bridge;
+    _log = log;
+    _traceLog = traceLog;
+    _clock = clock;
+    _sink = sink;
+    _bridgeLineId = bridgeLineId;
+    _bridgeCallId = bridgeCallId;
+    _ttsLineId = ttsLineId;
+    _netTestLineId = netTestLineId;
+    if (netTestBindAddr)
+        _netTestBindAddr = netTestBindAddr;
+    else 
+        _netTestBindAddr = "0.0.0.0";
+    _bridgeIn.init(_log, _traceLog, _clock);
+    _bridgeOut.init(_log, _clock);
 }
 
 void BridgeCall::reset() {
@@ -184,7 +209,7 @@ void BridgeCall::_enterParrotMode() {
 }
 
 bool BridgeCall::isRecentCommander() const {
-    return !_clock->isPast(_lastDtmfRxMs + COMMANDER_TIMEOUT_MS);
+    return _clock->isInWindow(_lastDtmfRxMs, COMMANDER_TIMEOUT_MS);
 }
 
 uint64_t BridgeCall::getStatusDocStampMs() const {
@@ -209,10 +234,6 @@ json BridgeCall::getStatusDoc() const {
 
     // Dynamic
     o2["rxActive"] = _bridgeIn.isActive();
-    uint64_t sinceLastActiveMs = 0;
-    if (_bridgeIn.getLastAudioMs() > 0) 
-        sinceLastActiveMs = (_clock->timeUs() / 1000) - _bridgeIn.getLastAudioMs();
-    o2["lastRxActive"] = sinceLastActiveMs;
     o2["talkerid"] = _talkerId;
 
     // Build the connection list
@@ -289,18 +310,16 @@ void BridgeCall::consume(const Message& frame) {
         // Only update the report if it's different from last time
         if (_linkReport != r) {
             _linkReport = r;
-            _linkReportChangeMs = _clock->timeUs() / 1000;
+            _linkReportChangeMs = _clock->timeMs();
         }
     } 
     else if (frame.isSignal(Message::SignalType::CALL_TALKERID)) {
         string r((const char*)frame.body(), frame.size());
         // Only update the talker ID if it's different from last time
         // and if there is active audio being received on this call.
-        uint64_t sinceLastAudio = (_clock->timeUs() / 1000) - 
-            _bridgeIn.getLastAudioMs();
-        if (_talkerId != r && sinceLastAudio < 10 * 1000) {
+        if (_talkerId != r && _bridgeIn.isActiveRecently()) {
             _talkerId = r;
-            _talkerIdChangeMs = _clock->timeUs() / 1000;
+            _talkerIdChangeMs = _clock->timeMs();
             _log->info("Input talker ID set %s", _talkerId.c_str());
         }
     } 
@@ -331,7 +350,7 @@ void BridgeCall::consume(const Message& frame) {
             if (symbol == '*') 
                 _dtmfAccumulator.clear();
             _dtmfAccumulator += symbol;
-            _lastDtmfRxMs = _clock->time();
+            _lastDtmfRxMs = _clock->timeMs();
         }
     } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
         _bridgeIn.consume(frame);       
@@ -424,24 +443,21 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
 }
 
 void BridgeCall::oneSecTick() {
-    if (!_dtmfAccumulator.empty() && _clock->isPast(_lastDtmfRxMs + 3000)) {
+    // Has a full DMTF sequence been collected?
+    if (!_dtmfAccumulator.empty() && 
+         _clock->isPastWindow(_lastDtmfRxMs, DTMF_WINDOW_MS)) {
         _processDtmfCommand(_dtmfAccumulator);
         _dtmfAccumulator.clear();
     }
-}
-
-void BridgeCall::tenSecTick() {
-    // #### TODO: SHOULD ONLY BE SENDING THIS IF THERE IS ACTIVE AUDIO
-    // #### FLOWING AS WELL.
-    _signalTalker();
+    // Refresh the talker
+    if (_bridgeOut.isActiveRecently())
+        _signalTalker();
 }
 
 void BridgeCall::setOutputTalkerId(const char* talkerId) {
     if (_outputTalkerId != talkerId) {
         _outputTalkerId = talkerId;
         _log->info("Output talker ID set %s", _outputTalkerId.c_str());
-        // Since the talker was changed we generate a signal immediately
-        _signalTalker();
     }
 }
 

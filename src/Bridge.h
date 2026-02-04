@@ -133,10 +133,16 @@ private:
     static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
-    // The list time a change was made to the call list
+
+    // The last time a change was made to the call list (i.e. started or 
+    // ended a call);
     uint64_t _lastCallListChangeMs;
 
     std::vector<int> _parrotLevelThresholds;
+
+    std::string _statusMessageText;
+    uint64_t _statusMessageUpdateMs;
+    unsigned _statusMessageLevel;
 };
 
 // #### TODO: CAN WE CONSOLIDATE THE CONFIG POLLER WITH THIS?

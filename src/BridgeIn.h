@@ -71,7 +71,6 @@ public:
     CODECType getCodec() const { return _codecType; }
 
     void setStartTime(uint32_t ms) { 
-        _startTime = ms; 
         _jitBuf.setStartMs(ms);
     }
 
@@ -83,7 +82,6 @@ public:
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
         _bypassJitterBuffer = false;
         _bypassedFrames = std::queue<Message>();
-        _startTime = 0;
         _jitBuf.reset();
         _lastUnkeyMs = 0;
         _lastAudioMs = 0;
@@ -114,12 +112,18 @@ public:
     /**
      * @returns The last time any audio was processed
      */
-    uint64_t getLastAudioMs() const { return _lastAudioMs; }
+    //uint64_t getLastAudioMs() const { return _lastAudioMs; }
 
     /**
      * @returns True if audio is actively being received.
      */
     bool isActive() const { return _activeStatus; }
+
+    /**
+     * @returns True if audio has been received within the last few
+     * seconds.
+     */
+    bool isActiveRecently() const;
 
     /** 
      * @returns The last time the active status transitioned (in either
@@ -157,10 +161,10 @@ private:
     std::function<void(const Message& msg)> _sink = nullptr;
     // This is the input CODEC of the user
     CODECType _codecType = CODECType::IAX2_CODEC_UNKNOWN;
-    // In ms
-    uint32_t _startTime = 0;
+
     // Last time audio was processed 
     uint64_t _lastAudioMs = 0; 
+
     // Current status, used to detect transitions  
     bool _activeStatus = false;
     // The last time the status was changed in either direction.

@@ -159,6 +159,12 @@ json Bridge::getStatusDoc() const {
     root["calls"] = calls;
     root["stamp"] = getStatusDocStampMs();
 
+    json o2;
+    o2["text"] = _statusMessageText;
+    o2["level"] = _statusMessageLevel;
+    o2["ageMs"] = _clock.timeMs() - _statusMessageUpdateMs;
+    root["message"] = o2;
+
     return root;
 }
 
@@ -427,22 +433,21 @@ void Bridge::oneSecTick() {
         [](const BridgeCall& s) { return s.isActive(); }
     );
 
-    // Set the outbound talker ID for every call based on the 
-    // which call has most recently contributed audio.
-    uint64_t maxMs = 0;
+    // Set the outbound talker ID for every call based on a 
+    // call with recent input activity.
     string talkerId;
 
-    // Find the most recent
     _calls.visitIf(
-        [&maxMs, &talkerId](const BridgeCall& call) { 
-            if (call.getLastAudioRxMs() != 0 && 
-                call.getLastAudioRxMs() > maxMs) {
-                maxMs = call.getLastAudioRxMs();
+        [&talkerId](const BridgeCall& call) { 
+            if (call.isInputActiveRecently()) {
                 talkerId = call.getInputTalkerId();
+                return false;
             }
-            return true;
+            else {
+                return true;
+            }
         },
-        [](const BridgeCall& s) { return s.isActive(); }
+        [](const BridgeCall& s) { return s.isActive() && s.isNormal(); }
     );
 
     // Assert on all calls
@@ -451,7 +456,7 @@ void Bridge::oneSecTick() {
             call.setOutputTalkerId(talkerId.c_str());
             return true;
         },
-        [](const BridgeCall& s) { return s.isActive(); }
+        [](const BridgeCall& s) { return s.isActive() && s.isNormal(); }
     );
 }
 

@@ -79,35 +79,27 @@ public:
     void init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock, 
         MessageConsumer* sink, 
         unsigned bridgeLineId, unsigned bridgeCallId, 
-        unsigned ttsLineId, unsigned netTestLineId, const char* netTestBindAddr) {
-        _bridge = bridge;
-        _log = log;
-        _traceLog = traceLog;
-        _clock = clock;
-        _sink = sink;
-        _bridgeLineId = bridgeLineId;
-        _bridgeCallId = bridgeCallId;
-        _ttsLineId = ttsLineId;
-        _netTestLineId = netTestLineId;
-        if (netTestBindAddr)
-            _netTestBindAddr = netTestBindAddr;
-        else 
-            _netTestBindAddr = "0.0.0.0";
-        _bridgeIn.init(_log, _traceLog, _clock);
-    }
+        unsigned ttsLineId, unsigned netTestLineId, const char* netTestBindAddr);
 
-    void reset();
-
+    /**
+     * Used at the very beginning of a call.
+     */
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
         bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
         const char* remoteNodeNumber, bool permanent, bool useKerchunkFilter,
         unsigned kerchunkFilterEvaluationIntervalMs);
+
+    void reset();
         
     bool isActive() const { return _active; }
 
     bool isNormal() const { return _mode == Mode::NORMAL; }
 
-    uint64_t getLastAudioRxMs() const { return _bridgeIn.getLastAudioMs(); }
+    /**
+     * @returns true if this call has had input audio in the past few
+     * seconds.
+     */
+    bool isInputActiveRecently() const { return _bridgeIn.isActiveRecently(); }
 
     bool equals(const BridgeCall& other) const { 
         return _active && _lineId == other._lineId && _callId == other._callId; 
@@ -201,7 +193,6 @@ public:
 
     void audioRateTick(uint32_t tickMs);
     void oneSecTick();
-    void tenSecTick();
 
 private:
 
@@ -242,7 +233,7 @@ private:
     // Used to gather DTMF symbols from the peer
     std::string _dtmfAccumulator;
     // The last time a DTMF symbol was received
-    uint32_t _lastDtmfRxMs;
+    uint64_t _lastDtmfRxMs;
 
     // The latest list of linked nodes received from this call's peer.
     std::string _linkReport;

@@ -16,6 +16,10 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
     margin-right: 10px;
 }
 
+#message-div {
+    margin-bottom: 5px;
+}
+
 #ptt-button {
     width: 200px;
     height: 40px;
@@ -150,6 +154,10 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
             </div>
         </div>
         <div class="content-row" role="tabpanel">
+            <!-- Message Area -->
+            <div id="message-div">
+                <span id="message">TEST</span> 
+            </div>
             <form id="status-form">
                 <div id="favorites-div" class="wrap-container">
                 </div>
@@ -449,6 +457,10 @@ async function status_update() {
             // An optimization to avoid updating the same status twice
             if (data["stamp"] != lastStatusUpdateMs) {
                 lastStatusUpdateMs = data["stamp"]
+                if (data["message"]) {
+                    msgSpan = document.getElementById("message")
+                    msgSpan.innerHTML = data["message"]["text"];
+                }
                 tbody = document.getElementById("connection-table-body")
                 tbody.replaceChildren();
                 if ("calls" in data) {

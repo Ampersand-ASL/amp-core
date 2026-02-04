@@ -23,6 +23,8 @@
 // How long after the last audio packet until we decide the link is 
 // inactive.
 #define ACTIVE_TIMEOUT_MS (100)
+// The definition of "recent"
+#define RECENT_TIMEOUT_MS (2000)
 
 namespace kc1fsz {
 
@@ -57,7 +59,7 @@ void BridgeIn::consume(const Message& frame) {
 
     if (frame.getType() == Message::Type::AUDIO) {
 
-        _lastAudioMs = _clock->timeUs() / 1000;
+        _lastAudioMs = _clock->timeMs();
 
         // Look for leading edge of active status
         if (!_activeStatus) {
@@ -129,10 +131,14 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
     _kerchunkFilter.audioRateTick(tickMs);
 
     // Look for trailing edge of active status
-    if (_activeStatus && _clock->isPast(_lastAudioMs + ACTIVE_TIMEOUT_MS)) {
+    if (_activeStatus && _clock->isPastWindow(_lastAudioMs, ACTIVE_TIMEOUT_MS)) {
         _activeStatus = false;
-        _lastActiveStatusChangedMs = _clock->timeUs() / 1000;
+        _lastActiveStatusChangedMs = _clock->timeMs();
     }
+}
+
+bool BridgeIn::isActiveRecently() const {
+    return _clock->isInWindow(_lastAudioMs, RECENT_TIMEOUT_MS);
 }
 
 /**

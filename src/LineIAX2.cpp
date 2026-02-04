@@ -2003,8 +2003,10 @@ bool LineIAX2::_progressCall(Call& call) {
                     call.localNumber.c_str(), call.remoteNumber.c_str()); 
 
                 PayloadCallFailed payload;
-                strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
-                strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+                strcpyLimited(payload.targetNumber, call.remoteNumber.c_str(), 
+                    sizeof(payload.targetNumber));
+                strcpyLimited(payload.message, "Node not responding", 
+                    sizeof(payload.message));
 
                 Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
                     sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
@@ -2171,10 +2173,32 @@ void LineIAX2::consume(const Message& msg) {
     } else if (msg.isSignal(Message::SignalType::DROP_CALL)) {
         dropCall(msg.getDestCallId());
     } else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
+
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
-        call(payload->localNumber, payload->targetNumber);
+        int rc = call(payload->localNumber, payload->targetNumber);
+        if (rc != 0) {
+            // If the call fails then build a message that contains
+            // the details suitable for display to an end-user.
+            PayloadCallFailed payload2;
+            strcpyLimited(payload2.targetNumber, payload->targetNumber, 
+                sizeof(payload2.targetNumber));
+            if (rc == -4) {
+                strcpyLimited(payload2.message, "Node number syntax error", 
+                    sizeof(payload2.message));
+            } else if (rc == -1) {
+            }
+
+            Message msg2(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
+                sizeof(payload2), (const uint8_t*)&payload2, 0, _clock.time());
+            msg2.setSource(_busId, Message::UNKNOWN_CALL_ID);
+            msg2.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+            _bus.consume(msg2);
+        }
     } else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
+        
+        // #### TODO: WE DON'T NEED A STRUCT FOR THIS!
+        
         PayloadDtmfGen payload;
         assert(sizeof(payload) == msg.size());
         memcpy(&payload, msg.body(), msg.size());
