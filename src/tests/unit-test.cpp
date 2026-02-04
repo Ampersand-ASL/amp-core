@@ -173,7 +173,7 @@ static void dspTest1() {
 
 void pack1() {
     uint8_t d[] = { 0x01, 0x02 };
-    printf("R %04x\n", unpack_int16_le(d));
+    assert(unpack_int16_le(d) == 0x0201);
 }
 
 static void resampler_1() {
@@ -196,12 +196,25 @@ static void sizeCheck1() {
     cout << "BridgeCall       " << sizeof(amp::BridgeCall) << endl;
 }
 
+static void snprintfCheck() {
+    char target[8];
+    // NOTE: This line will generate a compiler warning normally
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(target, 8, "%s", "01234567");
+#pragma GCC diagnostic pop
+    // Notice that the result was shortened and null-terminated
+    assert(strlen(target) == 7);
+    assert(target[7] == 0);
+}
+
 int main(int, const char**) {
     sizeCheck1();
+    snprintfCheck();
     testRound();
-    //resampler_1();
-    //pack1();
-    //bufferTest1();
+    resampler_1();
+    pack1();
+    bufferTest1();
     clockTest1();
     timerTest1();
     timerTest2();
