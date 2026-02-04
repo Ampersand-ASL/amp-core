@@ -596,15 +596,17 @@ function status_pressed(button) {
     // that we should read from ehe input box.
     if ("node" in msg && msg["node"] == "_ENTRY")
         msg["node"] = formObject["node"]
-    // Post down
+    // Post down.  Be careful since this is an asynchronous 
+    // operation!
     fetch('/status-pressed', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(msg, null, 2)
+    }).then(function(response) {
+        controls_update();
     });
-    controls_update();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

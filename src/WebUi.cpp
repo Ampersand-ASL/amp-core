@@ -168,7 +168,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
     svr.Get("/controls", [ui](const httplib::Request &, httplib::Response &res) {
         json o;
-        o["ptt"] = ui->_ptt;
+        o["ptt"] = ui->_ptt.load();
         res.set_content(o.dump(), "application/json");
     });
 
@@ -190,9 +190,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
         if (data.contains("action")) {
             if (data["action"] == "ptt") {
-                ui->_ptt = !ui->_ptt;
+                ui->_ptt.store(!ui->_ptt.load());
                 Message msg;
-                if (ui->_ptt) 
+                if (ui->_ptt.load()) 
                     msg = Message::signal(Message::SignalType::COS_ON);
                 else 
                     msg = Message::signal(Message::SignalType::COS_OFF);
