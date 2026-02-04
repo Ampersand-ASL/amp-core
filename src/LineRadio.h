@@ -17,6 +17,7 @@
 #pragma once
 
 #include <fstream>
+#include <string>
 
 #include "kc1fsz-tools/DTMFDetector2.h"
 #include "amp/Resampler.h"
@@ -43,10 +44,6 @@ public:
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
 
-    LineRadio(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
-        unsigned destBusId, unsigned destCallId);
-    void resetStatistics();
-
     /**
      * Example for sanity: 0dBv is 0.5 Vp.
      */
@@ -60,6 +57,17 @@ public:
             return -96;
         return 20.0 * log10(fv);
     }
+
+    LineRadio(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
+        unsigned destBusId, unsigned destCallId);
+
+    void resetStatistics();
+
+    /**
+     * @brief Sets the callsign that is transmitted as the talker ID for this
+     * radio.
+     */
+    void setCallsign(const char* c) { _callsign = c; }
 
     // ----- MessageConsumer -------------------------------------------------
     
@@ -99,6 +107,8 @@ public:
 
 protected:
 
+    void _sendSignal(Message::SignalType type, void* body, unsigned len);
+
     /**
      * This function is called to do the actual playing of the 48K PCM.
      */
@@ -127,9 +137,12 @@ protected:
     Log& _log;
     Clock& _clock;
     MessageConsumer& _captureConsumer;
-    unsigned _busId, _callId;
-    unsigned _destBusId, _destCallId;
-    uint32_t _startTimeMs;
+    const unsigned _busId, _callId;
+    const unsigned _destBusId, _destCallId;
+    const uint32_t _startTimeMs;
+
+    // Primarily used for setting the talker ID
+    std::string _callsign;
 
     // This resampler is configured to go from 48K->8K ahead of the DTMF detection
     amp::Resampler _resampler;

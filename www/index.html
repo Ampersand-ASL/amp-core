@@ -18,6 +18,19 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 
 #message-div {
     margin-bottom: 5px;
+    width: 100%;
+    padding: 3px;
+}
+
+.message-alert {
+    background-color: red;
+    color: white;
+    font-weight: bold;
+}
+
+.message-info {
+    color: green;
+    font-weight: bold;
 }
 
 #ptt-button {
@@ -154,10 +167,6 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
             </div>
         </div>
         <div class="content-row" role="tabpanel">
-            <!-- Message Area -->
-            <div id="message-div">
-                <span id="message"></span> 
-            </div>
             <form id="status-form">
                 <div id="favorites-div" class="wrap-container">
                 </div>
@@ -326,6 +335,10 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                     </div>
                 </div>
             </form>
+            <!-- Message Area -->
+            <div id="message-div">
+                <span id="message"></span> 
+            </div>
         </div> <!-- /content-row -->
         <div class="footer-row">
             <span><i><a href="https://www.qrz.com/db/KC1FSZ">Bruce MacKinnon KC1FSZ bruce@mackinnon.com</a></i></span>
@@ -335,6 +348,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 
 // Used to prevent unnecessary rendering updates
 var lastStatusUpdateMs = 0;
+var lastStatusRenderMs = 0;
 
 // This array establishes the top power level for each LED
 const audioLevels = [
@@ -454,31 +468,48 @@ async function status_update() {
         const response = await fetch('status');
         if (response.ok) {
             const data = await response.json();
-            // An optimization to avoid updating the same status twice
-            if (data["stamp"] != lastStatusUpdateMs) {
+            // An optimization to avoid updating the same status twice.
+            // But the status is re-rendered periodically no matter what.
+            if (data["stamp"] != lastStatusUpdateMs ||
+                Date.now() > lastStatusRenderMs + 15000) {
                 lastStatusUpdateMs = data["stamp"]
-
-                // Status message.
-                // #### TODO: Urgency and time
-                if (data["message"]) {
-                    msgSpan = document.getElementById("message")
-                    msgSpan.innerHTML = data["message"]["text"];
-                }
-
-                tbody = document.getElementById("connection-table-body")
-                tbody.replaceChildren();
-                if ("calls" in data) {
-                    for (c of data["calls"]) {
-                        if (!c["permanent"])
-                            tbody.appendChild(makeCallRow(c));
-                    }
-                }
-                lastStatusUpdateMs = data["stamp"];
+                lastStatusRenderMs = Date.now();
+                statusRender(data);
             }
         }
     } catch (error) {
+        console.log(error)
     }
 }
+
+function statusRender(data) {
+    // Status message.
+    if (data["message"]) {
+        msgDiv = document.getElementById("message-div");
+        msgDiv.className = "";
+        msgSpan = document.getElementById("message");
+        // Figure out age
+        const ageMs = Date.now() - data["message"]["stamp"];
+        if (ageMs < 30 * 1000) {
+            msgSpan.innerHTML = data["message"]["text"];
+            if (data["message"]["level"] == 2)
+                msgDiv.classList.add("message-alert");
+        } else {
+            msgSpan.innerHTML = "";
+        }
+    }
+    // Table that contains active calls
+    tbody = document.getElementById("connection-table-body")
+    tbody.replaceChildren();
+    if ("calls" in data) {
+        for (c of data["calls"]) {
+            if (!c["permanent"])
+                tbody.appendChild(makeCallRow(c));
+        }
+    }
+    lastStatusUpdateMs = data["stamp"];
+}
+
 
 // Creates a row that looks like this:
 //

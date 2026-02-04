@@ -162,18 +162,29 @@ void LineRadio::oneSecTick() {
     payload.tx0Db = radioTxDb;
     payload.tx1Db = -99;
 
+    _sendSignal(Message::SignalType::CALL_LEVELS, &payload, sizeof(payload));
+
+    /*
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_LEVELS, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
+    */
 
     resetStatistics();
 
     // Send the talker ID if we are actively capturing audio
-    uint64_t nowMs = _clock.timeUs() / 1000;
-    if (nowMs - _lastCaptureMs < 1000)
+    if (_clock.isInWindow(_lastCaptureMs, 2000))
         _sendTalkerId();
+}
+
+void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len) {
+    Message msg(Message::Type::SIGNAL, type, 
+        len, (const uint8_t*)body, 0, _clock.time());
+    msg.setSource(_busId, _callId);
+    msg.setDest(_destBusId, _destCallId);
+    _captureConsumer.consume(msg);
 }
 
 void LineRadio::audioRateTick(uint32_t tickMs) {
@@ -203,13 +214,16 @@ void LineRadio::_checkTimeouts() {
 }
 
 void LineRadio::_sendTalkerId() {
-    // ### TEMP
-    const char talkerId[32] = "KC1FSZ Bruce";
+    char talkerId[32];
+    strcpyLimited(talkerId, _callsign.c_str(), 32);
+    _sendSignal(Message::SignalType::CALL_TALKERID, talkerId, strlen(talkerId) + 1);
+    /*
     Message msg2(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
         strlen(talkerId) + 1, (const uint8_t*)talkerId, 0, _clock.time());
     msg2.setSource(_busId, _callId);
     msg2.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg2);
+    */
 }
 
 void LineRadio::_open(bool echo) {    
@@ -225,11 +239,15 @@ void LineRadio::_open(bool echo) {
     payload.originated = true;
     payload.permanent = true;
 
+    _sendSignal(Message::SignalType::CALL_START, &payload, sizeof(payload));
+
+    /*
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
+    */
 
     _sendTalkerId();
 }
@@ -238,11 +256,16 @@ void LineRadio::_close() {
     PayloadCallEnd payload;
     payload.localNumber[0] = 0;
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio");
+
+    _sendSignal(Message::SignalType::CALL_END, &payload, sizeof(payload));
+
+    /*
     Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
+    */
 }
 
 void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
@@ -351,10 +374,13 @@ void LineRadio::_captureEnd() {
     }
 
     // Send the unkey message 
+    _sendSignal(Message::SignalType::RADIO_UNKEY, 0, 0);
+    /*
     Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 0, 0, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
     _captureConsumer.consume(msg);
+    */
 }
 
 void LineRadio::_playStart() {
@@ -388,11 +414,14 @@ void LineRadio::_setCosStatus(bool cosActive) {
         _cosActive = false;
 
         // Generate an UNKEY signal on the negative transition
+        _sendSignal(Message::SignalType::RADIO_UNKEY, 0, 0);
+        /*
         Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
             0, 0, 0, _clock.time());
         msg.setSource(_busId, _callId);
         msg.setDest(_destBusId, _destCallId);
         _captureConsumer.consume(msg);
+        */
     }
 }
 

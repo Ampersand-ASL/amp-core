@@ -151,7 +151,7 @@ json Bridge::getStatusDoc() const {
     json o2;
     o2["text"] = _statusMessageText;
     o2["level"] = _statusMessageLevel;
-    o2["stamp"] = _clock.timeMs();
+    o2["stamp"] = _statusMessageUpdateMs;
 
     root["message"] = o2;
 
@@ -193,14 +193,18 @@ json Bridge::getLevelsDoc() const {
 void Bridge::consume(const Message& msg) {
 
     if (msg.isSignal(Message::SignalType::CALL_FAILED)) {   
+
         PayloadCallFailed payload;
         assert(msg.size() == sizeof(payload));
         memcpy(&payload, msg.body(), sizeof(payload));
-        // ### TODO: MAKE MORE OF A MESSAGE
-        _statusMessageText = payload.message;
+
+        char msg[128];
+        snprintf(msg, sizeof(msg), "Call to %s failed: %s",
+            payload.targetNumber, payload.message);
+
+        _statusMessageText = msg;
         _statusMessageUpdateMs = _clock.timeMs();
         _statusMessageLevel = 2;
-        _log.info("Got a call failed message: %s", _statusMessageText.c_str());
     } 
     else if (msg.isSignal(Message::SignalType::CALL_START)) {        
 

@@ -320,7 +320,8 @@ void BridgeCall::consume(const Message& frame) {
         if (_talkerId != r && _bridgeIn.isActiveRecently()) {
             _talkerId = r;
             _talkerIdChangeMs = _clock->timeMs();
-            _log->info("Input talker ID set %s", _talkerId.c_str());
+            _log->info("Input talker ID from %s set %s", 
+                _remoteNodeNumber.c_str(), _talkerId.c_str());
         }
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
@@ -449,7 +450,8 @@ void BridgeCall::oneSecTick() {
         _processDtmfCommand(_dtmfAccumulator);
         _dtmfAccumulator.clear();
     }
-    // Refresh the talker
+    // Refresh the talker as long as there is active audio being 
+    // transmitted.
     if (_bridgeOut.isActiveRecently())
         _signalTalker();
 }
@@ -457,7 +459,8 @@ void BridgeCall::oneSecTick() {
 void BridgeCall::setOutputTalkerId(const char* talkerId) {
     if (_outputTalkerId != talkerId) {
         _outputTalkerId = talkerId;
-        _log->info("Output talker ID set %s", _outputTalkerId.c_str());
+        _log->info("Output talker ID to %s set to %s", 
+            _remoteNodeNumber.c_str(), _outputTalkerId.c_str());
     }
 }
 

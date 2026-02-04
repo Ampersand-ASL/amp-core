@@ -176,9 +176,9 @@ struct PayloadDtmfGen {
 
 struct PayloadCallFailed {
     // This could potentially be an explicit address
-    char targetNumber[64];
+    char targetNumber[32];
     // Must be null-terminated
-    char message[80];
+    char message[64];
 };
 
 

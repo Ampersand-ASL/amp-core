@@ -50,6 +50,8 @@
                     <input type="text" id="node" name="node"/>
                     <label for="password">Password:</label>
                     <input type="text" id="password" name="password"/>
+                    <label for="callsign">Callsign:</label>
+                    <input type="text" id="callsign" name="callsign" maxlength="32"/>
                     <label for="iaxPort">IAX Port:</label>
                     <input type="text" id="iaxPort" name="iaxPort"/>
                     <label for="favorites">Favorites:</label>
@@ -254,6 +256,7 @@ async function configLoad() {
 
         loadUi("node", data, document)
         loadUi("password", data, document)
+        loadUi("callsign", data, document)
         loadUi("iaxPort", data, document)
         loadUi("favorites", data, document)
 
@@ -294,6 +297,7 @@ function configStore() {
 
     storeUi("node", formObject, fullConfig)
     storeUi("password", formObject, fullConfig)
+    storeUi("callsign", formObject, fullConfig)
     storeUi("iaxPort", formObject, fullConfig)
     storeUi("favorites", formObject, fullConfig)
 

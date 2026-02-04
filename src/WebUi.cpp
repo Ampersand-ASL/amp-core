@@ -127,17 +127,17 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     // ------ Common -----------------------------------------------------------
 
     svr.Get("/main.css", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
-        //    "text/css");
-        res.set_file_content("../amp-core/www/main.css");
+        res.set_content((const char*)_amp_core_www_main_css, _amp_core_www_main_css_len,
+            "text/css");
+        //res.set_file_content("../amp-core/www/main.css");
     });
 
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/index.html");
+        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/index.html");
     });
 
     svr.Get("/favorites", [ui](const httplib::Request &, httplib::Response &res) {

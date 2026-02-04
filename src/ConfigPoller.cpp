@@ -110,6 +110,9 @@ void ConfigPoller::_populateDefaults(json& j) {
     if (!j.contains("kfdelay")) {
         j["kfdelay"] = "2000";
     }
+    if (!j.contains("callsign")) {
+        j["callsign"] = "";
+    }
 }
 
     }
