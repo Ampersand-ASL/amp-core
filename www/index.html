@@ -156,7 +156,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
         <div class="content-row" role="tabpanel">
             <!-- Message Area -->
             <div id="message-div">
-                <span id="message">TEST</span> 
+                <span id="message"></span> 
             </div>
             <form id="status-form">
                 <div id="favorites-div" class="wrap-container">
@@ -457,10 +457,14 @@ async function status_update() {
             // An optimization to avoid updating the same status twice
             if (data["stamp"] != lastStatusUpdateMs) {
                 lastStatusUpdateMs = data["stamp"]
+
+                // Status message.
+                // #### TODO: Urgency and time
                 if (data["message"]) {
                     msgSpan = document.getElementById("message")
                     msgSpan.innerHTML = data["message"]["text"];
                 }
+
                 tbody = document.getElementById("connection-table-body")
                 tbody.replaceChildren();
                 if ("calls" in data) {

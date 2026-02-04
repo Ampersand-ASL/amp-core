@@ -377,6 +377,13 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
             call.state = Call::State::STATE_INITIATION_WAIT;
             call.active = true;
         }
+        // If there's nothing in the local registry then assume this is a public
+        // node and trigger a DNS.
+        else {
+            call.callUser = _publicUser;
+            call.state = Call::State::STATE_LOOKUP_0;
+            call.active = true;
+        }
     }
     // Otherwise, we in a state that will trigger a DNS lookup
     else {
@@ -2148,7 +2155,6 @@ void LineIAX2::_hangupCall(Call& call) {
     _sendFrameToPeer(hangupFrame, call);
     // Go into a state that will publish a CALL_END message
     call.state = Call::State::STATE_TERMINATE_WAITING;
-    _terminateCall(call);
 }
 
 void LineIAX2::_terminateCall(Call& call) {
@@ -2441,7 +2447,9 @@ int LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) {
         dnsPacket, 
 #endif
         dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-    return rc;
+    if (rc < 0)
+        return rc;
+    return 0;
 }
 
 int LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {    

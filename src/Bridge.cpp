@@ -53,6 +53,9 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
 void Bridge::reset() {
     _calls.visitAll(RESET_VISITOR);
     _lastCallListChangeMs = 0;
+    _statusMessageText.clear();
+    _statusMessageUpdateMs = 0;
+    _statusMessageLevel = 0;
 }
 
 unsigned Bridge::getCallCount() const {
@@ -122,6 +125,7 @@ uint64_t Bridge::getStatusDocStampMs() const {
     // The idea here is to find the maximum change stamp of any of
     // the possibly dynamic elements of the Bridge.
     uint64_t maxStampMs = _lastCallListChangeMs;
+    maxStampMs = max(maxStampMs, _statusMessageUpdateMs);
 
     // Check each call for more recent activity
     _calls.visitIf(
@@ -141,7 +145,15 @@ json Bridge::getStatusDoc() const {
 
     json root;
 
-    // Bridge-level status
+    root["stamp"] = getStatusDocStampMs();
+
+    // Bridge-level status message
+    json o2;
+    o2["text"] = _statusMessageText;
+    o2["level"] = _statusMessageLevel;
+    o2["stamp"] = _clock.timeMs();
+
+    root["message"] = o2;
 
     // Call-level status
     auto calls = json::array();
@@ -157,13 +169,6 @@ json Bridge::getStatusDoc() const {
     );
 
     root["calls"] = calls;
-    root["stamp"] = getStatusDocStampMs();
-
-    json o2;
-    o2["text"] = _statusMessageText;
-    o2["level"] = _statusMessageLevel;
-    o2["ageMs"] = _clock.timeMs() - _statusMessageUpdateMs;
-    root["message"] = o2;
 
     return root;
 }
@@ -186,7 +191,18 @@ json Bridge::getLevelsDoc() const {
 }
 
 void Bridge::consume(const Message& msg) {
-    if (msg.isSignal(Message::SignalType::CALL_START)) {        
+
+    if (msg.isSignal(Message::SignalType::CALL_FAILED)) {   
+        PayloadCallFailed payload;
+        assert(msg.size() == sizeof(payload));
+        memcpy(&payload, msg.body(), sizeof(payload));
+        // ### TODO: MAKE MORE OF A MESSAGE
+        _statusMessageText = payload.message;
+        _statusMessageUpdateMs = _clock.timeMs();
+        _statusMessageLevel = 2;
+        _log.info("Got a call failed message: %s", _statusMessageText.c_str());
+    } 
+    else if (msg.isSignal(Message::SignalType::CALL_START)) {        
 
         _lastCallListChangeMs = _clock.timeUs() / 1000;
 
@@ -272,7 +288,14 @@ void Bridge::consume(const Message& msg) {
                         // Make sure this is NOT the call we just setup above
                         !(c._lineId == msg.getSourceBusId() && c._callId == msg.getSourceCallId());
                 }
-            );            
+            );
+
+            // Provide a status message announcing success.
+            char msg[64];
+            snprintf(msg, 64, "Node %s connected", payload.remoteNumber);
+            _statusMessageText = msg;
+            _statusMessageUpdateMs = _clock.timeMs();
+            _statusMessageLevel = 0;
         }
     }
     else if (msg.isSignal(Message::SignalType::CALL_END)) {

@@ -151,7 +151,6 @@ void KerchunkFilter::consume(const Message& frame) {
 
 void KerchunkFilter::_saveAndDiscard(std::queue<Message>& q) {
     while (!q.empty()) {
-        Message m = q.front();
         q.pop();
     }
 }
