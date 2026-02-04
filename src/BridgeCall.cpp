@@ -462,15 +462,13 @@ void BridgeCall::setOutputTalkerId(const char* talkerId) {
 }
 
 void BridgeCall::_signalTalker() {
-    if (!_outputTalkerId.empty()) {
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
-            // Include the null termination
-            _outputTalkerId.length() + 1, (const uint8_t*)_outputTalkerId.c_str(), 
-            0, 0);
-        msg.setSource(LINE_ID, CALL_ID);
-        msg.setDest(_lineId, _callId);
-        _bridgeOut.consume(msg);
-    }
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+        // Include the null termination
+        _outputTalkerId.length() + 1, (const uint8_t*)_outputTalkerId.c_str(), 
+        0, 0);
+    msg.setSource(LINE_ID, CALL_ID);
+    msg.setDest(_lineId, _callId);
+    _bridgeOut.consume(msg);
 }
 
 void BridgeCall::_processTTSAudio(const Message& frame) {

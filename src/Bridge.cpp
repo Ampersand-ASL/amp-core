@@ -435,11 +435,13 @@ void Bridge::oneSecTick() {
 
     // Set the outbound talker ID for every call based on a 
     // call with recent input activity.
+    bool foundTalker = false;
     string talkerId;
 
     _calls.visitIf(
-        [&talkerId](const BridgeCall& call) { 
+        [&foundTalker, &talkerId](const BridgeCall& call) { 
             if (call.isInputActiveRecently()) {
+                foundTalker = true;
                 talkerId = call.getInputTalkerId();
                 return false;
             }
@@ -450,14 +452,18 @@ void Bridge::oneSecTick() {
         [](const BridgeCall& s) { return s.isActive() && s.isNormal(); }
     );
 
-    // Assert on all calls
-    _calls.visitIf(
-        [&talkerId](BridgeCall& call) { 
-            call.setOutputTalkerId(talkerId.c_str());
-            return true;
-        },
-        [](const BridgeCall& s) { return s.isActive() && s.isNormal(); }
-    );
+    // Assuming there is an active talker, assert it on all calls. Note
+    // that the talker may be blank if the active call has not been 
+    // provided with a talker ID.
+    if (foundTalker) {
+        _calls.visitIf(
+            [&talkerId](BridgeCall& call) { 
+                call.setOutputTalkerId(talkerId.c_str());
+                return true;
+            },
+            [](const BridgeCall& s) { return s.isActive() && s.isNormal(); }
+        );
+    }
 }
 
 void Bridge::tenSecTick() {

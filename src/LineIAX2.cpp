@@ -74,7 +74,7 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 
 LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     MessageConsumer& bus, NumberAuthorizer* destAuth, NumberAuthorizer* sourceAuth,
-    LocalRegistry* locReg, unsigned destLineId)
+    LocalRegistry* locReg, unsigned destLineId, const char* publicUser)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
@@ -84,6 +84,7 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _sourceAuthorizer(sourceAuth),
     _locReg(locReg),
     _destLineId(destLineId),
+    _publicUser(publicUser),
     _startTime(clock.time()) {
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
@@ -135,12 +136,11 @@ void LineIAX2::setAuthMode(AuthMode mode) {
     }
 }
 
-int LineIAX2::open(short addrFamily, int listenPort, const char* defaultUser) {
+int LineIAX2::open(short addrFamily, int listenPort) {
 
     // If the configuration is changing then ignore the request
     if (addrFamily == _addrFamily &&
         _iaxListenPort == listenPort &&
-        _defaultUser == defaultUser &&
         _iaxSockFd != 0 &&
         _dnsSockFd != 0) {
         return 0;
@@ -150,7 +150,6 @@ int LineIAX2::open(short addrFamily, int listenPort, const char* defaultUser) {
 
     _addrFamily = addrFamily;
     _iaxListenPort = listenPort;
-    _defaultUser = defaultUser;
 
     _log.info("Listening on IAX port %d", _iaxListenPort);
 
@@ -266,7 +265,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
     // It's possible that the node has been specified in explicit 
     // format: radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
     // pieces so 
-    fixedstring targetUser = _defaultUser;
+    fixedstring targetUser;
     fixedstring targetNumber = targetNode;
     fixedstring targetAddrAndPort;
     fixedstring targetPassword;
@@ -334,46 +333,39 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
 
     // Allocate a call
     int callIx = _allocateCallIx();
-    if (callIx == -1) {
-        _log.error("No calls available");
-        return -2;
-    }
-    
+    if (callIx == -1) 
+        return -2; 
     Call& call = _calls[callIx];
 
     call.reset();
-    call.active = true;
     call.localNumber = localNumber;
     call.remoteNumber = targetNumber;
     call.side = Call::Side::SIDE_CALLER;
-    call.state = Call::State::STATE_LOOKUP_0;
     // Move back a few ms to make sure that the elapsed time is always positive
     // in some of the dispense operations below.
     call.localStartMs = _clock.time() - AUDIO_TICK_MS;
     call.lastLagrqMs = _clock.time();
     call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
-    // This may get overridden later
-    call.callUser = targetUser;
 
     // If an explicit address was specified 
     if (targetExplicit) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
-        if (parseIPAddrAndPort(targetAddrAndPort.c_str(), targetAddr) != 0) 
+        if (parseIPAddrAndPort(targetAddrAndPort.c_str(), targetAddr) != 0) {
             return -5;
+        }
         memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
         call.callUser = targetUser;
         call.callPassword = targetPassword;
         call.state = Call::State::STATE_INITIATION_WAIT;
+        call.active = true;
     }
     // Check the local registration (if available) to see if we can resolve the target 
     // without going out to the DNS/directory.
     else if (_locReg) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
-        fixedstring targetUser;
-        fixedstring targetPassword;
         if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr, targetUser, targetPassword)) { 
             char addr[64];
             formatIPAddrAndPort((const sockaddr&)targetAddr, addr, 64);
@@ -382,9 +374,18 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
             call.callUser = targetUser;
             call.callPassword = targetPassword;
             call.state = Call::State::STATE_INITIATION_WAIT;
+            call.active = true;
         }
     }
     // Otherwise, we in a state that will trigger a DNS lookup
+    else {
+        call.callUser = _publicUser;
+        call.state = Call::State::STATE_LOOKUP_0;
+        call.active = true;
+    }
+
+    // NOTICE: Be careful, at this point a call has been allocated so if
+    // **anything** goes wrong it needs to be cleaned up to avoid a call leak!
 
     return 0;
 }
@@ -772,7 +773,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
             Call& call = _calls[callIx];
             call.reset();
-            call.active = true;
             call.side = Call::Side::SIDE_CALLED;
             call.trusted = false;
             call.localCallId = _localCallIdCounter++;
@@ -800,9 +800,12 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
                 _log.info("Call %u starting AUTHREQ process for %s", call.localCallId, hostName);
                 // Start the DNS lookup process
-                _sendDNSRequestTXT(call.dnsRequestId, hostName);
-
-                call.state = Call::State::STATE_AUTHREP_WAIT_0;                
+                if (_sendDNSRequestTXT(call.dnsRequestId, hostName) != 0) {
+                    _log.error("Unable to request public key, ignoring call");
+                } else {
+                    call.state = Call::State::STATE_AUTHREP_WAIT_0;   
+                    call.active = true;
+                }
             }
             else {
                 // Make an IP address lookup request. 
@@ -810,9 +813,12 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 char hostName[65];
                 snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
                 // Start the DNS lookup process
-                _sendDNSRequestA(call.dnsRequestId, hostName);
-
-                call.state = Call::State::STATE_IP_VALIDATION_0;
+                if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
+                    _log.error("Unable to start address validation, ignoring call");
+                } else {
+                    call.state = Call::State::STATE_IP_VALIDATION_0;
+                    call.active = true;
+                }
             }
         }
         // Per the specification, we should respond to POKEs with PONGs. 
@@ -1752,11 +1758,13 @@ void LineIAX2::_processDNSResponse0(Call& call,
         &pri, &weight, &port, srvHost, 65);
     if (rc1 < 0) {
         if (rc1 == -3) {
-            _log.info("Call %u node not registered", call.localCallId);
+            _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+                "Node is not registered");
         } else {
-            _log.error("Invalid DNS response (SRV) %d", rc1);
+            _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+                "DNS error (SRV)");
         }
-        call.state = Call::State::STATE_TERMINATED;
+        _terminateCall(call);
         return;
     }
     // #### TODO: This will be based on address type, but since
@@ -1766,9 +1774,13 @@ void LineIAX2::_processDNSResponse0(Call& call,
 
     // Start a second DNS request
     call.dnsRequestId = _dnsRequestIdCounter++;
-    // #### TODO: ERROR CHECKING HERE
-    _sendDNSRequestA(call.dnsRequestId, srvHost);
-    call.state = Call::State::STATE_LOOKUP_1A;
+    if (_sendDNSRequestA(call.dnsRequestId, srvHost) != 0) {
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "DNS error (A2)");
+        _terminateCall(call);
+    } else {
+        call.state = Call::State::STATE_LOOKUP_1A;
+    }
 }
 
 void LineIAX2::_processDNSResponse1(Call& call, 
@@ -1781,8 +1793,9 @@ void LineIAX2::_processDNSResponse1(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        call.state = Call::State::STATE_TERMINATED;
-        _log.error("Invalid DNS response (A)");
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "DNS error (A)");
+        _terminateCall(call);
         return;
     }
 
@@ -1809,8 +1822,9 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
         if (_sourceIpValidationRequired) {
-            _log.error("Call %d invalid DNS response (A)", call.localCallId);
-            call.state = Call::State::STATE_TERMINATED;
+            _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+                "DNS error (A)");
+            _terminateCall(call);
         } else {
             _log.info("Call %d ignoring DNS lookup failure", call.localCallId);
             call.state = Call::State::STATE_CALLER_VALIDATED;
@@ -1831,8 +1845,9 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
             call.sourceAddrValidated = true;
         } else {
             if (_sourceIpValidationRequired) {
-                _log.info("Call %u IP validation failed", call.localCallId);
-                call.state = Call::State::STATE_TERMINATED;
+                _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+                    "IP address validation failed");
+                _terminateCall(call);
             } else{
                 _log.info("Call %u ignoring IP validation failure", call.localCallId);
                 call.state = Call::State::STATE_CALLER_VALIDATED;
@@ -1851,13 +1866,15 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
     char txt[256];
     int rc1 = microdns::parseDNSAnswer_TXT(buf, bufLen, txt, 256);
     if (rc1 < 0) {
-        _log.error("Call %u invalid DNS response (TXT) %d", call.localCallId, rc1);
-        call.state = Call::State::STATE_TERMINATED;
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "DNS error (TXT)");
+        _terminateCall(call);
         return;
     }
-
     if (strlen(txt) != 64) {
-        _log.error("Call %u invalid public key", call.localCallId);
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "Invalid public key");
+        _terminateCall(call);
         return;
     }
 
@@ -1920,8 +1937,13 @@ bool LineIAX2::_progressCall(Call& call) {
             char srvHostName[65];
             snprintf(srvHostName, 65, "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
             // Start the DNS lookup process
-            _sendDNSRequestSRV(call.dnsRequestId, srvHostName);
-            call.state = Call::State::STATE_LOOKUP_0A;
+            if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) {
+                _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+                    "DNS error (SRV2)");
+                _terminateCall(call);
+            } else {
+                call.state = Call::State::STATE_LOOKUP_0A;
+            }
         }
         else if (call.state == Call::State::STATE_INITIATION_WAIT) { 
             
@@ -1996,25 +2018,15 @@ bool LineIAX2::_progressCall(Call& call) {
         }
         else if (call.state == Call::State::STATE_WAITING) { 
             // Check to see if we should give up on a new call that isn't
-            // accepted.
+            // responding.
+            // #### TODO: Investigate whether the REJECT/HANGUP cases are 
+            // #### handled explicitly since the error message would be 
+            // #### different in that case.
             if (_clock.isPast(call._callInitiatedMs + CALL_INITIATION_TIMEOUS_MS)) {
-
-                _log.info("Call failed %s -> %s", 
-                    call.localNumber.c_str(), call.remoteNumber.c_str()); 
-
-                PayloadCallFailed payload;
-                strcpyLimited(payload.targetNumber, call.remoteNumber.c_str(), 
-                    sizeof(payload.targetNumber));
-                strcpyLimited(payload.message, "Node not responding", 
-                    sizeof(payload.message));
-
-                Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
-                    sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
-                msg.setSource(_busId, call.localCallId);
-                msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
-                _bus.consume(msg);
-
-                call.state = Call::State::STATE_TERMINATED;
+                _publishCallFailed(call.localNumber.c_str(),call.remoteNumber.c_str(), 
+                    "Node not responding");
+                _terminateCall(call);
+                // #### WHY ISN'T THIS BEING SET IN ALL TERMINATED CASES?
                 call.terminationMs = _clock.time();
             }
         }
@@ -2111,8 +2123,7 @@ bool LineIAX2::_progressCall(Call& call) {
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
 
-        call.state = Call::State::STATE_TERMINATED;
-        call.terminationMs = _clock.time();
+        _terminateCall(call);
     }
     else if (call.state == Call::State::STATE_TERMINATED) {
         // Calls are allowed to hangout in terminated state
@@ -2134,11 +2145,14 @@ void LineIAX2::_hangupCall(Call& call) {
         call.dispenseElapsedMs(_clock), 
         call.outSeqNo, call.expectedInSeqNo, IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_HANGUP);
     _sendFrameToPeer(hangupFrame, call);
+    // Go into a state that will publish a CALL_END message
+    call.state = Call::State::STATE_TERMINATE_WAITING;
     _terminateCall(call);
 }
 
 void LineIAX2::_terminateCall(Call& call) {
-    call.state = Call::State::STATE_TERMINATE_WAITING;
+    call.state = Call::State::STATE_TERMINATED;
+    call.terminationMs = _clock.time();
 }
 
 void LineIAX2::_dtmfGen(char symbol) {
@@ -2172,28 +2186,31 @@ void LineIAX2::consume(const Message& msg) {
         dropAllOutbound();
     } else if (msg.isSignal(Message::SignalType::DROP_CALL)) {
         dropCall(msg.getDestCallId());
-    } else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
-
+    } 
+    // This signal requests an outbound call 
+    else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
         int rc = call(payload->localNumber, payload->targetNumber);
         if (rc != 0) {
             // If the call fails then build a message that contains
             // the details suitable for display to an end-user.
-            PayloadCallFailed payload2;
-            strcpyLimited(payload2.targetNumber, payload->targetNumber, 
-                sizeof(payload2.targetNumber));
             if (rc == -4) {
-                strcpyLimited(payload2.message, "Node number syntax error", 
-                    sizeof(payload2.message));
+                _publishCallFailed(payload->localNumber, payload->targetNumber,
+                    "Node number syntax error");
             } else if (rc == -1) {
+                _publishCallFailed(payload->localNumber, payload->targetNumber,
+                    "Node already connected");
+            } else if (rc == -2) {
+                _publishCallFailed(payload->localNumber, payload->targetNumber,
+                    "Call limit exceeded");
+            } else if (rc == -5) {
+                _publishCallFailed(payload->localNumber, payload->targetNumber,
+                    "Address format error");
+            } else {
+                _publishCallFailed(payload->localNumber, payload->targetNumber,
+                    "Other error");
             }
-
-            Message msg2(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
-                sizeof(payload2), (const uint8_t*)&payload2, 0, _clock.time());
-            msg2.setSource(_busId, Message::UNKNOWN_CALL_ID);
-            msg2.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
-            _bus.consume(msg2);
         }
     } else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
         
@@ -2404,7 +2421,7 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
     }
 }
 
-void LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) {
+int LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) {
 
     if (_trace)
         _log.infoDump("DNS request", dnsPacket, dnsPacketLen);
@@ -2423,12 +2440,10 @@ void LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) 
         dnsPacket, 
 #endif
         dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-    if (rc < 0) {
-        _log.error("DNS send error");
-    }
+    return rc;
 }
 
-void LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {    
+int LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {    
 
     _log.info("Making DNS request (SRV) for %s", name);
 
@@ -2438,15 +2453,13 @@ void LineIAX2::_sendDNSRequestSRV(uint16_t requestId, const char* name) {
     int rc0 = microdns::makeDNSQuery_SRV(requestId, name, dnsPacket, dnsPacketCapacity);
     if (rc0 < 0) {
         _log.error("Unable to make DNS SRV query");
-        // ### TODO CALL FAILED EVENT
-        return;
+        return rc0;
     }
     unsigned dnsPacketLen = rc0;
-
-    _sendDNSRequest(dnsPacket, dnsPacketLen);
+    return _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
-void LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {    
+int LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {    
 
     _log.info("Making DNS request (A) for %s", name);
 
@@ -2456,15 +2469,13 @@ void LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {
     int rc0 = microdns::makeDNSQuery_A(requestId, name, dnsPacket, dnsPacketCapacity);
     if (rc0 < 0) {
         _log.error("Unable to make DNS A query");
-        // ### TODO CALL FAILED EVENT
-        return;
+        return rc0;
     }
     unsigned dnsPacketLen = rc0;
-
-    _sendDNSRequest(dnsPacket, dnsPacketLen);
+    return _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
-void LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {    
+int LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {    
 
     _log.info("Making DNS request (TXT for %s", name);
 
@@ -2474,12 +2485,10 @@ void LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {
     int rc0 = microdns::makeDNSQuery_TXT(requestId, name, dnsPacket, dnsPacketCapacity);
     if (rc0 < 0) {
         _log.error("Unable to make DNS TXT query");
-        // ### TODO CALL FAILED EVENT
-        return;
+        return rc0;
     }
     unsigned dnsPacketLen = rc0;
-
-    _sendDNSRequest(dnsPacket, dnsPacketLen);
+    return _sendDNSRequest(dnsPacket, dnsPacketLen);
 }
 
 void LineIAX2::oneSecTick() { 
@@ -2517,11 +2526,6 @@ void LineIAX2::tenSecTick() {
     _visitActiveCallsIf(
         [](Call& call) {
             call.resetStats();
-            /* Turning off stats display for now
-            if (call.state != Call::State::STATE_TERMINATED &&
-                call.state != Call::State::STATE_TERMINATE_WAITING)
-                call.logStats(log);
-            */
         },
         // Predicate
         [](const Call& call) { return true; }
@@ -2571,6 +2575,19 @@ void LineIAX2::_visitActiveCallsIf(std::function<void(const LineIAX2::Call& call
         if (call.active && predicate(call))
             v(call);
     }
+}
+
+void LineIAX2::_publishCallFailed(const char* localNumber, const char* remoteNumber, 
+    const char* text) {
+    _log.info("Call %s->%s failed: %s", localNumber, remoteNumber, text);
+    PayloadCallFailed payload;
+    strcpyLimited(payload.targetNumber, remoteNumber, sizeof(payload.targetNumber));
+    strcpyLimited(payload.message, text, sizeof(payload.message));
+    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+    msg.setSource(_busId, Message::UNKNOWN_CALL_ID);
+    msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+    _bus.consume(msg);
 }
 
 // ===== LineIAX2::Call ===================================================

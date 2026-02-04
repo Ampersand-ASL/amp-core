@@ -93,10 +93,11 @@ public:
      * @param sourceAuthorizer An interface that is used to validate the 
      * SOURCES of incoming calls. In other words, this can 
      * control what numbers this channel will ACCEPT calls from. 
+     * @param publicUser The IAX2 user sent for calls to public nodes.
      */
     LineIAX2(Log& log, Log& traceLog, Clock& clock, int lineId, MessageConsumer& consumer,
         NumberAuthorizer* destAuthorizer, NumberAuthorizer* sourceAuthorizer, 
-        LocalRegistry* locReg, unsigned destLineId);
+        LocalRegistry* locReg, unsigned destLineId, const char* publicUser);
 
     // Configuration 
 
@@ -152,13 +153,9 @@ public:
      *
      * @param listenFamily - Either AF_INET or AF_INET6
      * @param listenPort
-     * @param defaultUser - The user sent in IAX2 NEW requests when no 
-     * explicit username is specified. This is generally used for calls to 
-     * public nodes. (i.e. "radio")
-     *
      * @returns 0 if the open was successful.
      */
-    int open(short addrFamily, int listenPort, const char* defaultUser);
+    int open(short addrFamily, int listenPort);
 
     /**
      * Resets all calls as a side-effect.
@@ -172,8 +169,9 @@ public:
      * 
      * @param targetNode Can be a node number or an explicit target address 
      *   in the format of: user@address:port/number,password
-     * @returns 0 on success, -2 call limit exceeded, -4 for explicit target 
-     * parsing error
+     * @returns 0 on success, -4 target syntax error, -1 call already active,
+     *   -2 max call limit exceeded, -5 address format error.
+     * 
      */
     int call(const char* localNumber, const char* targetNode);
 
@@ -393,7 +391,7 @@ private:
     Log& _log;
     Log& _traceLog;
     Clock& _clock;
-    unsigned _busId;
+    const unsigned _busId;
     MessageConsumer& _bus;
     // An interface used to validate wether a call to a target number
     // should be allowed.
@@ -403,22 +401,21 @@ private:
     // Used to resolve targets using a local file
     LocalRegistry* _locReg = 0;
     // The line that all messages are directed to
-    unsigned _destLineId;
+    const unsigned _destLineId;
+    const fixedstring _publicUser;
+    // The startup time of this line. Mostly used for generating unique
+    // tokens.
+    const uint32_t _startTime;
+
     // This is an ED25519 private key in ASCII Hex format (exactly 64 characters)
     char _privateKeyHex[65];
     char _dnsRoot[32];
-
-    // The startup time of this line. Mostly used for generating unique
-    // tokens.
-    uint32_t _startTime;
 
     // The IP address family used for this connection. Either AF_INET
     // or AF_INET6.
     short _addrFamily = 0;
     // The UDP port number used to receive IAX packet
     int _iaxListenPort = 0;
-    // NOTE: Still researching this
-    fixedstring _defaultUser;
     // The UDP socket on which IAX messages are received/sent
     int _iaxSockFd = 0;
 
@@ -436,8 +433,6 @@ private:
     int _dnsSockFd = 0;
     // Used for generating unique IDs for DNS requests
     unsigned int _dnsRequestIdCounter = 1;
-    // Determines how much time we wait between call retries
-    uint32_t _callRetryIntervalMs = 30 * 1000;
     // Diagnostics    
     unsigned _invalidCallPacketCounter = 0;
     // Controls whether source IP validation is required
@@ -487,6 +482,10 @@ private:
     void _terminateCall(Call& call);
     // ### TODO: NEED TO DESIGNATE CALL
     void _dtmfGen(char symbol);
+    // Generates a signal message for a call failure and publishes it 
+    // onto the bus. 
+    void _publishCallFailed(const char* localNumber, const char* remoteNumber, 
+        const char* msg);
 
     /**
      * Sends a frame to the call peer. Also deals with call management:
@@ -497,10 +496,10 @@ private:
     void _sendFrameToPeer(const IAX2FrameFull& frame, const sockaddr& peerAddr);
     void _sendFrameToPeer(const uint8_t* frame, unsigned frameSize, const sockaddr& peerAddr);
 
-    void _sendDNSRequestSRV(uint16_t requestId, const char* name);
-    void _sendDNSRequestA(uint16_t requestId, const char* name);
-    void _sendDNSRequestTXT(uint16_t requestId, const char* name);
-    void _sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen);
+    int _sendDNSRequestSRV(uint16_t requestId, const char* name);
+    int _sendDNSRequestA(uint16_t requestId, const char* name);
+    int _sendDNSRequestTXT(uint16_t requestId, const char* name);
+    int _sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen);
 
     /**
      * @return true if there might be more work to be done
