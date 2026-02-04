@@ -18,7 +18,6 @@
 
 #include <functional>
 #include <queue>
-#include <fstream>
 
 #include "MessageConsumer.h"
 #include "Runnable2.h"
@@ -101,8 +100,6 @@ private:
     unsigned _debounceIntervalMs = 250;
 
     std::function<void(const Message& msg)> _sink = nullptr;
-
-    std::fstream _captureFile;
 };
 
 }

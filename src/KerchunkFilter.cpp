@@ -150,14 +150,10 @@ void KerchunkFilter::consume(const Message& frame) {
 }
 
 void KerchunkFilter::_saveAndDiscard(std::queue<Message>& q) {
-    _captureFile.open("./kerchunk-capture.pcm", 
-        std::ios::out | std::ios::app | std::ios::binary);
     while (!q.empty()) {
         Message m = q.front();
         q.pop();
-        _captureFile.write((const char*)m.body(), m.size());
     }
-    _captureFile.close();
 }
 
 }

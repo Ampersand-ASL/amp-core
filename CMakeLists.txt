@@ -18,7 +18,8 @@ cmake_minimum_required(VERSION 3.13)
 project(ampersand C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
-add_compile_options(-fstack-protector-all -Wall -Wpedantic -g -fstack-usage -Wstack-usage=8192)
+#add_compile_options(-fstack-protector-all -Wall -Wpedantic -g -fstack-usage -Wstack-usage=8192)
+add_compile_options(-fstack-protector-all -Wall -Wpedantic -g)
 
 # ----- USB (local) Parrot ----------------------------------------------------
 
@@ -108,15 +109,19 @@ add_executable(unit-test
   src/Message.cpp
   src/Line.cpp
   src/IAX2FrameFull.cpp
+  src/IAX2Util.cpp
   src/Resampler.cpp
   #src/Transcoder_G711_ULAW.cpp
   #src/NodeParrot.cpp
   src/Bridge.cpp
   src/BridgeCall.cpp
-  #src/BridgeIn.cpp
-  #src/BridgeOut.cpp
-  #src/Transcoder_G711_ULAW.cpp
-  #src/Transcoder_SLIN_48K.cpp
+  src/BridgeIn.cpp
+  src/BridgeOut.cpp
+  src/KerchunkFilter.cpp
+  src/Transcoder_G711_ULAW.cpp
+  src/Transcoder_SLIN_48K.cpp
+  src/Transcoder_SLIN_16K.cpp
+  src/Transcoder_SLIN_8K.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/DTMFDetector2.cpp
@@ -135,6 +140,7 @@ target_include_directories(unit-test PRIVATE itu-g711-codec/src)
 target_include_directories(unit-test PRIVATE cmsis-dsp-mock/include)
 target_include_directories(unit-test PRIVATE alsa-mock/include)
 target_include_directories(unit-test PRIVATE hid-mock/include)
+target_include_directories(unit-test PRIVATE json/include)
 target_link_libraries(unit-test)
 
 # ----- Protocol Test

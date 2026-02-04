@@ -32,6 +32,8 @@ namespace kc1fsz {
 class Log;
 class Clock;
 
+// #### TODO: CLEANUP NAMESPACE
+
 /**
  * Transcodes from internal SLIN_48K to whatever CODEC is needed for 
  * external communications.

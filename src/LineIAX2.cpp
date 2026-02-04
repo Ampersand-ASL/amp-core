@@ -159,6 +159,8 @@ int LineIAX2::open(short addrFamily, int listenPort) {
         _log.error("Unable to open IAX port (%d)", errno);
         return -1;
     }    
+
+    // #### TODO RAAI TO ADDRESS LEAKS BELOW
     
     // Configure reuse
     int optval = 1; 
@@ -179,8 +181,7 @@ int LineIAX2::open(short addrFamily, int listenPort) {
         // TODO: Allow this to bec controlled
         ((sockaddr_in&)servaddr).sin_addr.s_addr = INADDR_ANY;
         ((sockaddr_in&)servaddr).sin_port = htons(_iaxListenPort);
-    }
-    else if (_addrFamily == AF_INET6) {
+    } else if (_addrFamily == AF_INET6) {
         // To bind to all available IPv6 interfaces
         // TODO: Allow this to bec controlled
         ((sockaddr_in6&)servaddr).sin6_addr = in6addr_any; 

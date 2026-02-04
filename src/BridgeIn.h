@@ -189,8 +189,6 @@ private:
 
     // This is used to satisfy interpolation requests from
     // the Jitter Buffer.
-    //
-    // NOTE: At the moment this only supports 8K sample rates
     Plc _plc;
 
     // This is used to convert up to 48K

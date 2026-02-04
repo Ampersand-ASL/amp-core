@@ -479,6 +479,11 @@ private:
     void _sendACK(uint32_t timeStamp, Call& call); 
     void _sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const char* cause);
     void _hangupCall(Call& call);
+    /**
+     * Puts the call in terminate mode. The call will 
+     * continue to be active long enough for the peer
+     * to request any needed re-transmissions.
+     */
     void _terminateCall(Call& call);
     // ### TODO: NEED TO DESIGNATE CALL
     void _dtmfGen(char symbol);

@@ -19,6 +19,7 @@
 
 #include "Message.h"
 #include "IAX2FrameFull.h"
+#include "BridgeCall.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -186,7 +187,17 @@ static void testRound() {
     assert(amp::SequencingBufferStd<Message>::roundDownToTick(6779, 20) == 6760);
 }
 
+static void sizeCheck1() {
+    cout << "Message          " << sizeof(Message) << endl;
+    cout << "Message x 64     " << sizeof(Message) * 64 << endl;
+    cout << "SequencingBuffer " << sizeof(amp::SequencingBufferStd<Message>) << endl;
+    cout << "BridgeIn         " << sizeof(amp::BridgeIn) << endl;
+    cout << "BridgeOut        " << sizeof(BridgeOut) << endl;
+    cout << "BridgeCall       " << sizeof(amp::BridgeCall) << endl;
+}
+
 int main(int, const char**) {
+    sizeCheck1();
     testRound();
     //resampler_1();
     //pack1();
