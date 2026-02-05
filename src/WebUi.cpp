@@ -326,12 +326,12 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         }
         else if (menuName == "aslAudioDevice") {
 
+#ifndef _WIN32            
             json o;
             o["value"] = "";
             o["desc"] = "None";
             a.push_back(o);
 
-#ifndef _WIN32            
             visitUSBDevices2([&a](
                 const char* vendorName, const char* productName, 
                 const char* vendorId, const char* productId,                 
@@ -371,12 +371,13 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         
         auto a = json::array();
 
+#ifndef _WIN32        
+
         json o;
         o["value"] = "";
         o["desc"] = "None";
         a.push_back(o);
 
-#ifndef _WIN32        
         visitUSBDevices2([&a](const char* vendorName, const char* productName, 
             const char* vendorId, const char* productId,             
             const char* busId, const char* portId) {

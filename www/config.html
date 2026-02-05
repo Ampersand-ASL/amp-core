@@ -106,57 +106,6 @@
                     <label for="aslRxMixerSet">Receive Mixer:</label>
                     <select id="aslRxMixerSet" name="aslRxMixerSet">
                     </select>
-                    <!--
-                    <label for="audioDevice">Audio Device:</label>
-                    <select id="audioDevice" name="audioDevice">
-                    </select>
-                    <label for="audioDeviceParam">Audio Device Parameters:</label>
-                    <input type="text" id="audioDeviceParam" name="audioDeviceParam"/>
-
-                    <label for="cosSignal">COR Signal:</label>
-                    <select id="cosSignal" name="cosSignal">
-                        <option>USB HID Register</option>
-                        <option>Raspberry Pi GPIO Pin</option>
-                        <option>Parallel Port Pin</option>
-                        <option>UART RTS/DTR Pin</option>
-                        <option>CAT Command</option>
-                    </select>
-                    <label for="cosSignalParam">COR Signal Parameters:</label>
-                    <input type="text" id="cosSignalParam" name="cosSignalParam"/>
-                    <label for="ampInvertCos">Invert COR Signal:</label>
-                    <select id="ampInvertCos" name="ampInvertCos">
-                        <option>No</option>
-                        <option>Yes</option>
-                    </select>                
-
-                    <label for="ctcssSignal">CTCSS Signal:</label>
-                    <select id="ctcssSignal" name="ctcssSignal">
-                        <option>None</option>
-                    </select>
-                    <label for="ctcssSignalParam">CTCSS Signal Parameters:</label>
-                    <input type="text" id="ctcssSignalParam" name="ctcssSignalParam"/>
-                    <label for="ampInvertCtcss">Invert CTCSS Signal:</label>
-                    <select id="ampInvertCtcss" name="ampInvertCtcss">
-                        <option>No</option>
-                        <option>Yes</option>
-                    </select>                
-
-                    <label for="ampPttSignal">PTT Signal:</label>
-                    <select id="ampPttSignal" name="ampPttSignal">
-                        <option>USB HID Register</option>
-                        <option>Raspberry Pi GPIO Pin</option>
-                        <option>Parallel Port Pin</option>
-                        <option>UART RTS/DTR Pin</option>
-                        <option>CAT Command</option>
-                    </select>
-                    <label for="ampPttSignalParam">PTT Signal Parameters:</label>
-                    <input type="text" id="ampPttSignalParam" name="ampPttSignalParam"/>
-                    <label for="ampInvertPtt">Invert PTT:</label>
-                    <select id="ampInvertPtt" name="ampInvertPtt">
-                        <option>No (Active Low)</option>
-                        <option>Yes (Active High)</option>
-                    </select>                
-                -->
                 </div>
                 <div class="form2">
                     <div>Advanced Settings:</div><div></div>
@@ -186,6 +135,7 @@
  * @param args Optional arguments that can influence the list
  */
 async function loadSelectOptions(baseElId, selectId, arg) {
+
     // Get the starting value
     const baseEl = document.getElementById(baseElId);
     const sel = baseEl.querySelector("#" + selectId);
@@ -203,26 +153,38 @@ async function loadSelectOptions(baseElId, selectId, arg) {
         const data = await response.json();
         // Clear existing options
         sel.replaceChildren();
-        for (const i of data) {
-            var opt = document.createElement('option');
-            opt.value = i["value"]
-            opt.innerHTML = i["desc"]
-            sel.appendChild(opt);
+        if (data.length > 0) {
+            sel.disabled = false;
+            for (const i of data) {
+                var opt = document.createElement('option');
+                opt.value = i["value"]
+                opt.innerHTML = i["desc"]
+                sel.appendChild(opt);
+            }
+            // Get the item selected again
+            if (initialValue && initialValue != "") {
+                sel.value = initialValue
+            }
         }
-        // Get the item selected again
-        if (initialValue && initialValue != "") {
-            sel.value = initialValue
+        else {
+            sel.disabled = true;
         }
+
     } catch (error) {
         console.error('Error fetching data:', error.message);
     }
 }
 
 function loadUi(name, data, doc) {
-    if (name in data)
-        doc.getElementById(name).value = data[name]
-    else 
-        doc.getElementById(name).value = null
+    el = doc.getElementById(name);
+    if (el) {
+        if (name in data) {
+            el.value = data[name];
+        } else {
+            el.value = null;
+            el.disabled = true;
+        }
+    }
 }
 
 function storeUi(name, formObject, data) {
@@ -231,7 +193,7 @@ function storeUi(name, formObject, data) {
 }
 
 // Call this whenever the audio device selection changes so that 
-// the mixer ranges are appropirate for that device.
+// the mixer ranges are appropriate for that device.
 async function fixMixerRanges() {
     // Get the value of the audio device selected
     sel = document.getElementById("aslAudioDevice");
@@ -242,6 +204,7 @@ async function fixMixerRanges() {
     ]);
 }
 
+// Loads data into the configuration screen
 async function configLoad() {
     try {
         const response = await fetch('config-load');
@@ -278,7 +241,7 @@ async function configLoad() {
         loadUi("kfdelay", data, document);
 
     } catch (error) {
-        console.error('Error fetching data:', error.message);
+        console.error('Error fetching configuration data:', error.message);
     }
 }
 
