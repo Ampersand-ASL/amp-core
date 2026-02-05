@@ -56,7 +56,6 @@ public:
     static const unsigned BLOCK_SIZE_16K = 160 * 2;
     static const unsigned BLOCK_SIZE_48K = 160 * 6;
     static const unsigned BLOCK_PERIOD_MS = 20;
-    static const unsigned SESSION_TIMEOUT_MS = 120 * 1000;
     static const unsigned LINE_ID = 10;
     static const unsigned CALL_ID = 1;
 
@@ -222,8 +221,6 @@ private:
     Mode _mode = Mode::NORMAL;
     bool _permanent = false;
 
-    uint32_t _startMs = 0;
-
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
 
@@ -313,6 +310,9 @@ private:
 
     void _analyzeRecording(const std::vector<PCM16Frame>& audio, float* peakPower, float* avgPower);
 
+    // The start of the parrot session, used to manage session timeout
+    uint64_t _parrotStartMs = 0;
+
     // Last time the parrot received audio. Used to detect end of 
     // transmission.
     uint32_t _lastAudioRxMs = 0;
@@ -337,6 +337,8 @@ private:
         PAUSE_AFTER_RECORD,
         TTS_AFTER_RECORD,
         PLAYING_AFTER_RECORD,
+        TTS_GOODBYE,
+        PLAYING_GOODBYE,
         TIMEDOUT
     };
 

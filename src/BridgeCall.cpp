@@ -41,6 +41,13 @@
 // considered complete.
 #define DTMF_WINDOW_MS (2500)
 
+// The duration of a parrot session
+#define PARROT_SESSION_TIMEOUT_MS (120 * 1000)
+
+// How long we wait between the initial greeting and the second greeting.
+// In theory, this is enough time to get past any telemetry that is happening.
+#define PARROT_GREETING_PAUSE_MS (3500)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -130,7 +137,6 @@ void BridgeCall::reset() {
     _mode = Mode::NORMAL;
     _lineId = 0;  
     _callId = 0; 
-    _startMs = 0;
     _lastAudioRxMs = 0;
     _echo = false;
     _sourceAddrValidated = false;
@@ -149,6 +155,7 @@ void BridgeCall::reset() {
     _playQueue = std::queue<PCM16Frame>();
     _parrotState = ParrotState::NONE;
     _parrotStateStartMs = 0;
+    _parrotStartMs = 0;
     _lastUnkeyProcessedMs = 0;
 
     _stageInSet = false;
@@ -181,7 +188,6 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _callId = callId; 
     _remoteNodeNumber = remoteNodeNumber;
 
-    _startMs = startMs;
     _lastAudioRxMs = 0;
 
     _bridgeIn.setCodec(codec);
@@ -205,6 +211,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 void BridgeCall::_enterParrotMode() {
     _mode = Mode::PARROT;
     _parrotState = ParrotState::CONNECTED;
+    _parrotStartMs = _clock->timeMs();
     _parrotStateStartMs = _clock->time();
 }
 
@@ -658,16 +665,17 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
 
 void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
-    // General timeout
-    if (_clock->isPast(_startMs + SESSION_TIMEOUT_MS)) {
-        _log->info("Timing out call %u/%d", _lineId, _callId);
-        _parrotState = ParrotState::TIMEDOUT;
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
-            0, 0, 0, tickMs * 1000);
-        msg.setSource(LINE_ID, CALL_ID);
-        msg.setDest(_lineId, _callId);
-        _bridgeOut.consume(msg);
-        reset();
+    if (_parrotState == ParrotState::WAITING_FOR_RECORD) {
+        // General timeout
+        if (_clock->isPastWindow(_parrotStartMs, PARROT_SESSION_TIMEOUT_MS)) {
+
+            _log->info("Timing out parrot call %u/%d", _lineId, _callId);
+
+            requestTTS("Parrot session ended. Goodbye!");
+
+            _parrotState = ParrotState::TTS_GOODBYE;
+            _parrotStateStartMs = _clock->time();
+        }
     }
     else if (_parrotState == ParrotState::CONNECTED) {
 
@@ -716,7 +724,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     else if (_parrotState == ParrotState::GREETING_1) {
         // Per Jason N8EI, we only start after a bit of silence to let 
         // the telemetry pass.
-        if (_clock->isPast(_parrotStateStartMs + 3000)) {
+        if (_clock->isPast(_parrotStateStartMs + PARROT_GREETING_PAUSE_MS)) {
             string prompt;
             if (!_sourceAddrValidated) 
                 prompt += "Node is unregistered. ";
@@ -853,18 +861,34 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _parrotStateStartMs = _clock->time();
         }
     }
+    else if (_parrotState == ParrotState::PLAYING_GOODBYE) {
+        if (_playQueue.empty()) {
+
+            // Request to have the call killed on the IAX side
+            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+                0, 0, 0, tickMs * 1000);
+            msg.setSource(LINE_ID, CALL_ID);
+            msg.setDest(_lineId, _callId);
+            _bridgeOut.consume(msg);
+
+            // Reset this bridge session
+            reset();
+        }
+    }
 }
 
 // These are the places where we are waiting for the TTS to complete
 void BridgeCall::_processParrotTTSAudio(const Message& frame) {
     if (_parrotState == ParrotState::TTS_GREETING_0 ||
-        _parrotState == ParrotState::TTS_GREETING_1) {
+        _parrotState == ParrotState::TTS_GREETING_1 ||
+        _parrotState == ParrotState::TTS_GOODBYE) {
         if (frame.getType() == Message::Type::TTS_END) {
-            _log->info("Greeting start");
             if (_parrotState == ParrotState::TTS_GREETING_0)
                 _parrotState = ParrotState::PLAYING_GREETING_0;
             else if (_parrotState == ParrotState::TTS_GREETING_1)
                 _parrotState = ParrotState::PLAYING_GREETING_1;
+            else if (_parrotState == ParrotState::TTS_GOODBYE)
+                _parrotState = ParrotState::PLAYING_GOODBYE;
             _parrotStateStartMs = _clock->time();
         }        
     }
