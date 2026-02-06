@@ -67,7 +67,7 @@ int main(int, const char**) {
     // This is the Line that makes the IAX2 network connection
     LocalRegistryStd locReg;
 
-    const unsigned lineCount = 128;
+    const unsigned lineCount = 8;
 
     Runnable2* tasks[lineCount + 1];
 
