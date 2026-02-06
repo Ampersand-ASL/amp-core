@@ -1350,8 +1350,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
              frame.getSubclass() == ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY) {
         
-        _log.info("Call %u got UNKEY %u", call.localCallId, frame.getTimeStamp());
-
         Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
             0, 0, frame.getTimeStamp(), rxStampMs);
         unkeyMsg.setSource(_busId, call.localCallId);

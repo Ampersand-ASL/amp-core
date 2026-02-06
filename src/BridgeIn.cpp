@@ -31,8 +31,6 @@ namespace kc1fsz {
     namespace amp {
 
 BridgeIn::BridgeIn() {
-    // #### TODO: FIGURE OUT WHERE TO MOVE THIS
-    _jitBuf.setInitialMargin(20 * 10);
     // Kerchunk filter just passes through
     _kerchunkFilter.setSink(
         [this](const Message& frame) { _sink(frame); }
@@ -55,6 +53,14 @@ void BridgeIn::setCodec(CODECType codecType) {
     else assert(false);
 }
 
+void BridgeIn::setJitterBufferInitialMargin(unsigned ms) {
+    _jitBuf.setInitialMargin(ms);
+}
+
+bool BridgeIn::isActiveRecently() const {
+    return _clock->isInWindow(_lastAudioMs, RECENT_TIMEOUT_MS);
+}
+
 void BridgeIn::consume(const Message& frame) {    
 
     if (frame.getType() == Message::Type::AUDIO) {
@@ -67,12 +73,8 @@ void BridgeIn::consume(const Message& frame) {
             _lastActiveStatusChangedMs = _lastAudioMs;
         }
 
-        // The first stop is the jitter buffer, unless it's been bypassed
-        if (_bypassJitterBuffer) {
-            _bypassedFrames.push(frame);
-        } else {
-            _jitBuf.consume(*_log, frame);
-        }
+        // The first stop in the pipeline is the jitter buffer
+        _jitBuf.consume(*_log, frame);
     }
     else if (frame.getType() == Message::Type::SIGNAL) {
         if (frame.getFormat() == Message::SignalType::RADIO_UNKEY) {
@@ -117,15 +119,11 @@ private:
  * adaptor that will handle forwarding.
  */
 void BridgeIn::audioRateTick(uint32_t tickMs) {
-    if (_bypassJitterBuffer) {
-        if (!_bypassedFrames.empty()) {
-            _handleJitBufOut(_bypassedFrames.front());
-            _bypassedFrames.pop();
-        }
-    } else {
-        JBOutAdaptor adaptor([this](const Message& msg) { this->_handleJitBufOut(msg); });
-        _jitBuf.playOut(*_log, _clock->time(), &adaptor);
-    }
+
+    JBOutAdaptor adaptor([this](const Message& msg) { 
+        this->_handleJitBufOut(msg); 
+    });
+    _jitBuf.playOut(*_log, _clock->time(), &adaptor);
 
     // Let the kerchunk filter contribute output if necessary
     _kerchunkFilter.audioRateTick(tickMs);
@@ -135,10 +133,6 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
         _activeStatus = false;
         _lastActiveStatusChangedMs = _clock->timeMs();
     }
-}
-
-bool BridgeIn::isActiveRecently() const {
-    return _clock->isInWindow(_lastAudioMs, RECENT_TIMEOUT_MS);
 }
 
 /**

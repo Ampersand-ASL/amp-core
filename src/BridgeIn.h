@@ -45,6 +45,7 @@ class Clock;
  * 1. De-jitter, identification of interpolation needs.
  * 2. PLC (if possible)
  * 3. Transcodes/resamples to SLIN_48K for internal processing.
+ * 4. Kerchunk filtering
  */
 class BridgeIn : public MessageConsumer {
 public:
@@ -66,6 +67,8 @@ public:
 
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
 
+    void setJitterBufferInitialMargin(unsigned ms);
+
     void setCodec(CODECType codecType);
 
     CODECType getCodec() const { return _codecType; }
@@ -74,14 +77,10 @@ public:
         _jitBuf.setStartMs(ms);
     }
 
-    void setBypassJitterBuffer(bool b) { _bypassJitterBuffer = b; }
-
     uint32_t getLastUnkeyMs() const { return _lastUnkeyMs; }
     
     void reset() { 
         _codecType = CODECType::IAX2_CODEC_UNKNOWN;
-        _bypassJitterBuffer = false;
-        _bypassedFrames = std::queue<Message>();
         _jitBuf.reset();
         _lastUnkeyMs = 0;
         _lastAudioMs = 0;
@@ -170,17 +169,11 @@ private:
     // The last time the status was changed in either direction.
     uint64_t _lastActiveStatusChangedMs = 0;
 
-    bool _bypassJitterBuffer = false;
-
     // This is the Jitter Buffer used to address timing/sequencing
     // issues on the input side of the Bridge.
     amp::SequencingBufferStd<Message> _jitBuf;
 
     uint32_t _lastUnkeyMs = 0;
-
-    // If the jitter buffer is bypassed here is where the frames are queued.
-    // ### TODO: PUT A MODE ON THE JB TO SUPPORT BYPASS.
-    std::queue<Message> _bypassedFrames;
 
     Transcoder_G711_ULAW _transcoder0a;
     Transcoder_SLIN_8K _transcoder0b;

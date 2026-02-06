@@ -48,6 +48,9 @@
 // In theory, this is enough time to get past any telemetry that is happening.
 #define PARROT_GREETING_PAUSE_MS (3500)
 
+// The initial margin used by the jitter buffer (ms)
+#define JB_INITIAL_MARGIN_MS (200)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -191,7 +194,10 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _lastAudioRxMs = 0;
 
     _bridgeIn.setCodec(codec);
-    _bridgeIn.setBypassJitterBuffer(bypassJitterBuffer);
+    if (bypassJitterBuffer)
+        _bridgeIn.setJitterBufferInitialMargin(0);
+    else 
+        _bridgeIn.setJitterBufferInitialMargin(JB_INITIAL_MARGIN_MS);
     _bridgeIn.setStartTime(startMs);
     _bridgeOut.setCodec(codec);
 

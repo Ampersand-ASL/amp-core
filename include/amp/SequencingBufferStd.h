@@ -215,123 +215,138 @@ public:
         const int32_t idealOriginCursor = roundToTick(
             (int32_t)localMs - (int32_t)_idealDelay, _voiceTickSize);
 
-        // Work through the buffer chronologically. Forward on signal frames,
-        // look for the start of a talk spurt, play voice frames at the 
-        // right time, and discard expired voice frames.
-        while (!_buffer.empty()) {
-
-            const T& frame = _buffer.first();
-            const int32_t oldOriginCursor = _originCursor;
-
-            // Old voice frames (out of order or repeats) are discarded immediately
-            if (frame.getOrigMs() <= _lastPlayedOrigMs) {
-                log.info("Discarded OOS frame (%d <= %d)", frame.getOrigMs(), _lastPlayedOrigMs);
-                _lateVoiceFrameCount++;
+        // Look for the special case that is treated as a bypass of the 
+        // sequencing buffer.
+        if (_initialMargin == 0) {
+            if (!_buffer.empty()) {
+                sink->play(_buffer.first(), localMs);
                 _buffer.pop();
-                // NOTICE: We're in a loop so we get another shot at it,
-                continue;
+                voiceFramePlayed = true;
             }
+        }
+        // Everything in this else block is the "normal" operation of
+        // the buffer (i.e. no bypassed)
+        else {
+            // Work through the buffer chronologically. Forward on signal frames,
+            // look for the start of a talk spurt, play voice frames at the 
+            // right time, and discard expired voice frames.
+            while (!_buffer.empty()) {
 
-            // First frame of the talkpsurt? 
-            if (!_inTalkspurt) {
-                
-                // The voice frame may not necessarily be on a voice tick boundary
-                // so the cursor position needs to be rounded.
-                // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
-                _originCursor = roundToTick(frame.getOrigMs() - _initialMargin,
-                    _voiceTickSize);
+                const T& frame = _buffer.first();
+                const int32_t oldOriginCursor = _originCursor;
 
-                if (_originCursor > oldOriginCursor)
-                    log.info("Start TS, moving forward %u -> %u %u %d", 
-                        oldOriginCursor, _originCursor, frame.getOrigMs(), size());
-                else if (_originCursor < oldOriginCursor)
-                    log.info("Start TS, moving backward %u <- %u %u %d", 
-                        _originCursor, oldOriginCursor, frame.getOrigMs(), size());
-                else 
-                    log.info("Start TS, No movement %u %u %d", 
-                        _originCursor, frame.getOrigMs(), size());
-
-                _inTalkspurt = true;
-                _talkspurtFrameCount = 0;
-                _talkspurtFirstOrigin = frame.getOrigMs();
-                _lastPlayedOrigMs = 0;
-                _lastPlayedLocal = 0;
-            }
-
-            // If we get an expired frame then decide if we want to move the cursor back
-            // to pick it up.
-            if ((int32_t)frame.getOrigMs() < _originCursor) {
-
-                // A few rules:
-                // 1. Never move back further than has already been played in this 
-                // talkspurt.
-                // 2. Always move back onto a voice tick boundary.
-                // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
-                uint32_t proposedCursor = max(_lastPlayedOrigMs, 
-                    roundDownToTick(frame.getOrigMs(), _voiceTickSize));
-
-                // If the frame is within a reasonable range then move the cursor 
-                // back to pick up the frame.
-                if (proposedCursor >= (_originCursor - _initialMargin)) {
-                    // The cursor will need to stay on a tick boundary
-                    _originCursor = proposedCursor;
-                    log.info("Mid TS, moved cursor back (%d <- %d) size: %d", 
-                        _originCursor, oldOriginCursor, size());
-                }
-                // If the next frame is unreasonably early then discard it.
-                else {
-                    log.info("Mid TS, discarded frame (%d << %d) size: %d", 
-                        frame.getOrigMs(), _originCursor, size());
+                // Old voice frames (out of order or repeats) are discarded immediately
+                if (frame.getOrigMs() <= _lastPlayedOrigMs) {
+                    log.info("Discarded OOS frame (%d <= %d)", frame.getOrigMs(), _lastPlayedOrigMs);
                     _lateVoiceFrameCount++;
                     _buffer.pop();
+                    // NOTICE: We're in a loop so we get another shot at it,
+                    continue;
                 }
-                // NOTICE: We're in a loop so we get another shot at it,
-            }
-            // If we've got a frame that is inside of the current tick then play it.
-            // NOTE: *Most* of the time the voice ticks will be aligned on audio 
-            // tick boundaries, but occasionally we may get one that is is not, most
-            // likely because the timestamp for the tick was consumed by another 
-            // message.
-            //
-            // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
-            else if ((int32_t)frame.getOrigMs() >= _originCursor &&
-                     (int32_t)frame.getOrigMs() < _originCursor + (int32_t)_voiceTickSize) {
-                
-                sink->play(frame, localMs);
 
-                voiceFramePlayed = true;
-                _lastPlayedLocal = localMs;
-                _lastPlayedOrigMs = _originCursor;
-                _voicePlayoutCount++;
+                // First frame of the talkpsurt? 
+                if (!_inTalkspurt) {
+                    
+                    // The voice frame may not necessarily be on a voice tick boundary
+                    // so the cursor position needs to be rounded.
+                    // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
+                    _originCursor = roundToTick(frame.getOrigMs() - _initialMargin,
+                        _voiceTickSize);
 
-                bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
+                    if (_originCursor > oldOriginCursor)
+                        log.info("Start TS, moving forward %u -> %u %u %d", 
+                            oldOriginCursor, _originCursor, frame.getOrigMs(), size());
+                    else if (_originCursor < oldOriginCursor)
+                        log.info("Start TS, moving backward %u <- %u %u %d", 
+                            _originCursor, oldOriginCursor, frame.getOrigMs(), size());
+                    else 
+                        log.info("Start TS, No movement %u %u %d", 
+                            _originCursor, frame.getOrigMs(), size());
 
-                // Keep margin tracking up to date
-                int32_t margin = (int32_t)localMs - (int32_t)frame.getRxMs();
-                if (startOfSpurt) {
-                    _worstMargin = margin;
-                    _totalMargin = margin;
-                    _talkspurtFrameCount = 1;
-                } else {
-                    if (margin < _worstMargin) 
+                    _inTalkspurt = true;
+                    _talkspurtFrameCount = 0;
+                    _talkspurtFirstOrigin = frame.getOrigMs();
+                    _lastPlayedOrigMs = 0;
+                    _lastPlayedLocal = 0;
+                }
+
+                // If we get an expired frame then decide if we want to move the cursor back
+                // to pick it up.
+                if ((int32_t)frame.getOrigMs() < _originCursor) {
+
+                    // A few rules:
+                    // 1. Never move back further than has already been played in this 
+                    // talkspurt.
+                    // 2. Always move back onto a voice tick boundary.
+                    // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
+                    uint32_t proposedCursor = max(_lastPlayedOrigMs, 
+                        roundDownToTick(frame.getOrigMs(), _voiceTickSize));
+
+                    // If the frame is within a reasonable range then move the cursor 
+                    // back to pick up the frame.
+                    if (proposedCursor >= (_originCursor - _initialMargin)) {
+                        // The cursor will need to stay on a tick boundary
+                        _originCursor = proposedCursor;
+                        log.info("Mid TS, moved cursor back (%d <- %d) size: %d", 
+                            _originCursor, oldOriginCursor, size());
+                    }
+                    // If the next frame is unreasonably early then discard it.
+                    else {
+                        log.info("Mid TS, discarded frame (%d << %d) size: %d", 
+                            frame.getOrigMs(), _originCursor, size());
+                        _lateVoiceFrameCount++;
+                        _buffer.pop();
+                    }
+                    // NOTICE: We're in a loop so we get another shot at it,
+                }
+                // If we've got a frame that is inside of the current tick then play it.
+                // NOTE: *Most* of the time the voice ticks will be aligned on audio 
+                // tick boundaries, but occasionally we may get one that is is not, most
+                // likely because the timestamp for the tick was consumed by another 
+                // message.
+                //
+                // (Bruce observed non-rounded voice frames from ECR on 27-Dec-2025)
+                else if ((int32_t)frame.getOrigMs() >= _originCursor &&
+                        (int32_t)frame.getOrigMs() < _originCursor + (int32_t)_voiceTickSize) {
+                    
+                    sink->play(frame, localMs);
+
+                    voiceFramePlayed = true;
+                    _lastPlayedLocal = localMs;
+                    _lastPlayedOrigMs = _originCursor;
+                    _voicePlayoutCount++;
+
+                    bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
+
+                    // Keep margin tracking up to date
+                    int32_t margin = (int32_t)localMs - (int32_t)frame.getRxMs();
+                    if (startOfSpurt) {
                         _worstMargin = margin;
-                    _totalMargin += margin;
-                    _talkspurtFrameCount++;
+                        _totalMargin = margin;
+                        _talkspurtFrameCount = 1;
+                    } else {
+                        if (margin < _worstMargin) 
+                            _worstMargin = margin;
+                        _totalMargin += margin;
+                        _talkspurtFrameCount++;
+                    }
+
+                    _buffer.pop();
+
+                    if (_traceLog)
+                        _traceLog->info("POV, %u, %lld, %d", frame.getOrigMs(), frame.getRxMs(), margin);
+
+                    // We can only play one frame per tick, so break out of the loop
+                    break;
                 }
-
-                _buffer.pop();
-
-                if (_traceLog)
-                    _traceLog->info("POV, %u, %lld, %d", frame.getOrigMs(), frame.getRxMs(), margin);
-
-                // We can only play one frame per tick, so break out of the loop
-                break;
-            }
-            // Otherwise the next voice is in the future vis-a-vis the origin cursor,
-            // so an interpolation will happen to fill the gap.
-            else {
-                break;
-            }
+                // Otherwise the next voice is in the future vis-a-vis the origin cursor,
+                // so an interpolation will happen to fill the gap.
+                else {
+                    break;
+                }
+            }  
+            // END OF WHILE LOOP. Everything after this point happens
+            // exactly once per playout call.
         }
 
         // Things to check while the talkspurt is running
