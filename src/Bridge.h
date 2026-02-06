@@ -31,6 +31,8 @@
 #include "Message.h"
 #include "BridgeCall.h"
 
+#define MAX_CALLS (8)
+
 using json = nlohmann::json;
 
 namespace kc1fsz {
@@ -130,7 +132,6 @@ private:
     std::vector<std::string> _kerchunkFilterNodes;
     unsigned _kerchunkFilterDelayMs;
 
-    static const unsigned MAX_CALLS = 8;
     BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
 

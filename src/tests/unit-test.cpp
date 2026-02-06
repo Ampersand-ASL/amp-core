@@ -285,7 +285,7 @@ static void speedTest1() {
     unsigned lineId = 1;
 
     // Start some calls
-    unsigned callCount = 8;
+    unsigned callCount = 100;
     for (unsigned i = 0; i < callCount; i++) {
         unsigned callId = 20 + i;
         PayloadCallStart payload;

@@ -68,34 +68,28 @@ void LineRadio::consume(const Message& msg) {
     if (!_toneActive && msg.getType() == Message::Type::AUDIO) {
 
         // Detect transitions from silence to playing
-        bool leadingEdge = false;
-        if (!_playing) {
+        if (!_playing)
             _playStart();
-            leadingEdge = true;
-        }
 
         assert(msg.size() == BLOCK_SIZE_48K * 2);
-        assert(msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
 
-        // Convert the SLIN_48K LE into 16-bit PCM audio
         int16_t pcm48k_2[BLOCK_SIZE_48K];
-        Transcoder_SLIN_48K transcoder;
-        transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+
+        // #### TODO: LOOKING INTO REMOVING THIS CASE
+        if (msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K) {
+            // Convert the SLIN_48K LE into 16-bit PCM audio
+            Transcoder_SLIN_48K transcoder;
+            transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+        }
+        else if (msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K) {
+            // In this case no conversion is needed
+            memcpy(pcm48k_2, msg.body(), BLOCK_SIZE_48K * 2);
+        }
+        else assert(false);
 
         // Here is where statistical analysis and/or local recording can take 
         // place for diagnostic purposes.
         _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
-
-        // Apply a cross-fade to the start of the block if this is the first frame
-        // after silence.
-        if (leadingEdge) {
-            const unsigned fadeSamples = BLOCK_SIZE_48K / 4;
-            for (unsigned i = 0; i < fadeSamples; i++) {
-                float scale = (float)i / (float)fadeSamples;
-                float n = pcm48k_2[i] * scale;
-                pcm48k_2[i] = n;
-            }
-        }
 
         // Call down to do the actual play on the hardware
         _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
