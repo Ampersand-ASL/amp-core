@@ -23,6 +23,7 @@
 #include <sstream>
 
 #include "kc1fsz-tools/Common.h"
+#include "kc1fsz-tools/fixed_math.h"
 
 #include "Message.h"
 #include "BridgeCall.h"
@@ -307,7 +308,11 @@ json BridgeCall::getLevelsDoc() const {
 }
 
 void BridgeCall::consume(const Message& frame) {
-    if (frame.getType() == Message::Type::TTS_AUDIO ||
+    if (frame.isVoice() || 
+        frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
+        _bridgeIn.consume(frame);       
+    }
+    else if (frame.getType() == Message::Type::TTS_AUDIO ||
         frame.getType() == Message::Type::TTS_END) {
         _processTTSAudio(frame);
     } 
@@ -366,9 +371,7 @@ void BridgeCall::consume(const Message& frame) {
             _dtmfAccumulator += symbol;
             _lastDtmfRxMs = _clock->timeMs();
         }
-    } else if (frame.isVoice() || frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
-        _bridgeIn.consume(frame);       
-    }
+    } 
     else if (frame.isSignal(Message::SignalType::CALL_LEVELS)) {
         assert(frame.size() == sizeof(PayloadCallLevels));
         const PayloadCallLevels* payload = (const PayloadCallLevels*)frame.body();
@@ -416,9 +419,6 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
 
     // If there was any audio contributed then make a message and send it
     if (sources > 0) {
-        //if (!_lastCycleGeneratedOutput)
-        //    _log->info("Leading edge of audio detected");
-        // Convert the PCM16 data into LE mode as defined by the CODEC.
         uint8_t pcm48k[BLOCK_SIZE_48K * 2];
         Transcoder_SLIN_48K transcoder;
         transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
@@ -574,11 +574,15 @@ void BridgeCall::_processNormalAudio(const Message& msg) {
  * conference audio. 
  */
 void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize, 
-    float scale, uint32_t tickMs) {
-    assert(blockSize == BLOCK_SIZE_48K);
+    int calls, uint32_t tickMs) {
+    assert(blockSize == BLOCK_SIZE_48K);   
     if (_stageInSet) {
+        // Make the fixed-point scale factor
+        const int16_t scaleFixed = 0x7fff / (int16_t)calls;
+        // Vector multiply accumulate
+        // #### TODO: HW ACCELERATOR
         for (unsigned i = 0; i < blockSize; i++)
-            pcmBlock[i] += scale * (float)_stageIn[i];
+            pcmBlock[i] = add_sat(pcmBlock[i], mult(scaleFixed, _stageIn[i]));
     }
 }
 

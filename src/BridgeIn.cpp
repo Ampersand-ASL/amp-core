@@ -76,13 +76,8 @@ void BridgeIn::consume(const Message& frame) {
         // The first stop in the pipeline is the jitter buffer
         _jitBuf.consume(*_log, frame);
     }
-    else if (frame.getType() == Message::Type::SIGNAL) {
-        if (frame.getFormat() == Message::SignalType::RADIO_UNKEY) {
-            _lastUnkeyMs = _clock->time();
-        }
-        else {
-            assert(false);
-        }
+    else if (frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
+        _lastUnkeyMs = _clock->time();
     }
     else {
         assert(false);
@@ -120,6 +115,7 @@ private:
  */
 void BridgeIn::audioRateTick(uint32_t tickMs) {
 
+    // #### TODO: GET RID OF THIS AND SWITCH TO LAMBDA
     JBOutAdaptor adaptor([this](const Message& msg) { 
         this->_handleJitBufOut(msg); 
     });
@@ -129,7 +125,8 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
     _kerchunkFilter.audioRateTick(tickMs);
 
     // Look for trailing edge of active status
-    if (_activeStatus && _clock->isPastWindow(_lastAudioMs, ACTIVE_TIMEOUT_MS)) {
+    if (_activeStatus && 
+        _clock->isPastWindow(_lastAudioMs, ACTIVE_TIMEOUT_MS)) {
         _activeStatus = false;
         _lastActiveStatusChangedMs = _clock->timeMs();
     }
@@ -215,15 +212,16 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         _resampler.resample(pcm2, codecBlockSize(_codecType), 
             pcm48k, BLOCK_SIZE_48K);
 
-        // Look for power and decide if this is silence 
-        float rms = 0;
-        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-            float a = pcm48k[i] / 32767.0;
-            rms += (a * a);
-        }
+        // Determine if this frame is silence 
+        // #### TOOD: MOVE BEFORE RESAMPLING!
+        bool isSilence = true;
+        for (unsigned i = 0; i < BLOCK_SIZE_48K && isSilence; i++) 
+            if (pcm48k[i] != 0)
+                isSilence = false;
+
         // A completely silent frame is ignored. This can happen for stations
         // that sent continuous silent frames, like the ASL Telephone Portal.
-        if (rms == 0)
+        if (isSilence)
             return;
        
         // Transcode to SLIN_48K
@@ -236,7 +234,6 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 
         _kerchunkFilter.consume(outFrame);
-        //_sink(outFrame);
     }
     else {
         assert(false);

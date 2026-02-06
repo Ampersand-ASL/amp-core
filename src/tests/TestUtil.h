@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "MessageConsumer.h"
 #include "amp/SequencingBuffer.h"
 #include "amp/SequencingBufferStd.h"
 
@@ -11,6 +12,22 @@ using namespace kc1fsz::amp;
 namespace kc1fsz {
 
 class Log;
+
+class LogConsumer : public MessageConsumer {
+public:
+
+    void consume(const Message& frame) { 
+        _count++;
+    }
+
+    void reset() { _count = 0; }
+
+    unsigned getCount() const { return _count; }
+
+private:
+
+    unsigned _count = 0;
+};
 
 class TestClock : public Clock {
 public:

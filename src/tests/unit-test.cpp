@@ -12,6 +12,7 @@
 #include "kc1fsz-tools/linux/StdClock.h"
 #include "kc1fsz-tools/fixedqueue.h"
 #include "kc1fsz-tools/NetUtils.h"
+#include "kc1fsz-tools/fixed_math.h"
 
 #include "itu-g711-codec/codec.h"
 #include "amp/Resampler.h"
@@ -20,6 +21,9 @@
 #include "Message.h"
 #include "IAX2FrameFull.h"
 #include "BridgeCall.h"
+#include "Bridge.h"
+#include "NullConsumer.h"
+#include "TestUtil.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -208,7 +212,99 @@ static void snprintfCheck() {
     assert(target[7] == 0);
 }
 
+static void fixedMath1() {
+
+    int16_t a = 0.5f * 32767.0f;
+    float scale = 0.5;
+    int16_t scaleFixed = scale * 32767.0;
+
+    // Existing way
+    int16_t b = (float)a * scale;
+    // Fixed way
+    int16_t c = mult(a, scaleFixed);
+    assert(b == c);
+
+    scale = 1.0f / 3.0f;
+    scaleFixed = scale * 32767.0;
+    // Existing way
+    b = (float)a * scale;
+    // Fixed way
+    c = mult(a, scaleFixed);
+    // It will be close
+    assert(abs(b - c) < 2);
+
+    scale = 1.0f / 250.0f;
+    scaleFixed = scale * 32767.0;
+    // Existing way
+    b = (float)a * scale;
+    // Fixed way
+    c = mult(a, scaleFixed);
+    // It will be close
+    assert(abs(b - c) < 2);
+
+    // Reciprocal test
+    scale = 1.0f / 2.0f;
+    scaleFixed = scale * 32767.0;
+    int16_t recip = 0x7fff / 3;
+    // Fixed way
+    c = mult(recip, scaleFixed);
+}
+
+static void speedTest1() {
+
+    Log log;
+    StdClock clock;
+    LogConsumer nullCons;
+
+    unsigned bridgeLineId = 10;
+    amp::Bridge bridge(log, log, clock, nullCons,  amp::BridgeCall::Mode::NORMAL,
+        bridgeLineId, 0, 0, 0, 1);
+    bridge.setLocalNodeNumber("1000");
+
+    unsigned lineId = 1;
+
+    // Start some calls
+    unsigned callCount = 8;
+    for (unsigned i = 0; i < callCount; i++) {
+        unsigned callId = 20 + i;
+        PayloadCallStart payload;
+        payload.codec = CODECType::IAX2_CODEC_SLIN_8K;
+        payload.bypassJitterBuffer = true;
+        payload.startMs = clock.time();
+        strcpyLimited(payload.localNumber, "1000", sizeof(payload.localNumber));
+        strcpyLimited(payload.remoteNumber, "2000", sizeof(payload.remoteNumber));
+        payload.originated = false;
+        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+            sizeof(payload), (const uint8_t*)&payload, 0, clock.time());
+        msg.setSource(lineId, callId);
+        msg.setDest(bridgeLineId, Message::UNKNOWN_CALL_ID);
+        bridge.consume(msg);
+    }
+
+    // Generate some audio 
+    uint8_t audio[320];
+    memset(audio, 100, 320);
+    Message voice(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K, 
+        160 * 2, audio, 1000, 1000);
+    voice.setSource(lineId, 20);
+    voice.setDest(bridgeLineId, Message::UNKNOWN_CALL_ID);
+    bridge.consume(voice);
+
+    nullCons.reset();
+    uint64_t startUs = clock.timeUs();
+    // Tick
+    bridge.audioRateTick(1000);
+    uint64_t endUs = clock.timeUs();
+    cout << "Time " << (endUs - startUs) << endl;
+    cout << "Count " << nullCons.getCount() << endl;
+
+    //bridge.audioRateTick(1020);
+    //bridge.audioRateTick(1040);
+}
+
 int main(int, const char**) {
+    speedTest1();
+    fixedMath1();
     sizeCheck1();
     snprintfCheck();
     testRound();

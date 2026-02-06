@@ -136,12 +136,14 @@ public:
     void requestTTS(const char* prompt);
 
     /**
-     * This extracts the call's contribution (if any) to the audio frame for the designated
-     * tick interval.
+     * This extracts the call's contribution (if any) to the audio frame for the 
+     * designated tick interval.
      * 
+     * @param calls The total number of calls that are being combined. This
+     *   is used to scale this call's contribution appropriately.
      * @param tickMs The start of the time interval for which this frame is applicable.
      */
-    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, float scale, uint32_t tickMs);    
+    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, int calls, uint32_t tickMs);    
 
     /**
      * Clear the call's contribution so that we never use it again.

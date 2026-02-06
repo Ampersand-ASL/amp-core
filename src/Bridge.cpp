@@ -336,7 +336,7 @@ void Bridge::consume(const Message& msg) {
     }
     else if (msg.isSignal(Message::SignalType::CALL_END)) {
 
-        _lastCallListChangeMs = _clock.timeUs() / 1000;
+        _lastCallListChangeMs = _clock.timeMs();
 
         PayloadCallEnd payload;
         assert(msg.size() == sizeof(payload));
@@ -376,22 +376,13 @@ void Bridge::consume(const Message& msg) {
             }
         );
     }
-    // These are all the message types that get passed directly to the call.
-    // #### TODO: JUST PASS EVERYTHING IN AND SORT IT OUT AT THE CALL LEVEL?
-    else if (msg.getType() == Message::AUDIO || 
-             msg.getType() == Message::AUDIO_INTERPOLATE || 
-             msg.getType() == Message::TTS_AUDIO || 
-             msg.getType() == Message::TTS_END || 
-             msg.getType() == Message::NET_DIAG_1_RES || 
-             msg.isSignal(Message::SignalType::CALL_LEVELS) ||
-             msg.isSignal(Message::SignalType::CALL_TALKERID) ||
-             msg.isSignal(Message::SignalType::RADIO_UNKEY) ||
-             msg.isSignal(Message::SignalType::LINK_REPORT) ||
-             msg.isSignal(Message::SignalType::DTMF_PRESS)) {
+    // Everything else gets passed directly to the call.
+    else {
         _calls.visitIf(
             // Visitor
             [msg](BridgeCall& call) { 
                 call.consume(msg);
+                // Stop on first find
                 return false;
             },
             // Predicate
@@ -411,6 +402,8 @@ void Bridge::consume(const Message& msg) {
  *    in the mix.
  * 3. Give each participant an output audio frame.
  * 4. Clear the contributors' audio so its not used the next time.
+ *
+ * PERFORMANCE CRITICAL AREA!
  */
 void Bridge::audioRateTick(uint32_t tickMs) {
 
@@ -434,7 +427,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
         // Figure out how many calls we are mixing. Keep in mind that calls only contribute
         // audio to themselves if echo mode is enabled for that call.
-        unsigned mixCount = 0;
+        int mixCount = 0;
         for (unsigned j = 0; j < MAX_CALLS; j++) {
             // Ignore calls that are inactive or are silent
             if (!_calls[j].isActive())
@@ -448,11 +441,6 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         }
 
         if (mixCount > 0) {
-
-            // Figure out the scaling factor, which depends on how many calls
-            // are contributing audio. 
-            float mixScale = (mixCount == 0) ? 0 : 1.0f / (float)mixCount;
-
             // Now do the actual mixing
             int16_t mixedFrame[BLOCK_SIZE_48K];
             memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
@@ -465,7 +453,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
                 // Ignore ourself if echo is turned off
                 if (i == j && !_calls[j].isEcho())
                     continue;
-                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixScale, tickMs);
+                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixCount, tickMs);
             }
 
             // Output the result
