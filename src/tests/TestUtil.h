@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <functional>
 
 #include "MessageConsumer.h"
 #include "amp/SequencingBuffer.h"
@@ -16,8 +17,12 @@ class Log;
 class LogConsumer : public MessageConsumer {
 public:
 
+    LogConsumer(std::function<void(const Message& msg)> cb = nullptr) : _cb(cb) { }
+
     void consume(const Message& frame) { 
         _count++;
+        if (_cb)
+            _cb(frame);
     }
 
     void reset() { _count = 0; }
@@ -27,6 +32,7 @@ public:
 private:
 
     unsigned _count = 0;
+    std::function<void(const Message& msg)> _cb;
 };
 
 class TestClock : public Clock {

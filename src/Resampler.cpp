@@ -66,11 +66,15 @@ void Resampler::setRates(unsigned inRate, unsigned outRate) {
     } else if (_inRate == 8000 && _outRate == 48000) {
         arm_fir_init_q15(&_lpfFilter, F1_TAPS, F1_COEFFS, _lpfState, BLOCK_SIZE_48K);
     } else if (_inRate == 48000 && _outRate == 8000) {
-        arm_fir_init_q15(&_lpfFilter, F2_TAPS, F2_COEFFS, _lpfState, BLOCK_SIZE_48K);
+        //arm_fir_init_q15(&_lpfFilter, F2_TAPS, F2_COEFFS, _lpfState, BLOCK_SIZE_48K);
+        arm_fir_decimate_init_q15(&_lpfDecimationFilter, F2_TAPS, 6, F2_COEFFS, 
+            _lpfState, BLOCK_SIZE_48K);
     } else if (_inRate == 16000 && _outRate == 48000) {
         arm_fir_init_q15(&_lpfFilter, F16_TAPS, F16_COEFFS, _lpfState, BLOCK_SIZE_48K);
     } else if (_inRate == 48000 && _outRate == 16000) {
-        arm_fir_init_q15(&_lpfFilter, F16_TAPS, F16_COEFFS, _lpfState, BLOCK_SIZE_48K);
+        //arm_fir_init_q15(&_lpfFilter, F16_TAPS, F16_COEFFS, _lpfState, BLOCK_SIZE_48K);
+        arm_fir_decimate_init_q15(&_lpfDecimationFilter, F16_TAPS, 3, F16_COEFFS, 
+            _lpfState, BLOCK_SIZE_48K);
     } else {
         assert(false);
     }
@@ -119,17 +123,15 @@ void Resampler::resample(const int16_t* inBlock, unsigned inSize,
         // Apply the LPF anti-aliasing filter
         arm_fir_q15(&_lpfFilter, pcm48k_1, outBlock, BLOCK_SIZE_48K);
     }
+    // NOTE: This is a particularly performance-critical area given the 
+    // scenario with a lot of 8K callers attached to a conference bridge
+    // which natively runs at 48K.
     else if (_inRate == 48000 && _outRate == 8000) {
         assert(inSize == BLOCK_SIZE_48K);
         assert(outSize == BLOCK_SIZE_8K);
         // Decimate from 48k to 8k
         // Apply a LPF to the block because we are decimating.
-        // TODO: Use the more efficient decimation filter.
-        int16_t pcm48k_1[BLOCK_SIZE_48K];
-        arm_fir_q15(&_lpfFilter, inBlock, pcm48k_1, BLOCK_SIZE_48K);
-        const int16_t* srcPtr = pcm48k_1;
-        for (unsigned i = 0; i < BLOCK_SIZE_8K; i++, srcPtr += 6)
-            outBlock[i] = *srcPtr;
+        arm_fir_decimate_q15(&_lpfDecimationFilter, inBlock, outBlock, BLOCK_SIZE_48K);
     }
     else if (_inRate == 16000 && _outRate == 48000) {
         assert(inSize == BLOCK_SIZE_16K);
@@ -149,12 +151,7 @@ void Resampler::resample(const int16_t* inBlock, unsigned inSize,
         assert(outSize == BLOCK_SIZE_16K);
         // Decimate from 48k 
         // Apply a LPF to the block because we are decimating.
-        // TODO: Use the more efficient decimation filter.
-        int16_t pcm48k_1[BLOCK_SIZE_48K];
-        arm_fir_q15(&_lpfFilter, inBlock, pcm48k_1, BLOCK_SIZE_48K);
-        const int16_t* srcPtr = pcm48k_1;
-        for (unsigned i = 0; i < BLOCK_SIZE_16K; i++, srcPtr += 3)
-            outBlock[i] = *srcPtr;
+        arm_fir_decimate_q15(&_lpfDecimationFilter, inBlock, outBlock, BLOCK_SIZE_48K);
     }
     else {
         assert(false);

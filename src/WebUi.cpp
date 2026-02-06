@@ -301,6 +301,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                     else if (menuName == "aslRxMixerSet") {
                         rc2 = getMixerRange(name, "Mic Capture Volume", &minV, &maxV);
                     }
+                    else {
+                        rc2 = -1;
+                    }
                     if (rc2 == 0) {
                         int minDb = 0, maxDb = 0;
                         if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {

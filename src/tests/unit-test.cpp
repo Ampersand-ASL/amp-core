@@ -24,6 +24,7 @@
 #include "Bridge.h"
 #include "NullConsumer.h"
 #include "TestUtil.h"
+#include "dsp_util.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -254,7 +255,27 @@ static void speedTest1() {
 
     Log log;
     StdClock clock;
-    LogConsumer nullCons;
+    LogConsumer nullCons([](const Message& frame) {
+        /*
+        if (frame.getDestCallId() == 21) {
+            // FFT analysis
+            cf32 fftIn[160];
+            cf32 fftOut[160];
+            const uint8_t* p = frame.body();
+            for (unsigned i = 0; i < 160; i++, p += 2) {
+                int16_t sample = unpack_int16_le(p);
+                fftIn[i] = cf32((float)sample / 32767.0, 0);
+            }
+            simpleDFT(fftIn, fftOut, 160);
+            int gotBucket = maxMagIdx(fftOut, 0, 80);
+            cout << "Output freq/mag " << 8000 * gotBucket / 160  << " " 
+                << fftOut[gotBucket].mag() << endl;
+            cout << "  -1 " << fftOut[gotBucket - 1].mag() << endl;
+            cout << "     " << fftOut[gotBucket].mag() << endl;
+            cout << "  +1 " << fftOut[gotBucket + 1].mag() << endl;
+        }
+        */
+    });
 
     unsigned bridgeLineId = 10;
     amp::Bridge bridge(log, log, clock, nullCons,  amp::BridgeCall::Mode::NORMAL,
@@ -283,7 +304,31 @@ static void speedTest1() {
 
     // Generate some audio 
     uint8_t audio[320];
-    memset(audio, 100, 320);
+    float sampleRate = 8000;
+    float omega = 2.0f * 3.1415926f * 400.0f / sampleRate;
+    float phi = 0;
+    uint8_t* p = audio;
+    for (unsigned i = 0; i < 160; i++, p += 2) {
+        int16_t sample = std::cos(phi) * 32767.0;
+        pack_int16_le(sample, p);
+        phi += omega;
+    }
+
+    // FFT analysis
+    {
+        cf32 fftIn[160];
+        cf32 fftOut[160];
+        p = audio;
+        for (unsigned i = 0; i < 160; i++, p += 2) {
+            int16_t sample = unpack_int16_le(p);
+            fftIn[i] = cf32((float)sample / 32767.0, 0);
+        }
+        simpleDFT(fftIn, fftOut, 160);
+        int gotBucket = maxMagIdx(fftOut, 0, 80);
+        cout << "Input freq/mag " << 8000 * gotBucket / 160  << " " 
+            << fftOut[gotBucket].mag() << endl;
+    }
+
     Message voice(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K, 
         160 * 2, audio, 1000, 1000);
     voice.setSource(lineId, 20);

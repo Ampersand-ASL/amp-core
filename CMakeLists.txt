@@ -106,6 +106,7 @@ target_link_libraries(mixer-test-1 -lasound)
 
 add_executable(unit-test
   src/tests/unit-test.cpp
+  src/tests/dsp_util.cpp
   src/Message.cpp
   src/Line.cpp
   src/IAX2FrameFull.cpp
@@ -133,6 +134,7 @@ add_executable(unit-test
   cmsis-dsp-mock/src/main.cpp
   #alsa-mock/src/asoundlib.c
 )
+target_compile_options(unit-test PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
 
 target_include_directories(unit-test PRIVATE src)
 target_include_directories(unit-test PRIVATE include)

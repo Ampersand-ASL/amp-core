@@ -394,7 +394,7 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
     // This is also the place where an UNKEY event is requested on
     // the trailing edge of contributed audio.
 
-    int16_t output[BLOCK_SIZE_48K];
+    int16_t outputPCM48[BLOCK_SIZE_48K];
     int16_t sources = 0;
 
     // If there is anything in the play queue then contribute it to 
@@ -402,29 +402,30 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
     if (!_playQueue.empty()) {
         sources++;
         assert(_playQueue.front().size() == BLOCK_SIZE_48K);
-        memcpy(output, _playQueue.front().data(), BLOCK_SIZE_48K * 2);
+        memcpy(outputPCM48, _playQueue.front().data(), BLOCK_SIZE_48K * 2);
         _playQueue.pop();
     } else {
-        memset(output, 0, BLOCK_SIZE_48K * 2);
+        memset(outputPCM48, 0, BLOCK_SIZE_48K * 2);
     }
 
     // If we are in conference mode then mix in the conference output
     if (_mode == Mode::NORMAL && _stageOutSet) {
         sources++;
         for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
-            output[i] = (output[i] / sources) + (_stageOut[i] / sources);
+            // Sources are scaled individually first to avoid overflow
+            outputPCM48[i] = (outputPCM48[i] / sources) + (_stageOut[i] / sources);
         // Clear this flag so that we are ready for the next iteration
         _stageOutSet = false;
     }
 
     // If there was any audio contributed then make a message and send it
     if (sources > 0) {
-        uint8_t pcm48k[BLOCK_SIZE_48K * 2];
-        Transcoder_SLIN_48K transcoder;
-        transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
+        //uint8_t pcm48k[BLOCK_SIZE_48K * 2];
+        //Transcoder_SLIN_48K transcoder;
+        //transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
         // #### TODO: DO TIMES MATTER HERE?
-        Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K, 
-            BLOCK_SIZE_48K * 2, pcm48k, 0, tickMs);
+        Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+            BLOCK_SIZE_48K * 2, (const uint8_t*)outputPCM48, 0, tickMs);
         msg.setSource(LINE_ID, CALL_ID);
         msg.setDest(_lineId, _callId);
         _bridgeOut.consume(msg);

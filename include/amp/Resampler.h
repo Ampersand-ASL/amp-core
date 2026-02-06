@@ -46,6 +46,7 @@ public:
      * Resets internal state without changing the sample rates.
      */
     void reset();
+
     void setRates(unsigned inRate, unsigned outRate);
 
     /**
@@ -93,7 +94,7 @@ private:
 
     // Space for the largest possible filter
     arm_fir_instance_q15 _lpfFilter;
-    //static const unsigned MAX_TAPS = 45;
+    arm_fir_decimate_instance_q15 _lpfDecimationFilter;
     static const unsigned MAX_TAPS = 91;
     int16_t _lpfState[MAX_TAPS + BLOCK_SIZE_48K - 1];
 };

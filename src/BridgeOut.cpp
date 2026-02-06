@@ -47,54 +47,112 @@ void BridgeOut::consume(const Message& frame) {
 
         _lastActivityMs = _clock->timeMs();
 
-        assert(frame.getFormat() == CODECType::IAX2_CODEC_SLIN_48K);
-        assert(frame.size() == BLOCK_SIZE_48K * 2);
- 
-        if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
-            _codecType == CODECType::IAX2_CODEC_SLIN_16K ||
-            _codecType == CODECType::IAX2_CODEC_SLIN_8K) {             
+        // This is the existing path
+        if (frame.getFormat() == CODECType::IAX2_CODEC_SLIN_48K) {
             
-            Transcoder* t1 = 0;
-            unsigned codeSize = maxVoiceFrameSize(_codecType);
-            unsigned blockSize = codecBlockSize(_codecType);
-            if (_codecType == CODECType::IAX2_CODEC_G711_ULAW) 
-                t1 = &_transcoder1a;
-            else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K)
-                t1 = &_transcoder1c;
-            else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
-                t1 = &_transcoder1d;
-            else 
-                assert(false);
+            assert(frame.size() == BLOCK_SIZE_48K * 2);
+    
+            if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
+                _codecType == CODECType::IAX2_CODEC_SLIN_16K ||
+                _codecType == CODECType::IAX2_CODEC_SLIN_8K) {             
+                
+                Transcoder* t1 = 0;
+                unsigned codeSize = maxVoiceFrameSize(_codecType);
+                unsigned blockSize = codecBlockSize(_codecType);
+                if (_codecType == CODECType::IAX2_CODEC_G711_ULAW) 
+                    t1 = &_transcoder1a;
+                else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K)
+                    t1 = &_transcoder1c;
+                else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
+                    t1 = &_transcoder1d;
+                else 
+                    assert(false);
 
-            // Make PCM data
-            int16_t pcm48k[BLOCK_SIZE_48K];
-            _transcoder0.decode(frame.body(), frame.size(), pcm48k, BLOCK_SIZE_48K);
+                // Make PCM data
+                int16_t pcm48k[BLOCK_SIZE_48K];
+                _transcoder0.decode(frame.body(), frame.size(), pcm48k, BLOCK_SIZE_48K);
 
-            // Resample PCM data 
-            // NOTE: MAKE THIS LARGE ENOUGH
-            int16_t pcm_low[BLOCK_SIZE_8K * 2];
-            _resampler.resample(pcm48k, BLOCK_SIZE_48K, pcm_low, blockSize);
+                // Resample PCM data 
+                // NOTE: MAKE THIS LARGE ENOUGH
+                int16_t pcm_low[BLOCK_SIZE_8K * 2];
+                _resampler.resample(pcm48k, BLOCK_SIZE_48K, pcm_low, blockSize);
 
-            // NOTE: Make this big enough for any format!
-            uint8_t code[BLOCK_SIZE_8K * 4];
-            t1->encode(pcm_low, blockSize, code, codeSize);
-            
-            // Times are passed right through
-            Message outFrame(Message::Type::AUDIO, _codecType,
-                codeSize, code, frame.getOrigMs(), frame.getRxMs());
-            outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
-            outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
+                // NOTE: Make this big enough for any format!
+                uint8_t code[BLOCK_SIZE_8K * 4];
+                t1->encode(pcm_low, blockSize, code, codeSize);
+                
+                // Times are passed right through
+                Message outFrame(Message::Type::AUDIO, _codecType,
+                    codeSize, code, frame.getOrigMs(), frame.getRxMs());
+                outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
+                outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
 
-            _sink(outFrame);
-        }
-        else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
-            // No support for interpolation
-            if (frame.getType() == Message::Type::AUDIO) {
-                // No conversion needed
-                _sink(frame);
+                _sink(outFrame);
             }
-            else
+            else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
+                // No support for interpolation
+                if (frame.getType() == Message::Type::AUDIO) {
+                    // No conversion needed
+                    _sink(frame);
+                }
+                else
+                    assert(false);
+            }
+            else {
                 assert(false);
+            }
+        }
+        // NEW OPTIMIZED PATH
+        else if (frame.getFormat() == CODECType::IAX2_CODEC_PCM_48K) {
+
+            assert(frame.size() == BLOCK_SIZE_48K * 2);
+    
+            if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
+                _codecType == CODECType::IAX2_CODEC_SLIN_16K ||
+                _codecType == CODECType::IAX2_CODEC_SLIN_8K) {             
+                
+                Transcoder* t1 = 0;
+                unsigned codeSize = maxVoiceFrameSize(_codecType);
+                unsigned blockSize = codecBlockSize(_codecType);
+                if (_codecType == CODECType::IAX2_CODEC_G711_ULAW) 
+                    t1 = &_transcoder1a;
+                else if (_codecType == CODECType::IAX2_CODEC_SLIN_16K)
+                    t1 = &_transcoder1c;
+                else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
+                    t1 = &_transcoder1d;
+                else 
+                    assert(false);
+
+                // Resample PCM data 
+                // NOTE: MAKE THIS LARGE ENOUGH
+                int16_t pcm_low[BLOCK_SIZE_8K * 2];
+                _resampler.resample((const int16_t*)frame.body(), BLOCK_SIZE_48K, 
+                    pcm_low, blockSize);
+
+                // NOTE: Make this big enough for any format!
+                uint8_t code[BLOCK_SIZE_8K * 4];
+                t1->encode(pcm_low, blockSize, code, codeSize);
+                
+                // Times are passed right through
+                Message outFrame(Message::Type::AUDIO, _codecType,
+                    codeSize, code, frame.getOrigMs(), frame.getRxMs());
+                outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
+                outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());
+
+                _sink(outFrame);
+            }
+            else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
+                // No support for interpolation
+                if (frame.getType() == Message::Type::AUDIO) {
+                    // No conversion needed
+                    _sink(frame);
+                }
+                else
+                    assert(false);
+            }
+            else {
+                assert(false);
+            }
         }
         else {
             assert(false);

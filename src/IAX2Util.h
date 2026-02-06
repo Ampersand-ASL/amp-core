@@ -76,7 +76,10 @@ enum CODECType {
     IAX2_CODEC_SLIN_16K  = 0x00008000,
     // (48k 16-bit SLIN, little endian)
     // NOT OFFICIAL!
-    IAX2_CODEC_SLIN_48K  = 0x20000000
+    IAX2_CODEC_SLIN_48K  = 0x20000000,
+    // 16-bit PCM audio in native format
+    // NOT OFFICIAL!
+    IAX2_CODEC_PCM_48K   = 0x40000000
 };
 
 bool codecSupported(CODECType type);
