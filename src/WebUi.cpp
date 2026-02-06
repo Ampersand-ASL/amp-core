@@ -42,7 +42,6 @@
 #include "WebUi.h"
 #include "ThreadUtil.h"
 #include "TraceLog.h"
-#include "HistoryLog.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
 
