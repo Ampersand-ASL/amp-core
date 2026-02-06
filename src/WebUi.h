@@ -71,7 +71,7 @@ private:
     const std::string _configFileName;
     const std::string _version;
     TraceLog& _traceLog;
-
+    
     std::atomic<bool> _ptt;
 
     copyableatomic<json> _config;

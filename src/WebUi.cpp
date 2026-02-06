@@ -42,11 +42,13 @@
 #include "WebUi.h"
 #include "ThreadUtil.h"
 #include "TraceLog.h"
+#include "HistoryLog.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
 
 using namespace std;
 using namespace kc1fsz;
+
 using json = nlohmann::json;
 
 // https://github.com/yhirose/cpp-httplib
@@ -407,6 +409,18 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             }
         );
 #endif        
+        res.set_content(a.dump(), "application/json");
+    });
+
+    svr.Get("/log", [](const httplib::Request &, httplib::Response &res) {
+        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/log.html");
+    });
+
+    svr.Get("/log-data", [ui](const httplib::Request &, httplib::Response &res) {
+        auto a = json::array();
+        // GO FAST! This is blocking the multi-threaded logger
         res.set_content(a.dump(), "application/json");
     });
 

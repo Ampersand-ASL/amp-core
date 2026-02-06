@@ -1,0 +1,71 @@
+<!--
+Ampersand ASL Server Project
+Copyright (C) 2026, Bruce MacKinnon KC1FSZ
+-->
+<html>
+    <head>
+        <title>Ampersand Home Page</title>
+        <link rel="stylesheet" href="main.css">
+        <style>
+.log-div {
+    font-family: monospace;
+    height: calc(100vh - 150px);
+     overflow: auto;
+}            
+        </style>
+    </head>
+    <body>
+        <div class="title-row">
+            <span class="title-span">Ampersand ASL Server</span>
+        </div>
+        <div class="tab-row" role="tablist">
+            <div class="tab" role="tab" aria-selected="false">
+                <a href="/">Home</a>
+            </div>
+            <div class="tab" role="tab" aria-selected="false">
+                <a href="config">Configuration</a>
+            </div>
+            <div class="tab" role="tab" aria-selected="true">
+                <a href="log">Log</a>
+            </div>
+        </div>
+        <div class="content-row" role="tabpanel">
+            <div id="log-container" class="log-div">
+            </div>
+        </div> <!-- /content-row -->
+        <div class="footer-row">
+            <span><i><a href="https://www.qrz.com/db/KC1FSZ">Bruce MacKinnon KC1FSZ bruce@mackinnon.com</a></i></span>
+        </div> <!-- /footer-row -->
+    </body>
+    <script>
+async function log_update() {
+    container = document.getElementById("log-container")
+    container.replaceChildren();
+    try {
+        const response = await fetch('log-data');
+        if (response.ok) {
+            const data = await response.json();
+            for (i of data) {
+                var lineDiv = document.createElement('div');
+                //lineDiv.classList.add("logline");
+                //var sp = document.createElement('span');
+                lineDiv.innerHTML = i["text"];
+                container.appendChild(lineDiv);
+            }
+        }
+    } catch (error) {
+        console.log(error)
+    }
+     // Set the scrollTop position to the total scrollable height
+    container.scrollTop = container.scrollHeight;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Fast timer to get live updates from the server
+    //setInterval(async () => {
+    //    log_update();
+    //}, 500);
+    log_update();
+});
+    </script>
+</html>
