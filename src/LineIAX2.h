@@ -424,8 +424,8 @@ private:
     // initial connection.
     int _localCallIdCounter = 20;
 
-    static const unsigned MAX_CALLS = 8;
-    Call _calls[MAX_CALLS];
+    static const unsigned MAX_IAX2_CALLS = 8;
+    Call _calls[MAX_IAX2_CALLS];
 
     // Enables detailed network tracing
     bool _trace = false;

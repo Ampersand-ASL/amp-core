@@ -488,3 +488,127 @@ add_executable(white-noise
 target_include_directories(white-noise PRIVATE src)
 target_include_directories(white-noise PRIVATE kc1fsz-tools-cpp/include)
 
+# ----- load-server-1
+
+add_executable(load-server-1
+  src/tests/load-server-1.cpp
+  src/Message.cpp
+  src/Line.cpp
+  src/IAX2FrameFull.cpp
+  src/IAX2Util.cpp
+  src/Resampler.cpp
+  #src/Transcoder_G711_ULAW.cpp
+  #src/NodeParrot.cpp
+  src/Bridge.cpp
+  src/BridgeCall.cpp
+  src/BridgeIn.cpp
+  src/BridgeOut.cpp
+  src/KerchunkFilter.cpp
+  src/EventLoop.cpp
+  src/MultiRouter.cpp
+  src/LineIAX2.cpp
+  src/Transcoder_G711_ULAW.cpp
+  src/Transcoder_SLIN_48K.cpp
+  src/Transcoder_SLIN_16K.cpp
+  src/Transcoder_SLIN_8K.cpp
+  src/RetransmissionBufferStd.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/MicroDNS.cpp
+  kc1fsz-tools-cpp/src/DTMFDetector2.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/fixed_math.cpp
+  kc1fsz-tools-cpp/src/md5/md5c.c
+  kc1fsz-tools-cpp/src/md5/md5c.c
+  kc1fsz-tools-cpp/src/crc/crc.c
+  itu-g711-codec/src/codec.cpp
+  itu-g711-codec/src/Plc.cpp
+  cmsis-dsp-mock/src/main.cpp
+  ed25519/src/add_scalar.c
+  ed25519/src/ge.c
+  ed25519/src/keypair.c
+  ed25519/src/seed.c
+  ed25519/src/sign.c
+  ed25519/src/fe.c
+  ed25519/src/key_exchange.c
+  ed25519/src/sc.c
+  ed25519/src/sha512.c
+  ed25519/src/verify.c
+  #alsa-mock/src/asoundlib.c
+)
+target_compile_options(load-server-1 PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
+
+target_include_directories(load-server-1 PRIVATE src)
+target_include_directories(load-server-1 PRIVATE include)
+target_include_directories(load-server-1 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(load-server-1 PRIVATE kc1fsz-tools-cpp/include/kc1fsz-tools/crc)
+target_include_directories(load-server-1 PRIVATE itu-g711-codec/src)
+target_include_directories(load-server-1 PRIVATE cmsis-dsp-mock/include)
+target_include_directories(load-server-1 PRIVATE alsa-mock/include)
+target_include_directories(load-server-1 PRIVATE hid-mock/include)
+target_include_directories(load-server-1 PRIVATE json/include)
+target_include_directories(load-server-1 PRIVATE ed25519/src)
+
+# ----- load-client-1
+
+add_executable(load-client-1
+  src/tests/load-client-1.cpp
+  src/Message.cpp
+  src/Line.cpp
+  src/IAX2FrameFull.cpp
+  src/IAX2Util.cpp
+  src/Resampler.cpp
+  #src/Transcoder_G711_ULAW.cpp
+  #src/NodeParrot.cpp
+  src/Bridge.cpp
+  src/BridgeCall.cpp
+  src/BridgeIn.cpp
+  src/BridgeOut.cpp
+  src/KerchunkFilter.cpp
+  src/EventLoop.cpp
+  src/MultiRouter.cpp
+  src/LineIAX2.cpp
+  src/Transcoder_G711_ULAW.cpp
+  src/Transcoder_SLIN_48K.cpp
+  src/Transcoder_SLIN_16K.cpp
+  src/Transcoder_SLIN_8K.cpp
+  src/RetransmissionBufferStd.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/MicroDNS.cpp
+  kc1fsz-tools-cpp/src/DTMFDetector2.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/fixed_math.cpp
+  kc1fsz-tools-cpp/src/md5/md5c.c
+  kc1fsz-tools-cpp/src/md5/md5c.c
+  kc1fsz-tools-cpp/src/crc/crc.c
+  itu-g711-codec/src/codec.cpp
+  itu-g711-codec/src/Plc.cpp
+  cmsis-dsp-mock/src/main.cpp
+  ed25519/src/add_scalar.c
+  ed25519/src/ge.c
+  ed25519/src/keypair.c
+  ed25519/src/seed.c
+  ed25519/src/sign.c
+  ed25519/src/fe.c
+  ed25519/src/key_exchange.c
+  ed25519/src/sc.c
+  ed25519/src/sha512.c
+  ed25519/src/verify.c
+  #alsa-mock/src/asoundlib.c
+)
+target_compile_options(load-client-1 PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
+
+target_include_directories(load-client-1 PRIVATE src)
+target_include_directories(load-client-1 PRIVATE include)
+target_include_directories(load-client-1 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(load-client-1 PRIVATE kc1fsz-tools-cpp/include/kc1fsz-tools/crc)
+target_include_directories(load-client-1 PRIVATE itu-g711-codec/src)
+target_include_directories(load-client-1 PRIVATE cmsis-dsp-mock/include)
+target_include_directories(load-client-1 PRIVATE alsa-mock/include)
+target_include_directories(load-client-1 PRIVATE hid-mock/include)
+target_include_directories(load-client-1 PRIVATE json/include)
+target_include_directories(load-client-1 PRIVATE ed25519/src)
+

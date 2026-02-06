@@ -247,7 +247,7 @@ int LineIAX2::open(short addrFamily, int listenPort) {
 void LineIAX2::close() {   
 
     // Clean up all of the calls
-    for (unsigned i = 0; i < MAX_CALLS; i++)
+    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++)
         _calls[i].reset();
 
     if (_iaxSockFd) 
@@ -767,7 +767,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             uint32_t supportedCodecs;
             if (!frame.getIE_uint32(8, &supportedCodecs)) {
                 _log.error("No actual CODECs provided");
-                _sendREJECT(destCallId, peerAddr, "ACtual CODECs missing");
+                _sendREJECT(destCallId, peerAddr, "Actual CODECs missing");
                 return;
             }
 
@@ -977,7 +977,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
         bool recognizedCall = false;        
         unsigned recognizedCallIx = 0;
 
-        for (unsigned i = 0; i < MAX_CALLS; i++) {
+        for (unsigned i = 0; i < MAX_IAX2_CALLS; i++) {
             Call& call = _calls[i];
             if (call.active && call.localCallId == destCallId) {
                 recognizedCall = true;
@@ -1661,7 +1661,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
  }
 
 int LineIAX2::_allocateCallIx() {
-    for (unsigned i = 0; i < MAX_CALLS; i++)
+    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++)
         if (!_calls[i].active)
             return i;
     return -1;
@@ -2570,7 +2570,7 @@ void LineIAX2::tenSecTick() {
 
 void LineIAX2::_visitActiveCallsIf(std::function<void(LineIAX2::Call& call)> v,
     std::function<bool(const LineIAX2::Call& call)> predicate) {
-    for (unsigned i = 0; i < MAX_CALLS; i++) {
+    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++) {
         Call& call = _calls[i];
         if (call.active && predicate(call))
             v(call);
@@ -2579,7 +2579,7 @@ void LineIAX2::_visitActiveCallsIf(std::function<void(LineIAX2::Call& call)> v,
 
 void LineIAX2::_visitActiveCallsIf(std::function<void(const LineIAX2::Call& call)> v,
     std::function<bool(const LineIAX2::Call& call)> predicate) const {
-    for (unsigned i = 0; i < MAX_CALLS; i++) {
+    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++) {
         const Call& call = _calls[i];
         if (call.active && predicate(call))
             v(call);
