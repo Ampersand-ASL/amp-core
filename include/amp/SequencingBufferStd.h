@@ -219,9 +219,40 @@ public:
         // sequencing buffer.
         if (_initialMargin == 0) {
             if (!_buffer.empty()) {
-                sink->play(_buffer.first(), localMs);
-                _buffer.pop();
+
+                const T& frame = _buffer.first();
+
+                // First frame of the talkpsurt? 
+                if (!_inTalkspurt) {
+                    _inTalkspurt = true;
+                    _talkspurtFrameCount = 0;
+                    _talkspurtFirstOrigin = frame.getOrigMs();
+                    _lastPlayedLocal = 0;
+                }
+
+                // Just play the oldest frame, no questions asked
+                sink->play(frame, localMs);
+
                 voiceFramePlayed = true;
+                _lastPlayedLocal = localMs;
+                _lastPlayedOrigMs = _originCursor;
+                _voicePlayoutCount++;
+
+                bool startOfSpurt = _talkspurtFirstOrigin == frame.getOrigMs();
+
+                // Keep margin tracking up to date
+                int32_t margin = (int32_t)localMs - (int32_t)frame.getRxMs();
+                if (startOfSpurt) {
+                    _worstMargin = margin;
+                    _totalMargin = margin;
+                    _talkspurtFrameCount = 1;
+                } else {
+                    if (margin < _worstMargin) 
+                        _worstMargin = margin;
+                    _totalMargin += margin;
+                    _talkspurtFrameCount++;
+                }
+                _buffer.pop();
             }
         }
         // Everything in this else block is the "normal" operation of
