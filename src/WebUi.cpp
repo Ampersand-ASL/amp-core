@@ -427,7 +427,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     });
 
     // OK to use this const
-    svr.listen("0.0.0.0", ui->_listenPort);
+    if (!svr.listen("0.0.0.0", ui->_listenPort)) {
+        ui->_log.error("Unable to bind to HTTP port %d", ui->_listenPort);
+    }
 
     ui->_log.info("ui_thread end");
 }
