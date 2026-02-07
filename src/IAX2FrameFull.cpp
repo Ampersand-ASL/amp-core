@@ -131,7 +131,7 @@ void IAX2FrameFull::setHeader(uint16_t sourceCallId, uint16_t destCallId,
 }
 
 void IAX2FrameFull::setBody(const uint8_t* body, unsigned bodyLen) {
-    assert(bodyLen < MAX_BUF_LEN - 12);
+    assert(bodyLen <= MAX_BODY_LEN);
     memcpy(_buf + 12, body, bodyLen);
     _bufLen = 12 + bodyLen;
 }

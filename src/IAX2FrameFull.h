@@ -25,12 +25,13 @@ class fixedstring;
 class IAX2FrameFull {
 public:
 
+    static constexpr unsigned MAX_BUF_LEN = 1500;
+    static constexpr unsigned MAX_BODY_LEN = MAX_BUF_LEN - 12;
+
     IAX2FrameFull();
     IAX2FrameFull(const uint8_t* buf, unsigned bufLen);
     IAX2FrameFull(const IAX2FrameFull& other);
     
-    //IAX2FrameFull& operator=(const IAX2FrameFull& other);
-
     const uint8_t* buf() const { return _buf; }
     unsigned size() const { return _bufLen; }
 
@@ -134,7 +135,6 @@ private:
 
     // Always have at least the header
     unsigned _bufLen = 12;
-    static const unsigned MAX_BUF_LEN = 1500;
     uint8_t _buf[MAX_BUF_LEN];
 };
 

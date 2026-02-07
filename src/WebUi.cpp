@@ -415,9 +415,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     });
 
     svr.Get("/log", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/log.html");
+        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/log.html");
     });
 
     svr.Get("/log-data", [ui](const httplib::Request &, httplib::Response &res) {

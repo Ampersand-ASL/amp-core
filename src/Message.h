@@ -82,7 +82,7 @@ public:
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
     // (This is 1920 bytes)
-    static const unsigned MAX_SIZE = 160 * 6 * 2;
+    //static constexpr unsigned MAX_SIZE = 160 * 6 * 2;
     // Constant used for line
     static const unsigned BROADCAST = 0;
     static const unsigned UNKNOWN_CALL_ID = -1;
@@ -99,7 +99,8 @@ public:
     unsigned getFormat() const { return _format; }
 
     unsigned size() const { return _size; }
-    const uint8_t* body() const { return _body; }
+
+    virtual const uint8_t* body() const { return _body; }
 
     uint32_t getOrigMs() const { return _origMs; }
     uint32_t getRxMs() const { return _rxMs; }
@@ -120,6 +121,10 @@ public:
 
 private:
 
+    // Message needs to be large enough for 20ms of PCM16 at 48K 
+    // (This is 1920 bytes)
+    static constexpr unsigned MAX_SIZE = 160 * 6 * 2;
+
     Type _type;
     unsigned _format;
     unsigned _size;
@@ -130,6 +135,20 @@ private:
     unsigned _sourceBusId = 0, _sourceCallId = 0;
     unsigned _destBusId = 0, _destCallId = 0;
 };
+
+/*
+class MessageCarrier : public Message {
+private:
+
+    uint8_t _body[MAX_SIZE];
+};
+
+class MessageWrapper : public Message {
+private:
+
+    uint8_t* _body;
+};
+*/
 
 struct PayloadCallStart {
     char localNumber[16];

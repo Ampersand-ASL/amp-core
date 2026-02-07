@@ -63,7 +63,10 @@ enum IAXSubclass {
 };
 
 enum ControlSubclass {
-    IAX2_SUBCLASS_CONTROL_UNKEY = 0x0d
+    IAX2_SUBCLASS_CONTROL_ANSWER = 0x04,
+    IAX2_SUBCLASS_CONTROL_UNKEY = 0x0d,
+    // NOT IN RFC
+    IAX2_SUBCLASS_CONTROL_STOP_SOUNDS = 255
 };
 
 // See: https://datatracker.ietf.org/doc/html/rfc5457#page-19

@@ -50,6 +50,8 @@
 
 using namespace std;
 
+#define MAX_TEXT_MESSAGE_SIZE (160 * 6 * 2)
+
 static unsigned AUDIO_TICK_MS = 20;
 static const uint32_t NORMAL_PING_INTERVAL_MS = 10 * 1000;
 static const uint32_t FAST_PING_INTERVAL_MS = 2 * 1000;
@@ -346,7 +348,6 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
     // in some of the dispense operations below.
     call.localStartMs = _clock.time() - AUDIO_TICK_MS;
     call.lastLagrqMs = _clock.time();
-    call.lastLMs = _clock.time(); 
     call.lastFrameRxMs = _clock.time();
 
     // If an explicit address was specified 
@@ -794,7 +795,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
             // Schedule the ping out
             call.lastLagrqMs = _clock.time();
-            call.lastLMs = _clock.time();
             call.lastFrameRxMs = _clock.time();
             call.supportedCodecs = supportedCodecs;
 
@@ -1293,8 +1293,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         respFrame1.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
             call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
-        char strmsg[64];
-        snprintf(strmsg, 64, "T %s COMPLETE", call.localNumber.c_str());
+        char strmsg[256];
+        snprintf(strmsg, sizeof(strmsg), "T %s COMPLETE", call.localNumber.c_str());
         // NOTE: INCLUDING NULL!
         respFrame1.setBody((const uint8_t*)strmsg, strlen(strmsg) + 1);
         _sendFrameToPeer(respFrame1, call);
@@ -1303,7 +1303,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         respFrame3.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
             call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
-        snprintf(strmsg, 64, "T %s CONNECTED,%s,%s", 
+        snprintf(strmsg, sizeof(strmsg), "T %s CONNECTED,%s,%s", 
             call.localNumber.c_str(), call.localNumber.c_str(),
             call.remoteNumber.c_str());
         // NOTE: INCLUDING NULL!
@@ -1465,7 +1465,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.isTypeClass(FrameType::IAX2_TYPE_TEXT, 0)) {
 
         // Truncate/null-terminate the text
-        char textMessage[Message::MAX_SIZE];
+        char textMessage[MAX_TEXT_MESSAGE_SIZE];
         unsigned len = min((unsigned)(sizeof(textMessage) - 1), (frame.size() - 12));
         memcpy(textMessage, (const char*)frame.buf() + 12, len);
         textMessage[len] = 0;
@@ -1940,8 +1940,9 @@ bool LineIAX2::_progressCall(Call& call) {
             // Generate a new DNS ID
             call.dnsRequestId = _dnsRequestIdCounter++;
             // Create the SRV query hostname
-            char srvHostName[65];
-            snprintf(srvHostName, 65, "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
+            char srvHostName[256];
+            snprintf(srvHostName, sizeof(srvHostName), 
+                "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
             // Start the DNS lookup process
             if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) {
                 _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
@@ -2100,14 +2101,16 @@ bool LineIAX2::_progressCall(Call& call) {
             IAX2FrameFull answerFrame;
             answerFrame.setHeader(call.localCallId, call.remoteCallId, 
                 call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 4, 4);
+                call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_CONTROL, 
+                ControlSubclass::IAX2_SUBCLASS_CONTROL_ANSWER);
             _sendFrameToPeer(answerFrame, call);
 
             // Send the STOP_SOUNDS message
             IAX2FrameFull stopSoundsFrame;
             stopSoundsFrame.setHeader(call.localCallId, call.remoteCallId, 
                 call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 4, 255);
+                call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_CONTROL, 
+                ControlSubclass::IAX2_SUBCLASS_CONTROL_STOP_SOUNDS);
             _sendFrameToPeer(stopSoundsFrame, call);
 
             call.state = Call::State::STATE_UP;
@@ -2320,12 +2323,15 @@ void LineIAX2::consume(const Message& msg) {
                             call.dispenseElapsedMs(line->_clock), 
                             call.outSeqNo, call.expectedInSeqNo, 
                             FrameType::IAX2_TYPE_TEXT, 0);
-                        char text[64];
+                        // Pull out the talker ID
+                        char talkerId[33];
+                        strcpyLimited(talkerId, (const char*)msg.body(), sizeof(talkerId));
+                        // Build a full text message
+                        char text[128];
                         snprintf(text, sizeof(text), "T %s TALKERID,%s", 
-                            call.localNumber.c_str(), msg.body());
-                        //line->_log.info("Talker ID to %s [%s]", 
-                        //    call.remoteNumber.c_str(), text);
-                        frame.setBody((const uint8_t*)text, strlen(text));
+                            call.localNumber.c_str(), talkerId);
+                        // NOTE: Including null!
+                        frame.setBody((const uint8_t*)text, strlen(text) + 1);
                         line->_sendFrameToPeer(frame, call);
                     }
                 }
@@ -2533,8 +2539,8 @@ void LineIAX2::oneSecTick() {
 void LineIAX2::tenSecTick() {
 
     _visitActiveCallsIf(
-        [](Call& call) {
-            call.resetStats();
+        [line = this](Call& call) {
+            call.tenSecTick(line->_log, line->_clock, *line);
         },
         // Predicate
         [](const Call& call) { return true; }
@@ -2637,7 +2643,6 @@ void LineIAX2::Call::reset() {
     _nvi_1 = 0;
     reTx.reset();
     dnsRequestId = 0;
-    lastLMs = 0;
     lastPingSentMs = 0;
     lastPingTimeMs = 0;
     pingCount = 0;
@@ -2726,6 +2731,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
         lastPingSentMs = clock.time();
     }
 
+    /*
     // Need top send out a L text packet?
     if (clock.isPast(lastLMs + L_INTERVAL_MS)) {
         IAX2FrameFull respFrame2;
@@ -2738,6 +2744,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
         line._sendFrameToPeer(respFrame2, *this);
         lastLMs = clock.time();
     }
+    */
 
     // Need a LAGRQ?
     if (clock.isPast(lastLagrqMs + LAGRQ_INTERVAL_MS)) {
@@ -2775,6 +2782,49 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             context._sendFrameToPeer(frame, (const sockaddr&)call->peerAddr);
         });
 
+}
+
+void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
+
+    resetStats();
+
+    // Generate the L message with the list of linked nodes
+    // #### TODO: CONSIDER WHETHER THIS SHOULD BE INITIATED IN BRIDGE?
+
+    if (state == Call::State::STATE_UP) {
+
+        // NOTE: There is a limit to the number of nodes that can be reported here.
+        // Anything above the limit will be quietly dropped.
+        const unsigned textBufferCapacity = IAX2FrameFull::MAX_BODY_LEN;
+        char textBuffer[textBufferCapacity];
+        strcpy(textBuffer, "L ");
+        unsigned textBufferLen = 2;
+
+        line._visitActiveCallsIf(
+            // Visitor
+            [&textBuffer, textBufferCapacity, &textBufferLen](const Call& call) {
+                char linkNode[128];
+                snprintf(linkNode, sizeof(linkNode), "T%s ", call.remoteNumber.c_str());
+                if (textBufferLen + strlen(linkNode) < textBufferCapacity) {
+                    strcpy(textBuffer, linkNode);
+                    textBufferLen += strlen(linkNode);
+                }
+            },
+            // Predicate
+            [](const Call& call) {
+                return true;
+            }
+        );
+        // Add terminating null
+        textBuffer[textBufferLen++] = 0;
+
+        IAX2FrameFull respFrame2;
+        respFrame2.setHeader(localCallId, remoteCallId, 
+            dispenseElapsedMs(clock), 
+            outSeqNo, expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
+        respFrame2.setBody((const uint8_t*)textBuffer, textBufferLen);
+        line._sendFrameToPeer(respFrame2, *this);
+    }
 }
 
 void LineIAX2::Call::logStats(Log& log) {

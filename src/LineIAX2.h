@@ -318,8 +318,6 @@ private:
 
         // Used to track which DNS response ID we are waiting for
         uint16_t dnsRequestId;
-        uint32_t lastLMs = 0;
-        const uint32_t L_INTERVAL_MS = 20 * 1000;
         uint32_t lastPingSentMs = 0;
         int32_t lastPingTimeMs = 0;
         unsigned pingCount = 0;
@@ -343,6 +341,8 @@ private:
         void reset();
 
         void oneSecTick(Log& log, Clock& clock, LineIAX2& line);
+
+        void tenSecTick(Log& log, Clock& clock, LineIAX2& line);
 
         /**
          * @returns The milliseconds since the start of the call, based on
