@@ -2803,10 +2803,11 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
         line._visitActiveCallsIf(
             // Visitor
             [&textBuffer, textBufferCapacity, &textBufferLen](const Call& call) {
+                // This is a comma-separated list
                 char linkNode[128];
-                snprintf(linkNode, sizeof(linkNode), "T%s ", call.remoteNumber.c_str());
+                snprintf(linkNode, sizeof(linkNode), "T%s,", call.remoteNumber.c_str());
                 if (textBufferLen + strlen(linkNode) < textBufferCapacity) {
-                    strcpy(textBuffer, linkNode);
+                    strcpy(textBuffer + textBufferLen, linkNode);
                     textBufferLen += strlen(linkNode);
                 }
             },
@@ -2815,8 +2816,8 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
                 return true;
             }
         );
-        // Add terminating null
-        textBuffer[textBufferLen++] = 0;
+        // Add terminating null which will cover the last comma
+        textBuffer[textBufferLen] = 0;   
 
         IAX2FrameFull respFrame2;
         respFrame2.setHeader(localCallId, remoteCallId, 
