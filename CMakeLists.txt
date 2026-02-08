@@ -612,3 +612,20 @@ target_include_directories(load-client-1 PRIVATE hid-mock/include)
 target_include_directories(load-client-1 PRIVATE json/include)
 target_include_directories(load-client-1 PRIVATE ed25519/src)
 
+# ----- audio-test-2 --------------------------------------------------------
+
+add_executable(audio-test-2
+  src/tests/audio-test-2.cpp
+  src/tests/dsp_util.cpp
+  src/Resampler.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/fixed_math.cpp
+  cmsis-dsp-mock/src/main.cpp
+)
+
+target_include_directories(audio-test-2 PRIVATE src)
+target_include_directories(audio-test-2 PRIVATE include)
+target_include_directories(audio-test-2 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(audio-test-2 PRIVATE cmsis-dsp-mock/include)
