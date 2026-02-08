@@ -33,7 +33,7 @@ N1 = 91
 # Was 1 before
 beta1 = 3
 # Was 3900 before
-cutoff_hz1 = 4300
+cutoff_hz1 = 4200
 # Use firwin with a Kaiser window to create a lowpass FIR filter.
 taps1 = firwin(N1, cutoff_hz1 / nyq_rate, window=('kaiser', beta1))
 # Calculate the frequency response
