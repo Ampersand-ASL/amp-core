@@ -30,13 +30,16 @@ N1 = 91
 # stop-band (final) attenuation.
 # See this standard: 
 # https://www.etsi.org/deliver/etsi_es/202700_202799/202737/01.08.01_60/es_202737v010801p.pdf
-beta1 = 1
-cutoff_hz1 = 3900
+# Was 1 before
+beta1 = 3
+# Was 3900 before
+cutoff_hz1 = 4300
 # Use firwin with a Kaiser window to create a lowpass FIR filter.
 taps1 = firwin(N1, cutoff_hz1 / nyq_rate, window=('kaiser', beta1))
 # Calculate the frequency response
 frequencies1, frequency_response1 = fir_freq_response(taps1, sample_rate)
 db_data1 = 20 * np.log10(np.abs(frequency_response1[:len(frequencies1)//2]))
+print("Kaiser Window")
 print([round(t * 32767) for t in taps1])
 
 # The FIR filter from the ASL code

@@ -29,32 +29,36 @@ float analyze(int16_t* audioIn48) {
     for (unsigned i = 0; i < FFT_N; i++) 
         fftIn[i] = cf64((double)audioIn48[i] / 32767.0, 0);
     simpleDFT64(fftIn, fftOut, FFT_N);
-    int gotBucket = maxMagIdx64(fftOut, 0, FFT_N / 2);
+    // Only look at the left-side of the spectrum for the max mag search
+    unsigned fundBucket = maxMagIdx64(fftOut, 0, FFT_N / 2);
 
-    //cout << "Input freq/mag " << sampleHz * gotBucket / FFT_N  << " " 
-    //    << fftOut[gotBucket].mag() << endl;
     // Compute distortion
-    double fundamentalRms = sqrt(fftOut[gotBucket].magSquared() / (double)FFT_N);
+    double fundMag = fftOut[fundBucket].mag();
+    // Two-sided power!
+    double fundPower = (fundMag * fundMag) * 2.0;
+    double totalPower = 0;
+    double otherPower = 0;
 
-    double otherRms = 0;
-    double totalRms = 0;
-    for (unsigned i = 0; i < FFT_N / 2; i++) {
-        if (i != gotBucket)
-            otherRms += fftOut[i].magSquared();
-        totalRms += fftOut[i].magSquared();
+    for (unsigned i = 0; i < FFT_N; i++) {
+        // IMPORTANT: This FFT implementation contains the /N internally!
+        double power = std::pow(fftOut[i].mag(), 2.0);
+        totalPower += power;
+        // Exclude the fundamental on both sides of the spectrum
+        if (i != fundBucket && i != FFT_N - fundBucket)
+            otherPower += power;
     }
-    otherRms /= FFT_N;
-    totalRms /= FFT_N;
-    otherRms = std::sqrt(otherRms);
-    totalRms = std::sqrt(totalRms);
 
-    //cout << "Total RMS      " << totalRms << endl;
-    //cout << "Fund  RMS      " << fundamentalRms << endl;
-    //cout << "Fund/total  dB " << 10.0 * log10(fundamentalRms / totalRms) << endl;
-    //cout << "Other/total dB " << 10.0 * log10(otherRms / totalRms) << endl;
-    //cout << "Other/fund dB  " << 10.0 * log10(otherRms / fundamentalRms) << endl;
+    /*
+    cout << "Fund bin         " << fundBucket << endl;
+    cout << "Total Power      " << totalPower << endl;
+    cout << "Fund  Power      " << fundPower << endl;
+    cout << "Fund/total  dB   " << 10.0 * log10(fundPower / totalPower) << endl;
+    cout << "Other/total dB   " << 10.0 * log10(otherPower / totalPower) << endl;
+    cout << "Other/fund dB    " << 10.0 * log10(otherPower / fundPower) << endl;
+    */
 
-    return 10.0 * log10(otherRms / fundamentalRms);
+    // The figure of merit is other vs fundamental
+    return 10.0 * log10(otherPower / fundPower);
 }
 
 int main(int, const char**) {
@@ -62,24 +66,27 @@ int main(int, const char**) {
     // Generate some audio 
     int16_t audioIn48[BLOCK_SIZE_48K * BLOCKS_48K];    
 
-    double m = 1;
+    double m = 2;
     double step = 2;
     double endHz = 4000;
 
     while (m * resolutionHz < endHz) {
 
         // Choosing a frequency that is coherent
+        double amp = 0.5;
         double toneHz = m * resolutionHz;
         double omega = 2.0f * PI64 * toneHz / sampleHz;
         double phi = 0;   
         for (unsigned i = 0; i < BLOCK_SIZE_48K * BLOCKS_48K; i++) {
-            audioIn48[i] = round(0.5 * std::cos(phi) * 32767.0);
+            audioIn48[i] = round(amp * std::cos(phi) * 32767.0);
             phi += omega;
         }
+        //double vrms = amp / std::sqrt(2.0);
+        //cout << "Signal freq  " << toneHz << endl;
+        //cout << "Signal Vrms  " << vrms << endl;
+        //cout << "Signal power " << vrms * vrms << endl;
 
-        //cout << "Input signal" << endl;
         double preDb = analyze(audioIn48);
-        //cout << endl;
 
         // Now put the signal through the resampling
         amp::Resampler res;
