@@ -64,7 +64,9 @@ public:
 
     // Filter 1 is the LPF used for up-sampling from 8K to 
     // 48K. This runs at 48K.
+    // The original size from the ASL code:
     //static const unsigned F1_TAPS = 31;
+    // Updated size
     static const unsigned F1_TAPS = 91;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
@@ -72,7 +74,9 @@ public:
 
     // Filter 2 is the LPF used for down-sampling from 48K
     // to 8K. This runs at 48K.
+    // The original size from the ASL code:
     //static const unsigned F2_TAPS = 31;
+    // Updated size
     static const unsigned F2_TAPS = 91;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
