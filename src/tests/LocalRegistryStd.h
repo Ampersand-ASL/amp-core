@@ -29,6 +29,7 @@ class LocalRegistryStd : public LocalRegistry {
 public:
     virtual bool lookup(const char* destNumber, sockaddr_storage& addr, 
         fixedstring& user, fixedstring& password) {
+        /*
         //if (strcmp(destNumber, "2000") == 0) {
             addr.ss_family = AF_INET;
             setIPAddr(addr,"127.0.0.1");
@@ -38,9 +39,11 @@ public:
             return true;
         //}
         //else {
-            // At the moment there is nothing in the local registry
         //    return false;
         //}
+        */
+        // At the moment there is nothing in the local registry
+        return false;
     }
 };
 

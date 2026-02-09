@@ -2286,7 +2286,7 @@ void LineIAX2::consume(const Message& msg) {
                     // This is the case where an UNKEY is requested by something 
                     // on the internal bus. Create an UNKEY frame and send it out.
                     else if (msg.getFormat() == Message::SignalType::RADIO_UNKEY_GEN) {                        
-                        line->_log.info("Call %u sending unkey", call.localCallId);
+                        //line->_log.info("Call %u sending unkey", call.localCallId);
                         IAX2FrameFull frame;
                         frame.setHeader(call.localCallId, call.remoteCallId, 
                             call.dispenseElapsedMs(line->_clock), 

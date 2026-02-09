@@ -38,12 +38,16 @@
 #include "Bridge.h"
 #include "BridgeCall.h"
 #include "TimerTask.h"
+#include "Message.h"
 
 // And a few things from AMP Server
 #include "LocalRegistryStd.h"
 
 using namespace std;
 using namespace kc1fsz;
+
+static const unsigned lineCount = 16;
+static LineIAX2::Call iax2CallSpace[lineCount];
 
 int main(int, const char**) {
 
@@ -55,7 +59,7 @@ int main(int, const char**) {
 
     // A queue used by other threads to pass messages into the main thread's
     // router.
-    threadsafequeue2<Message> respQueue;
+    threadsafequeue2<MessageCarrier> respQueue;
     // A wrapper that makes the response queue look like a MessageConsumer
     QueueConsumer respQueueConsumer(respQueue);
 
@@ -67,31 +71,33 @@ int main(int, const char**) {
     // This is the Line that makes the IAX2 network connection
     LocalRegistryStd locReg;
 
-    const unsigned lineCount = 8;
-
     Runnable2* tasks[lineCount + 1];
 
     // Make a bunch of lines
     LineIAX2* lines[lineCount];
     for (unsigned i = 0; i < lineCount; i++) {
-       LineIAX2* line = new LineIAX2(log, log, clock, 100 + i, router, 0, 0, &locReg, 10, "radio");
-       lines[i] = line;
-       tasks[i + 1] = line;
-       router.addRoute(line, 100 + i);
-       int rc = line->open(AF_INET, 4570 + i);
-       if (rc < 0) {
+        // Each line only gets one call
+        LineIAX2* line = new LineIAX2(log, log, clock, 100 + i, router, 0, 0, &locReg, 10, "radio",
+            iax2CallSpace + i, 1);
+        lines[i] = line;
+        tasks[i + 1] = line;
+        router.addRoute(line, 100 + i);
+        int rc = line->open(AF_INET, 4570 + i);
+        if (rc < 0) {
             log.error("Failed to open IAX2 line %d", rc);
         }
         // Place a test call
         char localNode[32];
         snprintf(localNode, sizeof(localNode), "%d", 1000 + i);
-        line->call(localNode, "radio@127.0.0.1:4569/2000,NONE");
+        //line->call(localNode, "radio@127.0.0.1:4569/2000,NONE");
+        line->call(localNode, "672731");
     }
 
     int count = 0;
 
-    TimerTask timer0(log, clock, 10, [&clock, lines, lineCount, &count]() {
+    TimerTask timer0(log, clock, 10, [&clock, lines, &count]() {
         cout << "TICK" << endl;
+        /*
         if (count == 20) {
             cout << "Sending audio" << endl;
             // Attempt to send an audio packet on all lines 
@@ -119,7 +125,7 @@ int main(int, const char**) {
             uint64_t endUs = clock.timeUs();
             cout << "Time " << (endUs - startUs) << endl;
         }
-
+        */
         count++;
     });
     tasks[0] = &timer0;
