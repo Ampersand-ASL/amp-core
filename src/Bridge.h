@@ -144,6 +144,8 @@ private:
     std::string _statusMessageText;
     uint64_t _statusMessageUpdateMs = 0;
     unsigned _statusMessageLevel = 0;
+
+    uint64_t _maxTickUs = 0;
 };
 
 // #### TODO: CAN WE CONSOLIDATE THE CONFIG POLLER WITH THIS?

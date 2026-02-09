@@ -6,7 +6,7 @@ static const double PI64 = std::atan(1.0) * 4.0;
 /**
  * This is an out-of-the-book implementation to use for sanity checking.
 */
-void simpleDFT(cf32* in, cf32* out, uint16_t n) {
+void simpleDFT(const cf32* in, cf32* out, uint16_t n) {
     for (uint16_t k = 0; k < n; k++) { 
         float sumreal = 0;
         float sumimag = 0;

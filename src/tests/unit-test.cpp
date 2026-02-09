@@ -119,11 +119,11 @@ static void clockTest1() {
 
 static void frameTest1() {
     
-    Message frame0(Message::Type::AUDIO, 1, 2, (uint8_t*)"1", 0, 0);
-    Message frame1(Message::Type::TEXT, 1, 2, (uint8_t*)"1", 0, 0);
+    MessageCarrier frame0(Message::Type::AUDIO, 1, 2, (uint8_t*)"1", 0, 0);
+    MessageCarrier frame1(Message::Type::TEXT, 1, 2, (uint8_t*)"1", 0, 0);
 
-    Message flSpace[4];
-    fixedqueue<Message> fl(flSpace, 4);
+    MessageCarrier flSpace[4];
+    fixedqueue<MessageCarrier> fl(flSpace, 4);
 
     fl.push(frame0);
     fl.push(frame1);
@@ -186,16 +186,16 @@ static void resampler_1() {
 }
 
 static void testRound() {
-    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6755, 20) == 6740);
-    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6752, 20) == 6740);
-    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6740, 20) == 6740);
-    assert(amp::SequencingBufferStd<Message>::roundDownToTick(6779, 20) == 6760);
+    assert(amp::SequencingBufferStd<MessageCarrier>::roundDownToTick(6755, 20) == 6740);
+    assert(amp::SequencingBufferStd<MessageCarrier>::roundDownToTick(6752, 20) == 6740);
+    assert(amp::SequencingBufferStd<MessageCarrier>::roundDownToTick(6740, 20) == 6740);
+    assert(amp::SequencingBufferStd<MessageCarrier>::roundDownToTick(6779, 20) == 6760);
 }
 
 static void sizeCheck1() {
     cout << "Message          " << sizeof(Message) << endl;
     cout << "Message x 64     " << sizeof(Message) * 64 << endl;
-    cout << "SequencingBuffer " << sizeof(amp::SequencingBufferStd<Message>) << endl;
+    cout << "SequencingBuffer " << sizeof(amp::SequencingBufferStd<MessageCarrier>) << endl;
     cout << "BridgeIn         " << sizeof(amp::BridgeIn) << endl;
     cout << "BridgeOut        " << sizeof(BridgeOut) << endl;
     cout << "BridgeCall       " << sizeof(amp::BridgeCall) << endl;
@@ -295,7 +295,7 @@ static void speedTest1() {
         strcpyLimited(payload.localNumber, "1000", sizeof(payload.localNumber));
         strcpyLimited(payload.remoteNumber, "2000", sizeof(payload.remoteNumber));
         payload.originated = false;
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, clock.time());
         msg.setSource(lineId, callId);
         msg.setDest(bridgeLineId, Message::UNKNOWN_CALL_ID);
@@ -329,7 +329,7 @@ static void speedTest1() {
             << fftOut[gotBucket].mag() << endl;
     }
 
-    Message voice(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K, 
+    MessageWrapper voice(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K, 
         160 * 2, audio, 1000, 1000);
     voice.setSource(lineId, 20);
     voice.setDest(bridgeLineId, Message::UNKNOWN_CALL_ID);

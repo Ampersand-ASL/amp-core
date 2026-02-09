@@ -56,6 +56,7 @@ void Bridge::reset() {
     _statusMessageText.clear();
     _statusMessageUpdateMs = 0;
     _statusMessageLevel = 0;
+    _maxTickUs = 0;
 }
 
 unsigned Bridge::getCallCount() const {
@@ -407,6 +408,8 @@ void Bridge::consume(const Message& msg) {
  */
 void Bridge::audioRateTick(uint32_t tickMs) {
 
+    uint64_t startUs = _clock.timeUs();
+
     // Tick each call so that we have an input frame for each.
     _calls.visitIf(
         // Visitor
@@ -419,7 +422,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         [](const BridgeCall& s) { return s.isActive(); }
     );
 
-    // Perform mixing and create an output for each active call
+    // Perform mixing and create a mixed output for each active call
     for (unsigned i = 0; i < MAX_CALLS; i++) {
         
         if (!_calls[i].isActive())
@@ -440,10 +443,12 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             mixCount++;
         }
 
+        // This is the target for the mixing of the conference audio
+        int16_t mixedFrame[BLOCK_SIZE_48K];
+        memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
+
+        // Now do the actual mixing
         if (mixCount > 0) {
-            // Now do the actual mixing
-            int16_t mixedFrame[BLOCK_SIZE_48K];
-            memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
             for (unsigned j = 0; j < MAX_CALLS; j++) {
                 // Ignore calls that are inactive or are silent
                 if (!_calls[j].isActive())
@@ -455,18 +460,23 @@ void Bridge::audioRateTick(uint32_t tickMs) {
                     continue;
                 _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixCount, tickMs);
             }
-
-            // Output the result
-            _calls[i].setConferenceOutput(mixedFrame, BLOCK_SIZE_48K, tickMs);
         }
 
-        _calls[i].produceOutput(tickMs);
+        // Output the result
+        _calls[i].setConferenceOutput(mixedFrame, BLOCK_SIZE_48K, tickMs, mixCount);
     }
 
     // Clear all contributions for this tick
     for (unsigned j = 0; j < MAX_CALLS; j++)
         if (_calls[j].isActive()) 
             _calls[j].clearInputAudio();
+
+    uint64_t endUs = _clock.timeUs();
+    uint64_t durUs = endUs - startUs;
+    if (durUs > _maxTickUs) {
+        _maxTickUs = durUs;
+        _log.info("Max Bridge output tick: %ld", _maxTickUs);
+    }
 }
 
 void Bridge::oneSecTick() {

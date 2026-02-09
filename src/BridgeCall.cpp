@@ -163,7 +163,6 @@ void BridgeCall::reset() {
     _lastUnkeyProcessedMs = 0;
 
     _stageInSet = false;
-    _stageOutSet = false;
     _lastCycleGeneratedOutput = false;
 
     _dtmfAccumulator.clear();
@@ -382,70 +381,6 @@ void BridgeCall::consume(const Message& frame) {
     }
 }
 
-void BridgeCall::produceOutput(uint32_t tickMs) {    
-    
-    // IMPORTANT: The final output for a call is the combination
-    // of any synthetic material on the play queue and whether 
-    // is coming it from the conference.
-    //
-    // This should be the ONLY place in this class where a frame
-    // of audio is passed to the _bridgeOut.
-    // 
-    // This is also the place where an UNKEY event is requested on
-    // the trailing edge of contributed audio.
-
-    int16_t outputPCM48[BLOCK_SIZE_48K];
-    int16_t sources = 0;
-
-    // If there is anything in the play queue then contribute it to 
-    // the final output.
-    if (!_playQueue.empty()) {
-        sources++;
-        assert(_playQueue.front().size() == BLOCK_SIZE_48K);
-        memcpy(outputPCM48, _playQueue.front().data(), BLOCK_SIZE_48K * 2);
-        _playQueue.pop();
-    } else {
-        memset(outputPCM48, 0, BLOCK_SIZE_48K * 2);
-    }
-
-    // If we are in conference mode then mix in the conference output
-    if (_mode == Mode::NORMAL && _stageOutSet) {
-        sources++;
-        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
-            // Sources are scaled individually first to avoid overflow
-            outputPCM48[i] = (outputPCM48[i] / sources) + (_stageOut[i] / sources);
-        // Clear this flag so that we are ready for the next iteration
-        _stageOutSet = false;
-    }
-
-    // If there was any audio contributed then make a message and send it
-    if (sources > 0) {
-        //uint8_t pcm48k[BLOCK_SIZE_48K * 2];
-        //Transcoder_SLIN_48K transcoder;
-        //transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
-        // #### TODO: DO TIMES MATTER HERE?
-        MessageWrapper msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
-            BLOCK_SIZE_48K * 2, (const uint8_t*)outputPCM48, 0, tickMs);
-        msg.setSource(LINE_ID, CALL_ID);
-        msg.setDest(_lineId, _callId);
-        _bridgeOut.consume(msg);
-
-        _lastCycleGeneratedOutput = true;
-    }
-    // If there was no audio contributed then consider a UNKEY event on the
-    // trailing edge.
-    else {
-        if (_lastCycleGeneratedOutput) {
-            MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY_GEN, 
-                0, tickMs);
-            msg.setSource(LINE_ID, CALL_ID);
-            msg.setDest(_lineId, _callId);
-            _bridgeOut.consume(msg);
-        }
-        _lastCycleGeneratedOutput = false;
-    }
-}
-
 void BridgeCall::audioRateTick(uint32_t tickMs) {
 
     _bridgeIn.audioRateTick(tickMs);
@@ -595,10 +530,65 @@ void BridgeCall::clearInputAudio() {
  * The bridge calls this function to set the final output audio for this call.
  * Takes 48K PCM and passes it into the BridgeOut pipeline for transcoding, etc.
  */
-void BridgeCall::setConferenceOutput(const int16_t* pcm48k, unsigned blockSize, uint32_t tickMs) {
+void BridgeCall::setConferenceOutput(const int16_t* pcm48k, unsigned blockSize, uint32_t tickMs,
+    unsigned mixCount) {
+
     assert(blockSize == BLOCK_SIZE_48K);
-    memcpy(_stageOut, pcm48k, BLOCK_SIZE_48K * 2);
-    _stageOutSet = true;
+
+    // IMPORTANT: The final output for a call is the combination
+    // of any synthetic material on the play queue and whether 
+    // is coming it from the conference.
+    //
+    // This should be the ONLY place in this class where a frame
+    // of audio is passed to the _bridgeOut.
+    // 
+    // This is also the place where an UNKEY event is requested on
+    // the trailing edge of contributed audio.
+
+    int16_t outputPCM48[BLOCK_SIZE_48K];
+    int16_t sources = 0;
+
+    // If there is anything in the play queue then contribute it to 
+    // the final output.
+    if (!_playQueue.empty()) {
+        sources++;
+        assert(_playQueue.front().size() == BLOCK_SIZE_48K);
+        memcpy(outputPCM48, _playQueue.front().data(), BLOCK_SIZE_48K * 2);
+        _playQueue.pop();
+    } else {
+        memset(outputPCM48, 0, BLOCK_SIZE_48K * 2);
+    }
+
+    // If we are in conference mode then mix in the conference output
+    if (_mode == Mode::NORMAL && mixCount > 0) {
+        sources++;
+        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
+            // Sources are scaled individually first to avoid overflow
+            outputPCM48[i] = (outputPCM48[i] / sources) + (pcm48k[i] / sources);
+    }
+
+    // If there was any audio contributed then make a message and send it
+    if (sources > 0) {
+        // #### TODO: DO TIMES MATTER HERE?
+        MessageWrapper msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+            BLOCK_SIZE_48K * 2, (const uint8_t*)outputPCM48, 0, tickMs);
+        msg.setSource(LINE_ID, CALL_ID);
+        msg.setDest(_lineId, _callId);
+        _bridgeOut.consume(msg);
+
+        _lastCycleGeneratedOutput = true;
+    }
+    // If there was no audio contributed then consider a UNKEY event on the
+    // trailing edge.
+    else {
+        if (_lastCycleGeneratedOutput) {
+            MessageEmpty msg = MessageEmpty::signal(Message::SignalType::RADIO_UNKEY_GEN); 
+            msg.setSource(LINE_ID, CALL_ID);
+            msg.setDest(_lineId, _callId);
+            _bridgeOut.consume(msg);
+        }
+        _lastCycleGeneratedOutput = false;
+    }
 }
 
 // ===== Tone Mode Related ====================================================

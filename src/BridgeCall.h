@@ -152,16 +152,14 @@ public:
 
     /**
      * This provides the call with the mixed audio frame for the designated tick interval.
-     * 
-     * @param tickMs The start of the time interval for which this frame is applicable.
-     */
-    void setConferenceOutput(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs);  
-
-    /**
      * Tells the call to generate its audio output for the designated tick interval,
      * taking into account all of the various sources.
+     * 
+     * @param tickMs The start of the time interval for which this frame is applicable.
+     * @param mixCount The number of conference talkers that are included in the pcmBlock.
      */
-    void produceOutput(uint32_t tickMs);
+    void setConferenceOutput(const int16_t* pcmBlock, unsigned blockSize, uint32_t tickMs,
+        unsigned mixCount);  
 
     /**
      * @returns Effective time of the status document for this call. Used
@@ -214,9 +212,11 @@ private:
     unsigned _bridgeLineId = 0;
     unsigned _bridgeCallId = 0;
 
+    // #### TODO: MOVE TO BRIDGE
     unsigned _ttsLineId = 0;
     unsigned _netTestLineId = 0;
     std::string _netTestBindAddr;
+    // #### TODO: MOVE TO BRIDGE
 
     bool _echo = false;
     bool _sourceAddrValidated = false;
@@ -259,6 +259,7 @@ private:
     int _tx1Db = 0;
 
     void _processTTSAudio(const Message& msg);
+
     void _signalTalker();
 
     // ----- Normal Mode Related ----------------------------------------------
@@ -273,11 +274,6 @@ private:
     int16_t _stageIn[BLOCK_SIZE_48K];
     // Indicates whether any input was provided during this tick
     bool _stageInSet = false;
-
-    // This is the conference audio prepared for this call. 
-    int16_t _stageOut[BLOCK_SIZE_48K];
-    // Indicates whether any output was provided during this tick
-    bool _stageOutSet = false;
 
     // Used to identify the trailing edge of output generation so that we 
     // can make an UNKEY at the right time.
