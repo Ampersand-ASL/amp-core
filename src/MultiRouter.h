@@ -39,7 +39,7 @@ public:
      * @param auxQueue Another way to consume messages, useful for 
      * posting messages from other threads.
      */ 
-    MultiRouter(threadsafequeue2<Message>& auxQueue);
+    MultiRouter(threadsafequeue2<MessageCarrier>& auxQueue);
 
     void addRoute(MessageConsumer* consumer, unsigned lineId);
 
@@ -55,7 +55,7 @@ private:
     };
 
     std::vector<Dest> _dests;
-    threadsafequeue2<Message>& _auxQueue;
+    threadsafequeue2<MessageCarrier>& _auxQueue;
 };
 
 }

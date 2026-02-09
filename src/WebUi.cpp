@@ -192,11 +192,11 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         if (data.contains("action")) {
             if (data["action"] == "ptt") {
                 ui->_ptt.store(!ui->_ptt.load());
-                Message msg;
+                MessageEmpty msg;
                 if (ui->_ptt.load()) 
-                    msg = Message::signal(Message::SignalType::COS_ON);
+                    msg = MessageEmpty::signal(Message::SignalType::COS_ON);
                 else 
-                    msg = Message::signal(Message::SignalType::COS_OFF);
+                    msg = MessageEmpty::signal(Message::SignalType::COS_OFF);
                 msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
                 bus->consume(msg);
             } 
@@ -212,7 +212,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                     PayloadCall payload;
                     strcpyLimited(payload.localNumber, localNode.c_str(), sizeof(payload.localNumber));
                     strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
-                    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+                    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
                     msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
                     bus->consume(msg);
@@ -224,21 +224,21 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                 if (symbol.size() >= 1) {
                     PayloadDtmfGen payload;
                     payload.symbol = symbol[0];
-                    Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
+                    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
                     msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
                     bus->consume(msg);
                 }
             }
             else if (data["action"] == "dropcall") {
-                Message msg = Message::signal(Message::SignalType::DROP_CALL);
+                MessageEmpty msg = MessageEmpty::signal(Message::SignalType::DROP_CALL);
                 int lineId = data["lineId"].get<int>();
                 int callId = data["callId"].get<int>();
                 msg.setDest(lineId, callId);
                 bus->consume(msg);
             }
             else if (data["action"] == "dropall") {
-                Message msg = Message::signal(Message::SignalType::DROP_ALL_CALLS);
+                MessageEmpty msg = MessageEmpty::signal(Message::SignalType::DROP_ALL_CALLS);
                 msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
                 bus->consume(msg);
             }

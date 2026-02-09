@@ -80,7 +80,7 @@ private:
     Clock* _clock = 0;
     bool _enabled = false;
 
-    std::queue<Message> _queue;
+    std::queue<MessageCarrier> _queue;
     
     bool _isActive = false;
     bool _isTrusted = false;

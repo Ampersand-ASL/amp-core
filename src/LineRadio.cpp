@@ -166,7 +166,7 @@ void LineRadio::oneSecTick() {
 }
 
 void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len) {
-    Message msg(Message::Type::SIGNAL, type, 
+    MessageWrapper msg(Message::Type::SIGNAL, type, 
         len, (const uint8_t*)body, 0, _clock.time());
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);
@@ -290,7 +290,7 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
     }
 
     // Make an audio message and send it to the listeners for processing
-    Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
+    MessageWrapper msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
         BLOCK_SIZE_48K * 2, outBuffer, 0, idealCaptureMs);
     msg.setSource(_busId, _callId);
     msg.setDest(_destBusId, _destCallId);

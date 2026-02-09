@@ -40,7 +40,7 @@ void KerchunkFilter::reset() {
     _lastActivityStartMs = 0;
     _lastActivityEndMs = 0;
     _bufferingStartMs = 0;
-    _queue = std::queue<Message>();
+    _queue = std::queue<MessageCarrier>();
 }
 
 void KerchunkFilter::audioRateTick(uint32_t tickMs) {
@@ -72,8 +72,7 @@ void KerchunkFilter::audioRateTick(uint32_t tickMs) {
         else if (_clock->isPast(_bufferingStartMs + _evaluationIntervalMs)) {
             _log->info("Kerchunk was detected, flushing %d ms",
                 _queue.size() * 20);
-            //_saveAndDiscard(_queue);
-            _queue = std::queue<Message>();
+            _queue = std::queue<MessageCarrier>();
             _state = State::PASSING;
         }
     }

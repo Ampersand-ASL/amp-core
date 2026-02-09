@@ -219,7 +219,7 @@ void Bridge::consume(const Message& msg) {
                 return true;
             },
             // Predicate
-            [msg](const BridgeCall& c) { 
+            [&msg](const BridgeCall& c) { 
                 return c.isActive() && 
                     // Make sure this is a normal conference node (not a parrot)
                     c.isNormal() &&
@@ -247,7 +247,7 @@ void Bridge::consume(const Message& msg) {
             // Visitor
             RESET_VISITOR,
             // Predicate
-            [msg](const BridgeCall& s) { return s.belongsTo(msg); }
+            [&msg](const BridgeCall& s) { return s.belongsTo(msg); }
         );
         
         // Add new session for this call
@@ -257,7 +257,7 @@ void Bridge::consume(const Message& msg) {
         if (newIndex == -1) {
             _log.info("Max sessions, rejecting call %d", msg.getSourceCallId());
             // #### TODO: NEED TO TEST THIS AFTER RACE CONDITION IS RESOLVED
-            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 0, 0,
+            MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE,
                 0, _clock.time());
             msg.setDest(msg.getSourceBusId(), msg.getSourceCallId());
             //_bus.consume(msg);
@@ -314,7 +314,7 @@ void Bridge::consume(const Message& msg) {
                     return true;
                  },
                 // Predicate
-                [msg](const BridgeCall& c) { 
+                [&msg](const BridgeCall& c) { 
                     return c.isActive() && 
                         // Make sure this is a normal conference node (not a parrot)
                         c.isNormal() &&
@@ -349,7 +349,7 @@ void Bridge::consume(const Message& msg) {
             // Visitor
             RESET_VISITOR,
             // Predicate
-            [msg](const BridgeCall& c) { return c.belongsTo(msg); }         
+            [&msg](const BridgeCall& c) { return c.belongsTo(msg); }         
         );
 
         // Announce the dropped connection to all of the *other* active calls
@@ -364,7 +364,7 @@ void Bridge::consume(const Message& msg) {
                 return true;
             },
             // Predicate
-            [msg](const BridgeCall& c) { 
+            [&msg](const BridgeCall& c) { 
                 return c.isActive() && 
                     // Make sure this is a normal conference node (not parrot)
                     c.isNormal() &&
@@ -380,13 +380,13 @@ void Bridge::consume(const Message& msg) {
     else {
         _calls.visitIf(
             // Visitor
-            [msg](BridgeCall& call) { 
+            [&msg](BridgeCall& call) { 
                 call.consume(msg);
                 // Stop on first find
                 return false;
             },
             // Predicate
-            [msg](const BridgeCall& s) { return s.belongsTo(msg); }
+            [&msg](const BridgeCall& s) { return s.belongsTo(msg); }
         );
     }
 }

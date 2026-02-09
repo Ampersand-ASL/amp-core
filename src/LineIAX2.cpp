@@ -1319,7 +1319,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
         strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
         payload.originated = true;
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
             sizeof(payload), (const uint8_t*)&payload, 0, rxStampMs);
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
@@ -1350,8 +1350,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
              frame.getSubclass() == ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY) {
         
-        Message unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
-            0, 0, frame.getTimeStamp(), rxStampMs);
+        MessageEmpty unkeyMsg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY, 
+            frame.getTimeStamp(), rxStampMs);
         unkeyMsg.setSource(_busId, call.localCallId);
         unkeyMsg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(unkeyMsg);
@@ -1434,16 +1434,10 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         // Make a voice message from the network frame content and 
         // pass it to the consumers.
-        Message voiceMsg;
         bool goodVoice = false;
         const unsigned vfs = maxVoiceFrameSize(call.codec);
         if (vfs > 0) {
             if (frame.size() == 12 + vfs) {
-                // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
-                // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
-                // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
-                voiceMsg = Message(Message::Type::AUDIO, call.codec,
-                    vfs, frame.buf(), frame.getTimeStamp(), rxStampMs);
                 goodVoice = true;
             } else {
                 _log.info("Voice frame size error");
@@ -1453,6 +1447,11 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         }
 
         if (goodVoice) {
+            // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
+            // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
+            // #### TODO: NEED TO GET THE RIGHT TIMESTAMP!
+            MessageWrapper voiceMsg(Message::Type::AUDIO, call.codec,
+                vfs, frame.buf(), frame.getTimeStamp(), rxStampMs);
             voiceMsg.setSource(_busId, call.localCallId);
             voiceMsg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
             _bus.consume(voiceMsg);
@@ -1502,7 +1501,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
                 _log.info("Call %u DTMF Press %c", call.localCallId, symbol);
                 PayloadDtmfPress payload;
                 payload.symbol = symbol;
-                Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+                MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
                     sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
                 msg.setSource(_busId, call.localCallId);
                 msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
@@ -1591,7 +1590,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             if (strcmp(cmd,"TALKERID") == 0) {
                 //_log.info("Talker ID from %s: [%s]", call.remoteNumber.c_str(), 
                 //    params);
-                Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+                MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
                     // Include the null
                     paramsLen + 1, (const uint8_t*)params, 
                     0, _clock.time());
@@ -1615,7 +1614,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //  If no other nodes are connected, the list is empty and only L is sent.
         else if (textMessage[0] == 'L') {
             //_log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
-            Message msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT, 
+            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT, 
                 // The initial "L " gets stripped here
                 strlen(textMessage) - 2, (const uint8_t*)textMessage + 2, 
                 0, _clock.time());
@@ -1643,7 +1642,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         PayloadDtmfPress payload;
         payload.symbol = (char)frame.getSubclass();
 
-        Message msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
             sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
@@ -1690,17 +1689,19 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             // the remote time and local time are fairly close to each 
             // other in order for this conversion to work.
             uint16_t lowRemoteTime = unpack_uint16_be(buf + 2);
-            uint32_t remoteTime = amp::SequencingBufferStd<Message>::extendTime(lowRemoteTime,
+            uint32_t remoteTime = amp::SequencingBufferStd<MessageCarrier>::extendTime(lowRemoteTime,
                 call.localElapsedMs(line->_clock));
 
             // Make a voice message from the network frame content and pass it
             // to the consumers.
-            Message voiceMsg;
             unsigned vfs = maxVoiceFrameSize(call.codec);
             if (vfs > 0) {
                 if (bufLen <= 4 + vfs) {
-                    voiceMsg = Message(Message::Type::AUDIO, call.codec,
+                    MessageWrapper voiceMsg(Message::Type::AUDIO, call.codec,
                         vfs, buf + 4, remoteTime, rxStampMs);
+                    voiceMsg.setSource(line->_busId, call.localCallId);
+                    voiceMsg.setDest(line->_destLineId, Message::UNKNOWN_CALL_ID);
+                    line->_bus.consume(voiceMsg);
                 } else {
                     log.error("Voice frame size error");
                     return;
@@ -1709,10 +1710,6 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
                 log.error("Unsupported CODEC");
                 return;
             }
-
-            voiceMsg.setSource(line->_busId, call.localCallId);
-            voiceMsg.setDest(line->_destLineId, Message::UNKNOWN_CALL_ID);
-            line->_bus.consume(voiceMsg);
         },
         // Predicate
         [sourceCallId, unverifiedPeerAddr](const Call& call) {
@@ -2085,7 +2082,7 @@ bool LineIAX2::_progressCall(Call& call) {
             strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
             payload.originated = false;
 
-            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
                 sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
             msg.setSource(_busId, call.localCallId);
             msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
@@ -2128,7 +2125,7 @@ bool LineIAX2::_progressCall(Call& call) {
             sizeof(payload.localNumber));
         strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), 
             sizeof(payload.remoteNumber));
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
             sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());            
         msg.setSource(_busId, call.localCallId);
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
@@ -2337,7 +2334,7 @@ void LineIAX2::consume(const Message& msg) {
                 }
             },
             // Predicate (filters the calls)
-            [msg](const Call& call) {
+            [&msg](const Call& call) {
                 return call.state == Call::State::STATE_UP &&
                     msg.getDestCallId() == call.localCallId;
             }
@@ -2526,10 +2523,11 @@ void LineIAX2::oneSecTick() {
             PayloadCallStatus status;
             status.lastRxMs = call.lastRxVoiceFrameMs;
             status.lastTxMs = call.lastTxVoiceFrameMs;
-            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_STATUS, sizeof(status),
-                (const uint8_t*)&status, 0, 0);
+            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_STATUS, 
+                sizeof(status), (const uint8_t*)&status, 0, 0);
             msg.setSource(_busId, call.localCallId);
             msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+            // #### TODO: NEED TO PUBLISH THIS SOMEWHERE!
         },
         // Predicate
         [](const Call& call) { return true; }
@@ -2598,7 +2596,7 @@ void LineIAX2::_publishCallFailed(const char* localNumber, const char* remoteNum
     PayloadCallFailed payload;
     strcpyLimited(payload.targetNumber, remoteNumber, sizeof(payload.targetNumber));
     strcpyLimited(payload.message, text, sizeof(payload.message));
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
+    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_FAILED, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_busId, Message::UNKNOWN_CALL_ID);
     msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);

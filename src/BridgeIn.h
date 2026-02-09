@@ -171,7 +171,7 @@ private:
 
     // This is the Jitter Buffer used to address timing/sequencing
     // issues on the input side of the Bridge.
-    amp::SequencingBufferStd<Message> _jitBuf;
+    amp::SequencingBufferStd<MessageCarrier> _jitBuf;
 
     uint32_t _lastUnkeyMs = 0;
 

@@ -87,26 +87,26 @@ void BridgeIn::consume(const Message& frame) {
 /** 
  * Adaptor that links the SequencingBuffer output to a sink function
  */
-class JBOutAdaptor : public amp::SequencingBufferSink<Message> {
+class JBOutAdaptor : public amp::SequencingBufferSink<MessageCarrier> {
 public:
 
-    JBOutAdaptor(std::function<void(const Message& msg)> sink) 
+    JBOutAdaptor(std::function<void(const MessageCarrier& msg)> sink) 
     :   _sink(sink) { }
 
-    void play(const Message& msg, uint32_t) {   
+    void play(const MessageCarrier& msg, uint32_t) {   
         _sink(msg);
     }
 
     void interpolate(uint32_t origMs, uint32_t localMs, uint32_t) {
         // Need to make a message to represent the interpolate event
         // #### TODO: NOTE: The source/destination aren't filled in. Does this matter?
-        Message msg(Message::Type::AUDIO_INTERPOLATE, 0, 0, 0, origMs, localMs);
+        MessageEmpty msg(Message::Type::AUDIO_INTERPOLATE, 0, origMs, localMs);
         _sink(msg);
     }
 
 private:
 
-    std::function<void(const Message& msg)> _sink = nullptr;
+    std::function<void(const MessageCarrier& msg)> _sink = nullptr;
 };
 
 /**
@@ -116,7 +116,7 @@ private:
 void BridgeIn::audioRateTick(uint32_t tickMs) {
 
     // #### TODO: GET RID OF THIS AND SWITCH TO LAMBDA
-    JBOutAdaptor adaptor([this](const Message& msg) { 
+    JBOutAdaptor adaptor([this](const MessageCarrier& msg) { 
         this->_handleJitBufOut(msg); 
     });
     _jitBuf.playOut(*_log, _clock->time(), &adaptor);
@@ -228,7 +228,7 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         uint8_t slin48k[BLOCK_SIZE_48K * 2];
         _transcoder1.encode(pcm48k, BLOCK_SIZE_48K, slin48k, BLOCK_SIZE_48K * 2);
         
-        Message outFrame(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
+        MessageWrapper outFrame(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_48K,
             BLOCK_SIZE_48K * 2, slin48k, frame.getOrigMs(), frame.getRxMs());
         outFrame.setSource(frame.getSourceBusId(), frame.getSourceCallId());
         outFrame.setDest(frame.getDestBusId(), frame.getDestCallId());

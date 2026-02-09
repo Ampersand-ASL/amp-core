@@ -126,7 +126,7 @@ int LineSDRC::open(const char* serialDevice) {
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "sdrc");
     payload.originated = true;
     payload.permanent = true;
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_lineId, _callId);
     msg.setDest(_destLineId, Message::BROADCAST);
@@ -147,7 +147,7 @@ void LineSDRC::close() {
     PayloadCallEnd payload;
     payload.localNumber[0] = 0;
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "sdrc");
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
+    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_END, 
         sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
     msg.setSource(_lineId, _callId);
     msg.setDest(_destLineId, Message::BROADCAST);
@@ -211,7 +211,7 @@ bool LineSDRC::run2() {
                 // Make an audio message and send it to the listeners for 
                 // processing. This is convenient because the audio comes in 
                 // from the SDRC in 16-bit linear format LE already.
-                Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K,
+                MessageWrapper msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_SLIN_8K,
                     frameLen, frame, _originMsCounter, _clock.time());
                 msg.setSource(_lineId, _callId);
                 msg.setDest(_destLineId, Message::BROADCAST);

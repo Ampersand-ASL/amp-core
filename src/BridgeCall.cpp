@@ -424,7 +424,7 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
         //Transcoder_SLIN_48K transcoder;
         //transcoder.encode(output, BLOCK_SIZE_48K, pcm48k, BLOCK_SIZE_48K * 2);
         // #### TODO: DO TIMES MATTER HERE?
-        Message msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+        MessageWrapper msg(Message::Type::AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
             BLOCK_SIZE_48K * 2, (const uint8_t*)outputPCM48, 0, tickMs);
         msg.setSource(LINE_ID, CALL_ID);
         msg.setDest(_lineId, _callId);
@@ -436,8 +436,8 @@ void BridgeCall::produceOutput(uint32_t tickMs) {
     // trailing edge.
     else {
         if (_lastCycleGeneratedOutput) {
-            Message msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY_GEN, 
-                0, 0, 0, tickMs);
+            MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::RADIO_UNKEY_GEN, 
+                0, tickMs);
             msg.setSource(LINE_ID, CALL_ID);
             msg.setDest(_lineId, _callId);
             _bridgeOut.consume(msg);
@@ -479,7 +479,7 @@ void BridgeCall::setOutputTalkerId(const char* talkerId) {
 }
 
 void BridgeCall::_signalTalker() {
-    Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
+    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_TALKERID, 
         // Include the null termination
         _outputTalkerId.length() + 1, (const uint8_t*)_outputTalkerId.c_str(), 
         0, 0);
@@ -513,7 +513,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         PayloadCall payload;
         strcpyLimited(payload.localNumber, _bridge->_nodeNumber.c_str(), sizeof(payload.localNumber));
         strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
-        Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
             sizeof(payload), (const uint8_t*)&payload, 0, 0);
         msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
         _bridge->_bus.consume(msg);
@@ -524,8 +524,8 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         _log->info("DTMF request to disconnect all");
 
         // Create a signal and publish it to the LineIAX2 for processing
-        Message msg(Message::Type::SIGNAL, Message::SignalType::DROP_ALL_CALLS_OUTBOUND, 
-            0, 0, 0, 0);
+        MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::DROP_ALL_CALLS_OUTBOUND, 
+            0, 0);
         msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
         _bridge->_bus.consume(msg);
     }
@@ -698,7 +698,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
         req.timeoutMs = 250;
 
-        Message msg(Message::Type::NET_DIAG_1_REQ, 0, 
+        MessageWrapper msg(Message::Type::NET_DIAG_1_REQ, 0, 
             sizeof(req), (const uint8_t*)&req, 0, 0);
         msg.setSource(_bridgeLineId, _bridgeCallId);
         msg.setDest(_netTestLineId, Message::BROADCAST);
@@ -876,8 +876,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
         if (_playQueue.empty()) {
 
             // Request to have the call killed on the IAX side
-            Message msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
-                0, 0, 0, tickMs * 1000);
+            MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+                0, tickMs * 1000);
             msg.setSource(LINE_ID, CALL_ID);
             msg.setDest(_lineId, _callId);
             _bridgeOut.consume(msg);
@@ -926,7 +926,7 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
 }
 
 void BridgeCall::requestTTS(const char* prompt) {
-    Message req(Message::Type::TTS_REQ, 0, strlen(prompt), (const uint8_t*)prompt, 
+    MessageWrapper req(Message::Type::TTS_REQ, 0, strlen(prompt), (const uint8_t*)prompt, 
         0, 0);
     req.setSource(_bridgeLineId, _bridgeCallId);
     req.setDest(_ttsLineId, Message::BROADCAST);

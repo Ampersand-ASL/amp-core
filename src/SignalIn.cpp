@@ -98,11 +98,11 @@ void SignalIn::_pollHidStatus() {
 
 void SignalIn::_processHidPacket(const uint8_t* packet, unsigned packetLen) {
     bool ptt = (packet[_hidOffset] & _hidMask) != 0;
-    Message msg;
+    MessageEmpty msg;
     if (ptt) 
-        msg = Message::signal(_sigTypeOn);
+        msg = MessageEmpty::signal(_sigTypeOn);
     else 
-        msg = Message::signal(_sigTypeOff);
+        msg = MessageEmpty::signal(_sigTypeOff);
     msg.setDest(_radioLineId, DEST_CALL_ID);
     _bus.consume(msg);
 }

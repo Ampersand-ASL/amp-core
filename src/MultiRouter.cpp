@@ -18,14 +18,14 @@
 
 namespace kc1fsz {
 
-MultiRouter::MultiRouter(threadsafequeue2<Message>& auxQueue)
+MultiRouter::MultiRouter(threadsafequeue2<MessageCarrier>& auxQueue)
 :   _auxQueue(auxQueue) {     
 }
 
 bool MultiRouter::run2() {
     bool worked = false;
     while (!_auxQueue.empty()) {
-        Message m;
+        MessageCarrier m;
         // Goal is to avoid blocking and return back to the event loop 
         // as quickly as possible.
         if (_auxQueue.try_pop(m, 0)) {
