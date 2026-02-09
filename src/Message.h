@@ -87,9 +87,6 @@ public:
     static const unsigned BROADCAST = 0;
     static const unsigned UNKNOWN_CALL_ID = -1;
 
-    Message(Type type, unsigned format, unsigned size, uint32_t origMs, uint32_t rxMs);
-    Message(const Message& other);
-
     virtual void clear();
 
     Type getType() const { return _type; }
@@ -111,17 +108,15 @@ public:
 
 protected:
 
-    // Message needs to be large enough for 20ms of PCM16 at 48K 
-    // (This is 1920 bytes)
-    static constexpr unsigned MAX_SIZE = 160 * 6 * 2;
-
     // Not allowed to instantiate
     Message();
+    Message(Type type, unsigned format, unsigned size, uint32_t origMs, uint32_t rxMs);
+    Message(const Message& other);
+    Message& operator=(const Message& other);
 
     Type _type;
     unsigned _format;
     unsigned _size;
-    //uint8_t _body[MAX_SIZE];
     uint32_t _origMs;
     uint32_t _rxMs;
     // Routing stuff
@@ -135,19 +130,30 @@ protected:
 class MessageCarrier : public Message {
 public:
 
+    // NOTE: Pay close attention to the C++ "rule of 3/5/0"
     MessageCarrier();
     MessageCarrier(Type type, unsigned format, unsigned size, const uint8_t* body,
         uint32_t origMs, uint32_t rxMs);
+    MessageCarrier(const MessageCarrier& other);
+    virtual ~MessageCarrier();
+    MessageCarrier& operator=(const MessageCarrier& other);
+
     MessageCarrier(const Message& other);
-    MessageCarrier& operator=(const Message& other);
 
     virtual const uint8_t* body() const { return _body; }
 
     void clear();
 
+protected:
+
+    // Message needs to be large enough for 20ms of PCM16 at 48K 
+    // (This is 1920 bytes)
+    static constexpr unsigned MAX_SIZE = 160 * 6 * 2;
+
 private:
 
     uint8_t _body[MAX_SIZE];
+    //uint8_t* _body = 0;
 };
 
 /**
@@ -156,6 +162,7 @@ private:
 class MessageWrapper : public Message {
 public:
 
+    // NOTE: Pay close attention to the C++ "rule of 3/5/0"
     MessageWrapper(Type type, unsigned format, unsigned size, const uint8_t* body,
         uint32_t origMs, uint32_t rxMs);
 
@@ -172,9 +179,8 @@ private:
 class MessageEmpty : public Message {
 public:
 
-    MessageEmpty();
     MessageEmpty(Type type, unsigned format, uint32_t origMs, uint32_t rxMs);
-    MessageEmpty(const Message& other);
+    MessageEmpty(const MessageEmpty& other);
 
     virtual const uint8_t* body() const { return 0; }
 
@@ -182,6 +188,10 @@ public:
      * Shortcut constructor
      */
     static MessageEmpty signal(SignalType st) { return MessageEmpty(Type::SIGNAL, st, 0, 0); }
+
+protected:
+
+    MessageEmpty();
 };
 
 struct PayloadCallStart {

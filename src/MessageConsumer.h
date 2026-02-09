@@ -38,7 +38,7 @@ public:
 
     void consume(const Message& msg) { 
         // Here we take a copy of the message onto the queue
-        _q.push(MessageCarrier(msg)); 
+        _q.push(msg); 
     }
 
 private:

@@ -15,6 +15,7 @@
 #include "kc1fsz-tools/fixed_math.h"
 
 #include "itu-g711-codec/codec.h"
+#include "itu-g711-plc/Plc.h"
 #include "amp/Resampler.h"
 #include "amp/SequencingBufferStd.h"
 
@@ -23,6 +24,8 @@
 #include "BridgeCall.h"
 #include "Bridge.h"
 #include "NullConsumer.h"
+#include "KerchunkFilter.h"
+
 #include "TestUtil.h"
 #include "dsp_util.h"
 
@@ -195,10 +198,13 @@ static void testRound() {
 static void sizeCheck1() {
     cout << "Message          " << sizeof(Message) << endl;
     cout << "Message x 64     " << sizeof(Message) * 64 << endl;
-    cout << "SequencingBuffer " << sizeof(amp::SequencingBufferStd<MessageCarrier>) << endl;
-    cout << "BridgeIn         " << sizeof(amp::BridgeIn) << endl;
-    cout << "BridgeOut        " << sizeof(BridgeOut) << endl;
     cout << "BridgeCall       " << sizeof(amp::BridgeCall) << endl;
+    cout << "BridgeIn         " << sizeof(amp::BridgeIn) << endl;
+    cout << "SequencingBuffer " << sizeof(amp::SequencingBufferStd<MessageCarrier>) << endl;
+    cout << "KerchunkFilter   " << sizeof(KerchunkFilter) << endl;
+    cout << "Resampler        " << sizeof(amp::Resampler) << endl;
+    cout << "Plc              " << sizeof(Plc) << endl;
+    cout << "BridgeOut        " << sizeof(BridgeOut) << endl;
 }
 
 static void snprintfCheck() {
@@ -251,6 +257,10 @@ static void fixedMath1() {
     c = mult(recip, scaleFixed);
 }
 
+// Large structure kept off stack
+static const unsigned callCount = 1024;
+static amp::BridgeCall callSpace[callCount];
+
 static void speedTest1() {
 
     Log log;
@@ -279,13 +289,12 @@ static void speedTest1() {
 
     unsigned bridgeLineId = 10;
     amp::Bridge bridge(log, log, clock, nullCons,  amp::BridgeCall::Mode::NORMAL,
-        bridgeLineId, 0, 0, 0, 1);
+        bridgeLineId, 0, 0, 0, 1, callSpace, callCount);
     bridge.setLocalNodeNumber("1000");
 
     unsigned lineId = 1;
 
     // Start some calls
-    unsigned callCount = 100;
     for (unsigned i = 0; i < callCount; i++) {
         unsigned callId = 20 + i;
         PayloadCallStart payload;
@@ -340,8 +349,8 @@ static void speedTest1() {
     // Tick
     bridge.audioRateTick(1000);
     uint64_t endUs = clock.timeUs();
-    cout << "Time " << (endUs - startUs) << endl;
-    cout << "Count " << nullCons.getCount() << endl;
+    cout << "Time (us) " << (endUs - startUs) << endl;
+    cout << "Count     " << nullCons.getCount() << endl;
 
     //bridge.audioRateTick(1020);
     //bridge.audioRateTick(1040);

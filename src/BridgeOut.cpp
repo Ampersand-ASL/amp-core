@@ -16,6 +16,7 @@
  */
 #include <cassert>
 #include <iostream>
+#include <cstring>
 
 #include "kc1fsz-tools/Log.h"
 

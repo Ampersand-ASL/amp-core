@@ -427,8 +427,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         }
 
         // This is the target for the mixing of the conference audio
-        int16_t mixedFrame[BLOCK_SIZE_48K];
-        memset(mixedFrame, 0, BLOCK_SIZE_48K * sizeof(int16_t));
+        int16_t mixedFrame[BLOCK_SIZE_48K] = { 0 };
 
         // Now do the actual mixing
         if (mixCount > 0) {
@@ -441,6 +440,8 @@ void Bridge::audioRateTick(uint32_t tickMs) {
                 // Ignore ourself if echo is turned off
                 if (i == j && !_calls[j].isEcho())
                     continue;
+                // NOTE: This appears to be the most time-critical step in this 
+                // process at the moment.
                 _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixCount, tickMs);
             }
         }
@@ -451,7 +452,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
     // Clear all contributions for this tick
     _visitActiveCalls([](BridgeCall& call) { call.clearInputAudio(); return true; });
-
+    
     uint64_t endUs = _clock.timeUs();
     uint64_t durUs = endUs - startUs;
     if (durUs > _maxTickUs) {

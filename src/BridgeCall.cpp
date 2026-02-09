@@ -517,8 +517,13 @@ void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize,
         const int16_t scaleFixed = 0x7fff / (int16_t)calls;
         // Vector multiply accumulate
         // #### TODO: HW ACCELERATOR
-        for (unsigned i = 0; i < blockSize; i++)
-            pcmBlock[i] = add_sat(pcmBlock[i], mult(scaleFixed, _stageIn[i]));
+        for (unsigned i = 0; i < blockSize; i++) {
+            // Fixed-point multiply and accumulate is spelled out here
+            // to give the compiler the best chance at optimization.
+            int32_t product = (int32_t)scaleFixed * (int32_t)_stageIn[i];
+            product >>= 15;            
+            pcmBlock[i] += product;
+        }
     }
 }
 
@@ -545,7 +550,7 @@ void BridgeCall::setConferenceOutput(const int16_t* pcm48k, unsigned blockSize, 
     // This is also the place where an UNKEY event is requested on
     // the trailing edge of contributed audio.
 
-    int16_t outputPCM48[BLOCK_SIZE_48K];
+    int16_t outputPCM48[BLOCK_SIZE_48K] = { 0 };
     int16_t sources = 0;
 
     // If there is anything in the play queue then contribute it to 
@@ -553,18 +558,21 @@ void BridgeCall::setConferenceOutput(const int16_t* pcm48k, unsigned blockSize, 
     if (!_playQueue.empty()) {
         sources++;
         assert(_playQueue.front().size() == BLOCK_SIZE_48K);
-        memcpy(outputPCM48, _playQueue.front().data(), BLOCK_SIZE_48K * 2);
+        memcpy(outputPCM48, _playQueue.front().data(), BLOCK_SIZE_48K * sizeof(int16_t));
         _playQueue.pop();
-    } else {
-        memset(outputPCM48, 0, BLOCK_SIZE_48K * 2);
     }
 
     // If we are in conference mode then mix in the conference output
     if (_mode == Mode::NORMAL && mixCount > 0) {
         sources++;
-        for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
-            // Sources are scaled individually first to avoid overflow
-            outputPCM48[i] = (outputPCM48[i] / sources) + (pcm48k[i] / sources);
+        if (sources == 1) {
+            for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) 
+                outputPCM48[i] = pcm48k[i];
+        } else {
+            for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) 
+                // Sources are scaled individually first to avoid overflow
+                outputPCM48[i] = (outputPCM48[i] >> 1) + (pcm48k[i] >> 1);
+        }
     }
 
     // If there was any audio contributed then make a message and send it

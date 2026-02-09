@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdint>
+#include <algorithm>
 
 // NOTE: This may be the real ARM library or a mock, depending on the
 // platfom that we are building for.
@@ -83,8 +84,6 @@ public:
     static const int16_t F2_COEFFS[F2_TAPS];
 
     // LPF used for down-sampling from 48K to 16K
-    //static const unsigned F16_TAPS = 31;
-    //static const unsigned F16_TAPS = 45;
     static const unsigned F16_TAPS = 71;
     // REMEMBER: These are in reverse order but since they are symmetrical
     // and an odd number this doesn't matter.
@@ -96,10 +95,10 @@ private:
 
     unsigned _inRate = 0, _outRate = 0;
 
-    // Space for the largest possible filter
     arm_fir_instance_q15 _lpfFilter;
     arm_fir_decimate_instance_q15 _lpfDecimationFilter;
-    static const unsigned MAX_TAPS = 91;
+    // Space for the largest possible filter
+    static constexpr unsigned MAX_TAPS = std::max(F1_TAPS, std::max(F2_TAPS, F16_TAPS));
     int16_t _lpfState[MAX_TAPS + BLOCK_SIZE_48K - 1];
 };
     }
