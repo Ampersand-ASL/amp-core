@@ -31,8 +31,6 @@
 #include "Message.h"
 #include "BridgeCall.h"
 
-#define MAX_CALLS (8)
-
 using json = nlohmann::json;
 
 namespace kc1fsz {
