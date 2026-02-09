@@ -52,6 +52,10 @@
 // The initial margin used by the jitter buffer (ms)
 #define JB_INITIAL_MARGIN_MS (200)
 
+// The largest number of nodes that the telemetry will read out.
+// Needs to be limited to prevent overload of TTS.
+#define MAX_TELEMETRY_NODE_COUNT (8)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -471,13 +475,24 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
 
         // Get a list of the nodes connected
         vector<string> nodes = _bridge->getConnectedNodes();
-        string prompt = "Connected to ";
-        bool first = true;
+        string prompt;
+        char p1[32];
+        if (nodes.size() == 1)
+            snprintf(p1, sizeof(p1), "One connection. ");
+        else 
+            snprintf(p1, sizeof(p1), "%d connections. ", nodes.size());
+        prompt += p1;
+        unsigned count = 0;
         for (auto n : nodes) {
-            if (!first)
+            if (count > 0)
                 prompt += " and ";
+            // Enforce a limit to prevent an overly long prompt
+            if (count > MAX_TELEMETRY_NODE_COUNT) {
+                prompt += "several others";
+                break;
+            }
             prompt += Bridge::addSpaces(n.c_str());
-            first = false;
+            count++;
         }
         prompt += ".";
         requestTTS(prompt.c_str());
