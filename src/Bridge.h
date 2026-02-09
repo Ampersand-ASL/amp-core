@@ -60,13 +60,17 @@ public:
     static std::string addSpaces(const char* text);
 
     /**
-    * @param netLineId The line ID of the IAX network connection.
+     * @param netDestLineId The line ID of the IAX network connection.
+     * @param callSpace The pre-allocated bank of BrideCalls. This is 
+     * passed as a parameter to allow flexibility around the max number
+     * of calls.
+     * @param callSpaceLen The number of calls in the bank.
      */
     Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
         BridgeCall::Mode defaultMode, 
         unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
-        const char* netTestBindAddr,
-        unsigned networkDestLineId);
+        const char* netTestBindAddr, unsigned netDestLineId,
+        BridgeCall* callSpace, unsigned callSpaceLen);
 
     void reset();
 
@@ -117,6 +121,10 @@ public:
 private:
 
     static constexpr auto RESET_VISITOR = [](BridgeCall& s) { s.reset(); return true; };
+    static constexpr auto ACTIVE_PRED = [](const BridgeCall& c) { return c.isActive(); };
+
+    void _visitActiveCalls(std::function<bool(BridgeCall&)> cb);
+    void _visitActiveCalls(std::function<bool(const BridgeCall&)> cb) const;
 
     Log& _log;
     Log& _traceLog;
@@ -132,7 +140,6 @@ private:
     std::vector<std::string> _kerchunkFilterNodes;
     unsigned _kerchunkFilterDelayMs;
 
-    BridgeCall _callSpace[MAX_CALLS];
     fixedvector<BridgeCall> _calls;
 
     // The last time a change was made to the call list (i.e. started or 

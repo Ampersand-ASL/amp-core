@@ -32,7 +32,8 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     BridgeCall::Mode defaultMode, 
     unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
     const char* netTestBindAddr,
-    unsigned networkDestLineId)
+    unsigned networkDestLineId,
+    BridgeCall* callSpace, unsigned callSpaceLen)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
@@ -42,11 +43,11 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _ttsLineId(ttsLineId),
     _netTestLineId(netTestLineId),
     _networkDestLineId(networkDestLineId),
-    _calls(_callSpace, MAX_CALLS) { 
+    _calls(callSpace, callSpaceLen) { 
 
     // One-time (static) setup of all calls
-    for (unsigned i = 0; i < MAX_CALLS; i++)
-        _callSpace[i].init(this, &log, &traceLog, &clock, &_bus, 
+    for (unsigned i = 0; i < callSpaceLen; i++)
+        callSpace[i].init(this, &log, &traceLog, &clock, &_bus, 
             _lineId, i, _ttsLineId, _netTestLineId, netTestBindAddr);
 }
 
@@ -60,17 +61,7 @@ void Bridge::reset() {
 }
 
 unsigned Bridge::getCallCount() const {
-    unsigned result = 0;
-    _calls.visitIf(
-        // Visitor
-        [&result](const BridgeCall& call) { 
-            result++;
-            return true;
-        },
-        // Predicate
-        [](const BridgeCall& s) { return s.isActive(); }
-    );
-    return result;
+    return _calls.countIf(ACTIVE_PRED);
 }
 
 void Bridge::setLocalNodeNumber(const char* nodeNumber) { 
@@ -99,14 +90,11 @@ void Bridge::setParrotLevelThresholds(std::vector<int>& thresholds) {
 
 vector<string> Bridge::getConnectedNodes() const {
     vector<string> result;
-    _calls.visitIf(
-        // Visitor
+    _visitActiveCalls(
         [&result](const BridgeCall& call) { 
             result.push_back(call.getRemoteNodeNumber());
             return true;
-        },
-        // Predicate
-        [](const BridgeCall& s) { return s.isActive(); }
+        }
     );
     return result;
 }
@@ -129,14 +117,11 @@ uint64_t Bridge::getStatusDocStampMs() const {
     maxStampMs = max(maxStampMs, _statusMessageUpdateMs);
 
     // Check each call for more recent activity
-    _calls.visitIf(
-        // Visitor
+    _visitActiveCalls(
         [&maxStampMs](const BridgeCall& call) { 
             maxStampMs = max(call.getStatusDocStampMs(), maxStampMs);
             return true;
-        },
-        // Predicate
-        [](const BridgeCall& s) { return s.isActive(); }
+        }
     );
 
     return maxStampMs;
@@ -159,14 +144,17 @@ json Bridge::getStatusDoc() const {
     // Call-level status
     auto calls = json::array();
 
-    _calls.visitIf(
-        // Visitor
+    _visitActiveCalls(
         [&calls](const BridgeCall& call) { 
-            calls.push_back(call.getStatusDoc());
-            return true;
-        },
-        // Predicate
-        [](const BridgeCall& s) { return s.isActive(); }
+            // Enforce a limit to prevent a giant document
+            if (calls.size() < 16) {
+                calls.push_back(call.getStatusDoc());
+                return true;
+            } 
+            else {
+                return false;
+            }
+        }
     );
 
     root["calls"] = calls;
@@ -411,19 +399,16 @@ void Bridge::audioRateTick(uint32_t tickMs) {
     uint64_t startUs = _clock.timeUs();
 
     // Tick each call so that we have an input frame for each.
-    _calls.visitIf(
-        // Visitor
+    _visitActiveCalls(
         [tickMs](BridgeCall& call) { 
             // Tick the call to get it to produce an audio frame
             call.audioRateTick(tickMs);
             return true;
-        },
-        // Predicate
-        [](const BridgeCall& s) { return s.isActive(); }
+        }
     );
 
     // Perform mixing and create a mixed output for each active call
-    for (unsigned i = 0; i < MAX_CALLS; i++) {
+    for (unsigned i = 0; i < _calls.size(); i++) {
         
         if (!_calls[i].isActive())
             continue;
@@ -431,7 +416,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         // Figure out how many calls we are mixing. Keep in mind that calls only contribute
         // audio to themselves if echo mode is enabled for that call.
         int mixCount = 0;
-        for (unsigned j = 0; j < MAX_CALLS; j++) {
+        for (unsigned j = 0; j < _calls.size(); j++) {
             // Ignore calls that are inactive or are silent
             if (!_calls[j].isActive())
                 continue;
@@ -449,7 +434,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
         // Now do the actual mixing
         if (mixCount > 0) {
-            for (unsigned j = 0; j < MAX_CALLS; j++) {
+            for (unsigned j = 0; j < _calls.size(); j++) {
                 // Ignore calls that are inactive or are silent
                 if (!_calls[j].isActive())
                     continue;
@@ -467,9 +452,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
     }
 
     // Clear all contributions for this tick
-    for (unsigned j = 0; j < MAX_CALLS; j++)
-        if (_calls[j].isActive()) 
-            _calls[j].clearInputAudio();
+    _visitActiveCalls([](BridgeCall& call) { call.clearInputAudio(); });
 
     uint64_t endUs = _clock.timeUs();
     uint64_t durUs = endUs - startUs;
@@ -482,31 +465,29 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 void Bridge::oneSecTick() {
 
     // Tick each call
-    _calls.visitIf(
+    _visitActiveCalls(
         [](BridgeCall& call) { 
             call.oneSecTick();
             return true;
-        },
-        [](const BridgeCall& s) { return s.isActive(); }
+        }
     );
 
-    // Set the outbound talker ID for every call based on a 
-    // call with recent input activity.
+    // If there are any calls with recent talking activity then move that 
+    // talker ID to all active calls.
     bool foundTalker = false;
     string talkerId;
 
     _calls.visitIf(
+        // Visitor
         [&foundTalker, &talkerId](const BridgeCall& call) { 
-            if (call.isInputActiveRecently()) {
-                foundTalker = true;
-                talkerId = call.getInputTalkerId();
-                return false;
-            }
-            else {
-                return true;
-            }
+            foundTalker = true;
+            talkerId = call.getInputTalkerId();
+            return false;
         },
-        [](const BridgeCall& s) { return s.isActive() && s.isNormal(); }
+        // Predicate
+        [](const BridgeCall& s) { 
+            return s.isActive() && s.isNormal() && call.isInputActiveRecently(); 
+        }
     );
 
     // Assuming there is an active talker, assert it on all calls. Note
@@ -525,13 +506,20 @@ void Bridge::oneSecTick() {
 
 void Bridge::tenSecTick() {
     // Tick each call
-    _calls.visitIf(
+    _visitActiveCalls(
         [](BridgeCall& call) { 
             call.tenSecTick();
             return true;
-        },
-        [](const BridgeCall& s) { return s.isActive(); }
+        }
     );
+}
+
+void Bridge::_visitActiveCalls(std::function<bool(BridgeCall&)> cb) {
+    _calls.visitIf(cb, ACTIVE_PRED);
+}
+
+void Bridge::_visitActiveCalls(std::function<bool(const BridgeCall&)> cb) const {
+    _calls.visitIf(cb, ACTIVE_PRED);
 }
 
     }
