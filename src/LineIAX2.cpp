@@ -779,7 +779,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
             // What CODECs are desired by the caller?
             uint32_t desiredCodecs = 0;
-            if (!frame.getIE_uint32(8, &desiredCodecs)) {
+            if (!frame.getIE_uint32(IEType::IAX2_IE_FORMAT, &desiredCodecs)) {
                 _log.info("No desired CODECs provided");
             }
 
