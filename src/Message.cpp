@@ -162,6 +162,7 @@ MessageEmpty::MessageEmpty(const MessageEmpty& other)
 
 MessageEmpty& MessageEmpty::operator=(const MessageEmpty& other) {
     Message::operator=(other);
+    return *this;
 }
 
 }
