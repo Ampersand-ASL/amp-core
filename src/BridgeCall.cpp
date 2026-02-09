@@ -480,7 +480,7 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
         if (nodes.size() == 1)
             snprintf(p1, sizeof(p1), "One connection. ");
         else 
-            snprintf(p1, sizeof(p1), "%d connections. ", nodes.size());
+            snprintf(p1, sizeof(p1), "%d connections. ", (int)nodes.size());
         prompt += p1;
         unsigned count = 0;
         for (auto n : nodes) {
