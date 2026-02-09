@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ * Copyright (C) 2026, Bruce MacKinnon KC1FSZ
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,8 +18,15 @@
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
+#include "kc1fsz-tools/raiiholder.h"
 
 #include "RegisterTask.h"
+
+#ifdef _WIN32
+// The xxd-generated resource which was downloaded from the Curl website
+// at build time.
+#include "cacerts.h"
+#endif
 
 using namespace std;
 
@@ -54,44 +61,64 @@ void RegisterTask::configure(const char* regServerUrl,
 
 void RegisterTask::_doRegister() {     
 
-    _curl = curl_easy_init();
+    CURL* curl = curl_easy_init();
+    // Responsible for freeing resource on exit
+    raiiholder<CURL> curlHolder(curl, [](CURL* c) { curl_easy_cleanup(c); });
 
-    curl_easy_setopt(_curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(_curl, CURLOPT_USERAGENT, AST_CURL_USER_AGENT);
-    curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, _writeCallback);
-    curl_easy_setopt(_curl, CURLOPT_WRITEDATA, this);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, AST_CURL_USER_AGENT);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, _writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+
+#ifdef _WIN32    
+    // On Windows we statically link the Certificate Authority root
+    // keys to avoid deployment hassles.
+    // See: https://curl.se/libcurl/c/CURLOPT_CAINFO_BLOB.html
+    struct curl_blob blob;
+    blob.data = curl_cacerts;
+    blob.len = strlen((const char*)curl_cacerts);
+    blob.flags = CURL_BLOB_COPY;
+    curl_easy_setopt(curl, CURLOPT_CAINFO_BLOB, &blob);
+#endif
+
     // Cache the CA cert bundle in memory for a week 
-    curl_easy_setopt(_curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
-    _headers = curl_slist_append(_headers, "Content-Type: application/json");
-    curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, _headers);
+    curl_easy_setopt(curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
+
+    curl_slist* headers = 0;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    // Responsible for freeing resource on exit
+    raiiholder<curl_slist> headerHolder(headers, 
+        [](curl_slist* h) { curl_slist_free_all(h); });
+
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
     // Populate the JSON template with the necessary information.
     snprintf(_jsonData, JSON_DATA_SIZE, JSON_TEMPLATE, _iaxPort, 
         _nodeNumber.c_str(), _nodeNumber.c_str(), _password.c_str());
 
-    curl_easy_setopt(_curl, CURLOPT_URL, _regServerUrl.c_str());
-    curl_easy_setopt(_curl, CURLOPT_FORBID_REUSE, 1L); 
+    curl_easy_setopt(curl, CURLOPT_URL, _regServerUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L); 
 
     // NOTE: Library doesn't make a copy of this data!! So we need to make 
     // sure it lasts beyond the scope of this function call.
-    curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, _jsonData);
-    curl_easy_setopt(_curl, CURLOPT_POSTFIELDSIZE, (long)strlen(_jsonData));
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, _jsonData);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(_jsonData));
 
-    curl_easy_setopt(_curl, CURLOPT_POST, 1L);
- 	curl_easy_setopt(_curl, CURLOPT_CONNECTTIMEOUT, 15L);
-	curl_easy_setopt(_curl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+ 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
     
     _resultArea[0] = 0;
     _resultAreaLen = 0;
 
-    CURLcode res = curl_easy_perform(_curl);
+    CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         _log.error("ASL node registration failed (1) for %s %d", 
             _nodeNumber.c_str(), res);
     }
     else {
         long http_code = 0;
-        curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         char* r0 = strstr(_resultArea, "successfully registered");
         if (http_code == 200 && r0 != 0) {
             _lastGoodRegistrationMs = _clock.time();
@@ -101,11 +128,6 @@ void RegisterTask::_doRegister() {
             _log.error("  Response body: %s", _resultArea);
         }
     }
-
-    curl_slist_free_all(_headers);
-    curl_easy_cleanup(_curl);
-    _headers = 0;
-    _curl = 0;
 }
 
 void RegisterTask::tenSecTick() {

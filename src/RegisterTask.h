@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ * Copyright (C) 2026, Bruce MacKinnon KC1FSZ
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,9 +68,6 @@ private:
     uint32_t _regIntervalMs;
     uint32_t _nextRegisterMs = 0;
     uint32_t _lastGoodRegistrationMs = 0;
-
-    CURL* _curl = 0;
-    curl_slist* _headers = 0;
 
     static const unsigned JSON_DATA_SIZE = 128;
     char _jsonData[JSON_DATA_SIZE];
