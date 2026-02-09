@@ -450,7 +450,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
     }
 
     // Clear all contributions for this tick
-    _visitActiveCalls([](BridgeCall& call) { call.clearInputAudio(); });
+    _visitActiveCalls([](BridgeCall& call) { call.clearInputAudio(); return true; });
 
     uint64_t endUs = _clock.timeUs();
     uint64_t durUs = endUs - startUs;
@@ -483,8 +483,8 @@ void Bridge::oneSecTick() {
             return false;
         },
         // Predicate
-        [](const BridgeCall& s) { 
-            return s.isActive() && s.isNormal() && call.isInputActiveRecently(); 
+        [](const BridgeCall& c) { 
+            return c.isActive() && c.isNormal() && c.isInputActiveRecently(); 
         }
     );
 
