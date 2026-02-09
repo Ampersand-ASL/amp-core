@@ -46,7 +46,7 @@ static const unsigned BLOCK_PERIOD_MS = 20;
 /**
  * Converts one block of 16K PCM to an audio Message (TTS_AUDIO) that is encoded in 48K LE.
  */
-static Message makeTTSAudioMsg(const Message& req, 
+static MessageCarrier makeTTSAudioMsg(const Message& req, 
     const int16_t* pcm16, unsigned pcm16Len, amp::Resampler& ttsResampler) {
 
     assert(pcm16Len == BLOCK_SIZE_16K);
@@ -61,7 +61,7 @@ static Message makeTTSAudioMsg(const Message& req,
     uint8_t buf[BLOCK_SIZE_48K * sizeof(int16_t)];
     trans.encode(pcm48, BLOCK_SIZE_48K, buf, BLOCK_SIZE_48K * sizeof(int16_t));
 
-    Message res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 0, 0);
+    MessageCarrier res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 0, 0);
     res.setSource(req.getDestBusId(), req.getDestCallId());
     res.setDest(req.getSourceBusId(), req.getSourceCallId());
     return res;
@@ -69,8 +69,8 @@ static Message makeTTSAudioMsg(const Message& req,
 
 // ------ Text To Speach Thread ----------------------------------------------
 
-void ttsLoop(Log* loga, threadsafequeue2<Message>* ttsQueueReq,
-    threadsafequeue2<Message>* ttsQueueRes, std::atomic<bool>* runFlag) {
+void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
+    threadsafequeue2<MessageCarrier>* ttsQueueRes, std::atomic<bool>* runFlag) {
 
     Log& log = *loga;
 
@@ -108,7 +108,7 @@ void ttsLoop(Log* loga, threadsafequeue2<Message>* ttsQueueReq,
 
         // Attempt to take a TTS request off the request queue. Use a long
         // timeout to avoid high CPU
-        Message req;
+        MessageCarrier req;
         if (ttsQueueReq->try_pop(req, 500)) {
             if (req.getType() == Message::Type::TTS_REQ) {
 
@@ -151,7 +151,7 @@ void ttsLoop(Log* loga, threadsafequeue2<Message>* ttsQueueReq,
                 }
 
                 // Send a TTS_END signal so the call will know that this TTS process is finished.
-                Message res(Message::Type::TTS_END, 0, 0, 0, 0, 0);
+                MessageEmpty res(Message::Type::TTS_END, 0, 0, 0);
                 res.setSource(req.getDestBusId(), req.getDestCallId());
                 res.setDest(req.getSourceBusId(), req.getSourceCallId());
                 ttsQueueRes->push(res);

@@ -298,9 +298,7 @@ void Bridge::consume(const Message& msg) {
             if (!payload.originated && call.isNormal()) {
                 if (!_greetingText.empty())       
                     call.requestTTS(_greetingText.c_str());
-            } else 
-                // #### TODO: REMOVE TEMP
-                _log.info("Not playing greeting since we originated call");
+            } 
 
             // Announce the new connection to all of the *other* active calls
             // who may have commanded this connection.

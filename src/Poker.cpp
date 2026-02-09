@@ -197,8 +197,8 @@ Poker::Result Poker::poke(Log& log, Clock& clock, const char* bindAddr,
 }
 
 void Poker::loop(Log* log, Clock* clock, 
-    threadsafequeue2<Message>* reqQueue,
-    threadsafequeue2<Message>* respQueue, std::atomic<bool>* runFlag) {
+    threadsafequeue2<MessageCarrier>* reqQueue,
+    threadsafequeue2<MessageCarrier>* respQueue, std::atomic<bool>* runFlag) {
 
     amp::setThreadName("NetDiag");
     amp::lowerThreadPriority();
@@ -210,14 +210,14 @@ void Poker::loop(Log* log, Clock* clock,
         // Attempt to take a request off the request queue. This has a 
         // long timeout to avoid high CPU, but not too long because 
         // this block is on the critical path of exiting the thread.
-        Message msg;
+        MessageCarrier msg;
         if (reqQueue->try_pop(msg, 500)) {
             if (msg.getType() == Message::Type::NET_DIAG_1_REQ) {
                 Poker::Request req;
                 memcpy(&req, msg.body(), sizeof(req));
                 Poker::Result r = Poker::poke(*log, *clock, req);
-                Message res(Message::Type::NET_DIAG_1_RES, 0, 
-                    sizeof(Poker::Result),  (const uint8_t*)&r, 0, 0);
+                MessageWrapper res(Message::Type::NET_DIAG_1_RES, 0, 
+                    sizeof(Poker::Result), (const uint8_t*)&r, 0, 0);
                 res.setSource(msg.getDestBusId(), msg.getDestCallId());
                 res.setDest(msg.getSourceBusId(), msg.getSourceCallId());
                 respQueue->push(res);

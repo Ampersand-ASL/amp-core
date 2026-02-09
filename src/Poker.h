@@ -67,7 +67,7 @@ public:
      * @param runFlag Keep this set to true until it's time to exit the loop.
      */
     static void loop(Log* log, Clock* clock, 
-        threadsafequeue2<Message>* reqQueue, threadsafequeue2<Message>* respQueue,
+        threadsafequeue2<MessageCarrier>* reqQueue, threadsafequeue2<MessageCarrier>* respQueue,
         std::atomic<bool>* runFlag);
 };
 
