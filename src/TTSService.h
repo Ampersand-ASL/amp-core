@@ -34,8 +34,8 @@ class Log;
  * @param resQueue Response queue.
  * @param runFlag Used to exit the thread.
  */
-void ttsLoop(Log* log, threadsafequeue2<Message>* reqQueue,
-    threadsafequeue2<Message>* resQueue, std::atomic<bool>* runFlag);
+void ttsLoop(Log* log, threadsafequeue2<MessageCarrier>* reqQueue,
+    threadsafequeue2<MessageCarrier>* resQueue, std::atomic<bool>* runFlag);
 
 }
 
