@@ -179,8 +179,11 @@ private:
 class MessageEmpty : public Message {
 public:
 
+    // NOTE: Pay close attention to the C++ "rule of 3/5/0"
+    MessageEmpty();
     MessageEmpty(Type type, unsigned format, uint32_t origMs, uint32_t rxMs);
     MessageEmpty(const MessageEmpty& other);
+    MessageEmpty& operator=(const MessageEmpty&);
 
     virtual const uint8_t* body() const { return 0; }
 
@@ -188,10 +191,6 @@ public:
      * Shortcut constructor
      */
     static MessageEmpty signal(SignalType st) { return MessageEmpty(Type::SIGNAL, st, 0, 0); }
-
-protected:
-
-    MessageEmpty();
 };
 
 struct PayloadCallStart {

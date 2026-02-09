@@ -150,7 +150,7 @@ MessageWrapper::MessageWrapper(Type type, unsigned format, unsigned size, const 
 }
 
 MessageEmpty::MessageEmpty() 
-: Message() {
+:   Message() {
 }
 
 MessageEmpty::MessageEmpty(Type type, unsigned format, uint32_t origMs, uint32_t rxMs) 
@@ -159,5 +159,9 @@ MessageEmpty::MessageEmpty(Type type, unsigned format, uint32_t origMs, uint32_t
 
 MessageEmpty::MessageEmpty(const MessageEmpty& other) 
 :   Message(other) { }
+
+MessageEmpty& MessageEmpty::operator=(const MessageEmpty& other) {
+    Message::operator=(other);
+}
 
 }

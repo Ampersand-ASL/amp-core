@@ -98,11 +98,7 @@ void SignalIn::_pollHidStatus() {
 
 void SignalIn::_processHidPacket(const uint8_t* packet, unsigned packetLen) {
     bool ptt = (packet[_hidOffset] & _hidMask) != 0;
-    MessageEmpty msg;
-    if (ptt) 
-        msg = MessageEmpty::signal(_sigTypeOn);
-    else 
-        msg = MessageEmpty::signal(_sigTypeOff);
+    MessageEmpty msg = MessageEmpty::signal((ptt) ? _sigTypeOn : _sigTypeOff);
     msg.setDest(_radioLineId, DEST_CALL_ID);
     _bus.consume(msg);
 }
@@ -116,10 +112,6 @@ void SignalIn::consume(const Message& frame) {
 
 int SignalIn::getPolls(pollfd* fds, unsigned fdsCapacity) {
     return 0;
-}
-
-bool SignalIn::run2() {
-    return false;
 }
 
 void SignalIn::audioRateTick(uint32_t tickMs) {

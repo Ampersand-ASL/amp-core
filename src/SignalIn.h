@@ -46,7 +46,6 @@ public:
     // ----- Runnable ---------------------------------------------------------
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
-    virtual bool run2();
     virtual void audioRateTick(uint32_t tickMs);
 
 private:
