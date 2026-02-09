@@ -54,7 +54,7 @@
 
 // The largest number of nodes that the telemetry will read out.
 // Needs to be limited to prevent overload of TTS.
-#define MAX_TELEMETRY_NODE_COUNT (8)
+#define MAX_TELEMETRY_NODE_COUNT (4)
 
 using namespace std;
 

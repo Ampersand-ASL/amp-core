@@ -46,7 +46,7 @@
 using namespace std;
 using namespace kc1fsz;
 
-static const unsigned lineCount = 16;
+static const unsigned lineCount = 128;
 static LineIAX2::Call iax2CallSpace[lineCount];
 
 int main(int, const char**) {
@@ -90,7 +90,7 @@ int main(int, const char**) {
         char localNode[32];
         snprintf(localNode, sizeof(localNode), "%d", 1000 + i);
         //line->call(localNode, "radio@127.0.0.1:4569/2000,NONE");
-        line->call(localNode, "672731");
+        line->call(localNode, "672731", CODECType::IAX2_CODEC_G711_ULAW);
     }
 
     int count = 0;

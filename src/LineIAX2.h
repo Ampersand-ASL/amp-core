@@ -174,7 +174,8 @@ public:
      *   -2 max call limit exceeded, -5 address format error.
      * 
      */
-    int call(const char* localNumber, const char* targetNode);
+    int call(const char* localNumber, const char* targetNode,
+        CODECType desiredCodec = CODECType::IAX2_CODEC_SLIN_16K);
 
     /**
      * Drops the target node number.
@@ -293,7 +294,13 @@ public:
         unsigned char publicKeyBin[32];
         sockaddr_storage peerAddr;
         uint32_t supportedCodecs = 0;
+        uint32_t desiredCodecs = 0;
+
+        // Relevant when we are initiating the call
+        CODECType desiredCodec = CODECType::IAX2_CODEC_SLIN_16K;
+        // This is the CODEC that was actually assigned to the call
         CODECType codec = CODECType::IAX2_CODEC_UNKNOWN;
+
         uint32_t lastFrameRxMs = 0;
         uint32_t terminationMs = 0;
         

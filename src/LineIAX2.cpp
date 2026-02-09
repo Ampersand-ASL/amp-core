@@ -266,7 +266,8 @@ void LineIAX2::close() {
 } 
 
 // TEST: radio@52.8.197.124:4569/61057,NONE
-int LineIAX2::call(const char* localNumber, const char* targetNode) {  
+int LineIAX2::call(const char* localNumber, const char* targetNode,
+    CODECType desiredCodec) {  
 
     // It's possible that the node has been specified in explicit 
     // format: radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
@@ -346,6 +347,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode) {
     call.reset();
     call.localNumber = localNumber;
     call.remoteNumber = targetNumber;
+    call.desiredCodec = desiredCodec;
     call.side = Call::Side::SIDE_CALLER;
     // Move back a few ms to make sure that the elapsed time is always positive
     // in some of the dispense operations below.
@@ -775,6 +777,12 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
+            // What CODECs are desired by the caller?
+            uint32_t desiredCodecs = 0;
+            if (!frame.getIE_uint32(8, &desiredCodecs)) {
+                _log.info("No desired CODECs provided");
+            }
+
             // All good, allocate the call
             int callIx = _allocateCallIx();
             if (callIx == -1) {
@@ -800,6 +808,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.lastLagrqMs = _clock.time();
             call.lastFrameRxMs = _clock.time();
             call.supportedCodecs = supportedCodecs;
+            call.desiredCodecs = desiredCodecs;
 
             // Explicit ACK 
             _sendACK(0, call);
@@ -807,8 +816,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             if (_authorizeWithAuthreq) {
                 // Go out to get the caller's public key
                 call.dnsRequestId = _dnsRequestIdCounter++;
-                char hostName[65];
-                snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
+                char hostName[128];
+                snprintf(hostName, sizeof(hostName), "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
                 _log.info("Call %u starting AUTHREQ process for %s", call.localCallId, hostName);
                 // Start the DNS lookup process
                 if (_sendDNSRequestTXT(call.dnsRequestId, hostName) != 0) {
@@ -821,8 +830,9 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             else {
                 // Make an IP address lookup request. 
                 call.dnsRequestId = _dnsRequestIdCounter++;
-                char hostName[65];
-                snprintf(hostName, 65, "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
+                char hostName[128];
+                snprintf(hostName, sizeof(hostName), 
+                    "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
                 // Start the DNS lookup process
                 if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
                     _log.error("Unable to start address validation, ignoring call");
@@ -1979,18 +1989,25 @@ bool LineIAX2::_progressCall(Call& call) {
             frame.addIE_str(10, "en", 2);
             frame.addIE_str(6, call.callUser);
             // Desired CODEC
-            frame.addIE_uint32(9, CODECType::IAX2_CODEC_SLIN_16K);
-            // ##### TODO
-            uint8_t desiredCodecBuf[9] = { 0,0,0,0,0,8,0,0,0 };
-            // Desired 64-bit CODEC
-            //frame.addIE_str(56, (const char*)desiredCodecBuf, 9);        
-            frame.addIE_str(0x38, (const char*)desiredCodecBuf, 9);        
+            if (call.desiredCodec == CODECType::IAX2_CODEC_SLIN_16K) {
+                frame.addIE_uint32(IEType::IAX2_IE_FORMAT, CODECType::IAX2_CODEC_SLIN_16K);
+                // ##### TODO
+                uint8_t desiredCodecBuf[9] = { 0,0,0,0,0,8,0,0,0 };
+                // Desired 64-bit CODEC
+                frame.addIE_str(0x38, (const char*)desiredCodecBuf, 9);        
+            } else {
+                frame.addIE_uint32(IEType::IAX2_IE_FORMAT, CODECType::IAX2_CODEC_G711_ULAW);
+                // ##### TODO
+                uint8_t desiredCodecBuf[9] = { 0,0,0,0,0,0,0,0,4 };
+                // Desired 64-bit CODEC
+                frame.addIE_str(0x38, (const char*)desiredCodecBuf, 9);        
+            }
             // Actual CODEC capability
-            frame.addIE_uint32(8, CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_16K );
+            frame.addIE_uint32(8, 
+                CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_16K );
             // ##### TODO
             uint8_t actualCodecBuf[9] = { 0,0,0,0,0,8,0,0,4 };
             // Actual 64-bit CODEC
-            //frame.addIE_str(55, (const char*)actualCodecBuf, 9);
             frame.addIE_str(0x37, (const char*)actualCodecBuf, 9);
             // CPE ADSI - "Analog display services interface (ADSI)"
             // TODO: WHAT IS THIS FOR?
@@ -2029,7 +2046,14 @@ bool LineIAX2::_progressCall(Call& call) {
             const uint8_t* codec64 = 0;
             const uint8_t buf_G711_ULAW[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 4 };
             const uint8_t buf_SLIN_16K[9] = { 0, 0, 0, 0, 0, 8, 0, 0, 0 };
-            if (call.supportedCodecs & CODECType::IAX2_CODEC_SLIN_16K) {
+            // Look for the explicit downgrade
+            if ((call.desiredCodecs & CODECType::IAX2_CODEC_G711_ULAW) && 
+                (call.supportedCodecs & CODECType::IAX2_CODEC_G711_ULAW)) {
+                call.codec = CODECType::IAX2_CODEC_G711_ULAW;
+                codec64 = buf_G711_ULAW;
+            } 
+            // Otherwise, we control
+            else if (call.supportedCodecs & CODECType::IAX2_CODEC_SLIN_16K) {
                 call.codec = CODECType::IAX2_CODEC_SLIN_16K;
                 codec64 = buf_SLIN_16K;
             } else if (call.supportedCodecs & CODECType::IAX2_CODEC_G711_ULAW) {
@@ -2613,6 +2637,8 @@ void LineIAX2::Call::reset() {
     calltoken.clear();
     memset(&peerAddr, 0, sizeof(peerAddr));
     supportedCodecs = 0;
+    desiredCodecs = 0;
+    desiredCodec = CODECType::IAX2_CODEC_SLIN_16K;
     codec = CODECType::IAX2_CODEC_UNKNOWN;
     lastFrameRxMs = 0;
     terminationMs = 0;
