@@ -76,7 +76,8 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 
 LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     MessageConsumer& bus, NumberAuthorizer* destAuth, NumberAuthorizer* sourceAuth,
-    LocalRegistry* locReg, unsigned destLineId, const char* publicUser)
+    LocalRegistry* locReg, unsigned destLineId, const char* publicUser,
+    LineIAX2::Call* callSpace, unsigned callSpaceLen)
 :   _log(log),
     _traceLog(traceLog),
     _clock(clock),
@@ -87,7 +88,9 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _locReg(locReg),
     _destLineId(destLineId),
     _publicUser(publicUser),
-    _startTime(clock.time()) {
+    _startTime(clock.time()),
+    _calls(callSpace),
+    _maxCalls(callSpaceLen) {
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
     _pokeNodeNumber[0] = 0;
@@ -249,7 +252,7 @@ int LineIAX2::open(short addrFamily, int listenPort) {
 void LineIAX2::close() {   
 
     // Clean up all of the calls
-    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++)
+    for (unsigned i = 0; i < _maxCalls; i++)
         _calls[i].reset();
 
     if (_iaxSockFd) 
@@ -977,8 +980,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
         bool recognizedCall = false;        
         unsigned recognizedCallIx = 0;
 
-        for (unsigned i = 0; i < MAX_IAX2_CALLS; i++) {
-            Call& call = _calls[i];
+        for (unsigned i = 0; i < _maxCalls; i++) {
+            const Call& call = _calls[i];
             if (call.active && call.localCallId == destCallId) {
                 recognizedCall = true;
                 recognizedCallIx = i;
@@ -1400,32 +1403,12 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         call.lastPingTimeMs = _clock.time() - call.lastPingSentMs;
 
-        // Eliminate gross outliners, smooth out the delays a bit
+        // Eliminate gross outliers, smooth out the delays a bit
         if (call.lastPingTimeMs < 500) {
             call.pingCount++;
             // Assume the one-way delay is half the round-trip ping.
             call.setNetworkDelayEstimate(call.lastPingTimeMs / 2, call.pingCount == 1);
         }
-
-        // Calculate using the remote station's clock 
-        int32_t estimatedDelay1 = 
-            (int32_t)call.localElapsedMs(_clock) - (int32_t)frame.getTimeStamp();
-        // Calulate the difference between the local clock and the remote clock.
-        // This is done by looking at the difference between the arrival time
-        // of the packet and the timestamp that the remote said created the packet,
-        // less the estimated network lag from above.
-        //
-        // A positive lag means the remote clock is behind, a negative lag means the 
-        // remote clock is ahead.
-        //
-        // Or: frameTimeStamp + lag = localtime
-        //
-        // #### TODO: Eliminate gross outliers and put somesmoothing here
-        call.remoteClockLagEstimateMs = estimatedDelay1 - call.networkDelayEstimateMs;
-
-        //_log.info("Ping network delay %d / %d, remote clock lag %d", call.lastPingTimeMs / 2,
-        //    call.networkDelayEstimateMs, 
-        //    call.remoteClockLagEstimateMs);    
     }
     // VOICE
     else if (frame.isVOICE()) {
@@ -1660,7 +1643,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
  }
 
 int LineIAX2::_allocateCallIx() {
-    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++)
+    for (unsigned i = 0; i < _maxCalls; i++)
         if (!_calls[i].active)
             return i;
     return -1;
@@ -2574,7 +2557,7 @@ void LineIAX2::tenSecTick() {
 
 void LineIAX2::_visitActiveCallsIf(std::function<void(LineIAX2::Call& call)> v,
     std::function<bool(const LineIAX2::Call& call)> predicate) {
-    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++) {
+    for (unsigned i = 0; i < _maxCalls; i++) {
         Call& call = _calls[i];
         if (call.active && predicate(call))
             v(call);
@@ -2583,7 +2566,7 @@ void LineIAX2::_visitActiveCallsIf(std::function<void(LineIAX2::Call& call)> v,
 
 void LineIAX2::_visitActiveCallsIf(std::function<void(const LineIAX2::Call& call)> v,
     std::function<bool(const LineIAX2::Call& call)> predicate) const {
-    for (unsigned i = 0; i < MAX_IAX2_CALLS; i++) {
+    for (unsigned i = 0; i < _maxCalls; i++) {
         const Call& call = _calls[i];
         if (call.active && predicate(call))
             v(call);
@@ -2633,7 +2616,6 @@ void LineIAX2::Call::reset() {
     codec = CODECType::IAX2_CODEC_UNKNOWN;
     lastFrameRxMs = 0;
     terminationMs = 0;
-    remoteClockLagEstimateMs = 0;
     networkDelayEstimateMs = 0;
     _ndi = 0;
     _ndi_1 = 0;
@@ -2649,9 +2631,6 @@ void LineIAX2::Call::reset() {
     lastRxVoiceFrameMs = 0;
     lastTxVoiceFrameMs = 0;
     _callInitiatedMs = 0;
-    localTalkerName.clear();
-    remoteTalkerName.clear();
-    lastLocalTalkerNameUpdateMs = 0;
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?

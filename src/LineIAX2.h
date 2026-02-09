@@ -81,6 +81,8 @@ public:
 class LineIAX2 : public Line {
 public:
 
+    class Call;
+
     /**
      * @param consumer This is the sink interface that received messages
      * will be sent to. VERY IMPORTANT: Audio frames will not have been 
@@ -97,9 +99,8 @@ public:
      */
     LineIAX2(Log& log, Log& traceLog, Clock& clock, int lineId, MessageConsumer& consumer,
         NumberAuthorizer* destAuthorizer, NumberAuthorizer* sourceAuthorizer, 
-        LocalRegistry* locReg, unsigned destLineId, const char* publicUser);
-
-    // Configuration 
+        LocalRegistry* locReg, unsigned destLineId, const char* publicUser,
+        LineIAX2::Call* callSpace, unsigned callSpaceLen);
 
     /**
      * Controls the root of the DNS queries that are used to resolve IP addresses
@@ -203,7 +204,7 @@ public:
      * Used to identify the active talker for outbound voice 
      * traffic for the designed local call.
      */
-    void setLocalTalkerName(unsigned localCallId, const char* name);
+    //void setLocalTalkerName(unsigned localCallId, const char* name);
     
     /**
      * @returns The name of who is talking on the other side of the 
@@ -227,8 +228,6 @@ public:
      * descriptors that need to be monitored for asynchronous activity.
      */
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
-
-private:
 
     // There is one instance of this call for each active call on the Channel.
     // This is where all of the call-specific state should live.
@@ -298,12 +297,6 @@ private:
         uint32_t lastFrameRxMs = 0;
         uint32_t terminationMs = 0;
         
-        // A positive lag means the remote clock is behind, a negative lag means the 
-        // remote clock is ahead.
-        //
-        // Or: frameTimeStamp + lag = localtime
-        int32_t remoteClockLagEstimateMs = 0;
-
         // Used to smooth/estimate network delay
         int32_t networkDelayEstimateMs = 0;
         float _ndi = 0;
@@ -331,12 +324,6 @@ private:
         uint64_t lastTxVoiceFrameMs = 0;
         // When a NEW request is sent out during call initiation
         uint32_t _callInitiatedMs = 0;
-
-        fixedstring localTalkerName;
-        fixedstring remoteTalkerName;
-        // The last time that the talker identification was sent to the 
-        // peer on of this call.
-        int32_t lastLocalTalkerNameUpdateMs;
         
         void reset();
 
@@ -388,6 +375,8 @@ private:
 
     friend class Call;
 
+private:
+
     Log& _log;
     Log& _traceLog;
     Clock& _clock;
@@ -424,8 +413,8 @@ private:
     // initial connection.
     int _localCallIdCounter = 20;
 
-    static const unsigned MAX_IAX2_CALLS = 8;
-    Call _calls[MAX_IAX2_CALLS];
+    Call* const _calls;
+    const unsigned _maxCalls;
 
     // Enables detailed network tracing
     bool _trace = false;

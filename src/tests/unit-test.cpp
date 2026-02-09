@@ -25,6 +25,7 @@
 #include "Bridge.h"
 #include "NullConsumer.h"
 #include "KerchunkFilter.h"
+#include "LineIAX2.h"
 
 #include "TestUtil.h"
 #include "dsp_util.h"
@@ -196,6 +197,7 @@ static void testRound() {
 }
 
 static void sizeCheck1() {
+    cout << "LineIAX2::Call   " << sizeof(LineIAX2::Call) << endl;
     cout << "Message          " << sizeof(Message) << endl;
     cout << "Message x 64     " << sizeof(Message) * 64 << endl;
     cout << "BridgeCall       " << sizeof(amp::BridgeCall) << endl;
