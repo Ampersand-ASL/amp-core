@@ -1200,7 +1200,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // If the sequence number is wrong then ignore the message (retransmit 
     // requests will clean this up later).
     else {
-        _log.info("Ignoring high sequence frame %d", 
+        _log.info("Call %u/%u ignoring high sequence frame %d", 
+            call.localCallId, call.remoteCallId,
             (int)frame.getOSeqNo());
         return;
     }
@@ -2384,8 +2385,8 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
     // on the network immediately.
     call.reTx.poll(call.localElapsedMs(_clock), 
         // The callback that will be fired for anything that reTx needs to send
-        [context=this, call](const IAX2FrameFull& frame) {
-            context->_sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
+        [this, &call](const IAX2FrameFull& frame) {
+            _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
         });
 }
 
