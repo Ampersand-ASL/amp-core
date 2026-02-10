@@ -238,6 +238,12 @@ public:
 
         Call();
 
+        void init(LineIAX2* l) {
+            line = l;
+            // Pass the log into the re-transmission buffer
+            reTx.init(&line->_log);
+        }
+
         enum State {
             STATE_NONE,
             STATE_LOOKUP_0,
@@ -271,6 +277,7 @@ public:
             SIDE_CALLED
         };
 
+        LineIAX2* line = 0;
         bool active = false;
         Side side = Side::SIDE_NONE;
         State state = State::STATE_NONE;

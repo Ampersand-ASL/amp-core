@@ -91,6 +91,9 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _startTime(clock.time()),
     _calls(callSpace),
     _maxCalls(callSpaceLen) {
+    // One-time initialization of calls
+    for (unsigned i = 0; i < callSpaceLen; i++)
+        _calls[i].init(this);
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
     _pokeNodeNumber[0] = 0;
@@ -174,6 +177,19 @@ int LineIAX2::open(short addrFamily, int listenPort) {
     if (setsockopt(iaxSockFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) < 0) {
         _log.error("IAX setsockopt SO_REUSEADDR failed (%d)", errno);
         return -1;
+    }
+
+    // Get the current send buffer size
+    {
+        int buffer_size;
+        socklen_t optlen = sizeof(buffer_size);
+        if (getsockopt(iaxSockFd, SOL_SOCKET, SO_SNDBUF, &buffer_size, &optlen) < 0) {
+            _log.error("Unable to get TX buffer size");
+        }
+        else {
+            if (buffer_size < 200000)
+                _log.warn("Low TX buffer size %d", buffer_size);
+        }
     }
 
     struct sockaddr_storage servaddr;
@@ -1200,9 +1216,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // If the sequence number is wrong then ignore the message (retransmit 
     // requests will clean this up later).
     else {
-        _log.info("Call %u/%u ignoring high sequence frame %d", 
+        _log.info("Call %u/%u ignoring high sequence frame %d, expected %d", 
             call.localCallId, call.remoteCallId,
-            (int)frame.getOSeqNo());
+            (int)frame.getOSeqNo(), (int)call.expectedInSeqNo);
         return;
     }
 
@@ -1344,7 +1360,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
              frame.getSubclass() == ControlSubclass::IAX2_SUBCLASS_CONTROL_ANSWER) {
         
-        _log.info("Call %u got ANSWER", call.localCallId);            
+        //_log.info("Call %u got ANSWER", call.localCallId);            
 
         if (call.side == Call::Side::SIDE_CALLER) {
             if (call.state == Call::State::STATE_LINKED)
@@ -1355,11 +1371,11 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     }
     // STOP_SOUNDS
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && frame.getSubclass() == 255) {
-        _log.info("Call %u got STOP_SOUNDS", call.localCallId);
+        //_log.info("Call %u got STOP_SOUNDS", call.localCallId);
     }
     // KEY
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && frame.getSubclass() == 12) {
-        _log.info("Call %u got KEY", call.localCallId);            
+        //_log.info("Call %u got KEY", call.localCallId);            
     }
     // UNKEY
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
@@ -2789,6 +2805,12 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             log.info("Hanging up inactive call %d", localCallId);
             line._hangupCall(*this);
         }
+    }
+
+    // Monitor retransmit buffer
+    if (reTx.getUsed() > reTx.getCapacity() / 2) {
+        log.info("Call %u/%u retransmission buffer at %d", localCallId, remoteCallId,
+            reTx.getUsed());
     }
 
     // Look for things waiting to go out on the network (like retransmits)

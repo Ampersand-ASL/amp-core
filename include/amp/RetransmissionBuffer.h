@@ -86,6 +86,16 @@ public:
     virtual bool empty() const = 0;
 
     /**
+     * @returns Amount of capacity in the buffer.
+     */
+    virtual unsigned getCapacity() const = 0;
+
+    /**
+     * @returns Number of entries used
+     */
+    virtual unsigned getUsed() const = 0;
+
+    /**
      * @returns The number of times a message needed to be retransmitted.
      */
     virtual unsigned getRetransmitCount() const = 0;

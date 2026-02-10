@@ -24,11 +24,19 @@
 #include "amp/RetransmissionBuffer.h"
 
 namespace kc1fsz {
+
+class Log;
+
     namespace amp {
+
 class RetransmissionBufferStd : public RetransmissionBuffer {
 public:
 
     RetransmissionBufferStd();
+
+    void init(Log* log) { 
+        _log = log;
+    }
 
     // ----- From RetransmissionBuffer ----------------------------------------
 
@@ -40,6 +48,8 @@ public:
         std::function<void(const IAX2FrameFull&)> sink);
     virtual bool empty() const { return _buffer.empty(); }
     virtual unsigned getRetransmitCount() const { return _retransmitCount; }
+    virtual unsigned getCapacity() const { return BUFFER_CAPACITY; }
+    virtual unsigned getUsed() const { return _buffer.size(); }
 
     /**
      * A strange kind of comparison that takes into account wrapping,
@@ -66,6 +76,8 @@ private:
     // Is appears that we need to be pretty aggressive about this 
     // to keep Asterisk happy.
     static const unsigned RETRANSMIT_INTERVAL_MS = 2000;
+
+    Log* _log = 0;
 };
     }
 }

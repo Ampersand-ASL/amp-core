@@ -14,7 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <iostream>
+//#include <iostream>
+
+#include "kc1fsz-tools/Log.h"
 #include "amp/RetransmissionBufferStd.h"
 
 using namespace std;
@@ -42,6 +44,10 @@ bool RetransmissionBufferStd::setExpectedSeq(uint8_t n) {
     // ignored.
     if (compareWrap(n, _nextExpectedSeq) >= 0) 
         _nextExpectedSeq = n;
+    else {
+        _log->info("Ignoring attempt to lower expectation from %d to %u",
+            _nextExpectedSeq, n);
+    }
 
     // Remove everything that was just acknowledged.
     _buffer.removeIf([mark = _nextExpectedSeq](const IAX2FrameFull& frame) {
@@ -92,6 +98,9 @@ void RetransmissionBufferStd::poll(uint32_t elapsedMs,
                 // Make a copy of the frame with the retransmission flag on
                 IAX2FrameFull rf = frame;
                 rf.setRetransmit();
+                context->_log->info("Call %d/%d retransmitting %d",
+                        frame.getDestCallId(), frame.getSourceCallId(), 
+                        frame.getOSeqNo());
                 sink(rf);
                 context->_retransmitCount++;
                 return true;
@@ -136,7 +145,6 @@ void RetransmissionBufferStd::retransmitToSeq(uint8_t targetSeq,
     );
 }
 
-
 bool RetransmissionBufferStd::consume(const IAX2FrameFull& frame) {
     if (_buffer.hasCapacity()) {
         // Check for duplicates
@@ -146,8 +154,7 @@ bool RetransmissionBufferStd::consume(const IAX2FrameFull& frame) {
             _buffer.push(frame);
             return true;
         } else {
-            // ### TODO: REAL LOG
-            cout << "Rejected " << (int)frame.getOSeqNo() << " dup " << endl;
+            _log->info("Rejected %d", (int)frame.getOSeqNo());
             return false;
         }
     }
