@@ -26,6 +26,8 @@
 #include <poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <linux/sockios.h> // Required for SIOCOUTQ
 #endif
 
 #include <sys/types.h>
@@ -181,14 +183,12 @@ int LineIAX2::open(short addrFamily, int listenPort) {
 
     // Get the current send buffer size
     {
-        int buffer_size;
-        socklen_t optlen = sizeof(buffer_size);
-        if (getsockopt(iaxSockFd, SOL_SOCKET, SO_SNDBUF, &buffer_size, &optlen) < 0) {
+        int bufferSize = 0;
+        socklen_t optlen = sizeof(bufferSize);
+        if (getsockopt(iaxSockFd, SOL_SOCKET, SO_SNDBUF, &bufferSize, &optlen) < 0) {
             _log.error("Unable to get TX buffer size");
-        }
-        else {
-            if (buffer_size < 200000)
-                _log.error("Low TX buffer size %d", buffer_size);
+        } else {
+            _txSocketBufferSize = bufferSize;
         }
     }
 
@@ -2168,8 +2168,10 @@ bool LineIAX2::_progressCall(Call& call) {
         // until the retransmit buffer is clear, or until
         // a timeout has expired.
         if (call.reTx.empty() || 
-            _clock.isPast(call.terminationMs + TERMINATION_TIMEOUT_MS))
+            _clock.isPast(call.terminationMs + TERMINATION_TIMEOUT_MS)) {
+            _log.info("Call %u/%d has ended", call.localCallId, call.remoteCallId);
             call.reset();
+        }
     }
 
     // If the state changes then its possible that more work is 
@@ -2398,10 +2400,14 @@ void LineIAX2::_sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const ch
 
 void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {    
 
-    // Check to see if we even have an address for this peer
+    // Check to see if we even have an address for this peer. There are a few
+    // situations where this can happen: (1) very early phase before the 
+    // IP address of a call has come back (2) if a call that never gets 
+    // an address goes through the hangup process.
     if (call.peerAddr.ss_family == 0) {
-        _log.error("Call %d/%d attempted to send frame %d without peer address",
-            call.localCallId, call.remoteCallId, (int)frame.getType());
+        _log.error("Call %d/%d unable to send %d/%d, no peer address",
+            call.localCallId, call.remoteCallId, 
+            (int)frame.getType(), (int)frame.getSubclass());
         return;
     }
 
@@ -2438,6 +2444,8 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame,
     _sendFrameToPeer(frame.buf(), frame.size(), peerAddr);
 }
 
+// NOTE: This is the ONLY place where IAX transmissions happen.
+
 void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
 
@@ -2465,6 +2473,14 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
             _log.error("Network is unreachable to %s", temp);
         } else 
             _log.error("Send error %d", errno);
+    }
+
+    // Take a look at the kernel buffer
+    int bytes_in_buffer = 0;
+    if (ioctl(_iaxSockFd, SIOCOUTQ, &bytes_in_buffer) == -1) {
+    } else {
+        if ((unsigned)bytes_in_buffer > ((_txSocketBufferSize * 3) / 4))
+            _log.info("Socket transmit buffer >75 percent at %d", bytes_in_buffer);
     }
 }
 
@@ -2812,12 +2828,6 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
                 localCallId, remoteCallId);
             line._hangupCall(*this);
         }
-    }
-
-    // Monitor retransmit buffer
-    if (reTx.getUsed() > reTx.getCapacity() - 4) {
-        log.info("Call %u/%u retransmission buffer at %d", localCallId, remoteCallId,
-            reTx.getUsed());
     }
 
     // Look for things waiting to go out on the network (like retransmits)

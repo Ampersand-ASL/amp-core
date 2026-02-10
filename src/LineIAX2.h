@@ -429,6 +429,8 @@ private:
     int _iaxListenPort = 0;
     // The UDP socket on which IAX messages are received/sent
     int _iaxSockFd = 0;
+    // The size of the transmit buffer as reported by the kernel
+    unsigned _txSocketBufferSize = 0;
 
     // Used to assign unique IDs to the calls.  Starting at 100
     // because call ID 1 may have special significance on 

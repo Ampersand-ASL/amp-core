@@ -96,7 +96,6 @@ int main(int, const char**) {
     int count = 0;
 
     TimerTask timer0(log, clock, 10, [&clock, lines, &count]() {
-        cout << "TICK" << endl;
         /*
         if (count == 20) {
             cout << "Sending audio" << endl;
