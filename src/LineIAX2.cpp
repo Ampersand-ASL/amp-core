@@ -1167,8 +1167,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         _log.info("VNAK received, retransmitting to %d", (int)frame.getOSeqNo());
         call.reTx.retransmitToSeq(frame.getOSeqNo(), call.expectedInSeqNo,       
             // The callback that will be fired for anything that rxTx needs to send
-            [context=this, call](const IAX2FrameFull& frame) {
-                context->_sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
+            [this, a=call.peerAddr](const IAX2FrameFull& frame) {
+                _sendFrameToPeer(frame, (const sockaddr&)a);
             } );
         return;
     }
@@ -2401,8 +2401,7 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
     // Save the frame into the retransmission buffer for future use 
     // (just in case)
     if (!call.reTx.consume(frame)) {
-        _log.error("Call %u retransmission buffer error", call.localCallId);
-        assert(false);
+        _log.error("Call %u/%u retx buffer error", call.localCallId, call.remoteCallId);
     }
 
     // Do the actual transmission on the socket
@@ -2784,13 +2783,19 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     if (state != Call::State::STATE_TERMINATED &&
         state != Call::State::STATE_TERMINATE_WAITING) {
         if (clock.isPast(lastFrameRxMs + _inactivityTimeoutMs)) {
-            log.info("Hanging up inactive call %d", localCallId);
+            log.info("Hanging up inactive call %d/%d", 
+                localCallId, remoteCallId);
+            line._hangupCall(*this);
+        }
+        else if (reTx.getUsed() == reTx.getCapacity()) {
+            log.info("Hanging up call with full retransmit buffer %d/%d", 
+                localCallId, remoteCallId);
             line._hangupCall(*this);
         }
     }
 
     // Monitor retransmit buffer
-    if (reTx.getUsed() > reTx.getCapacity() / 2) {
+    if (reTx.getUsed() > reTx.getCapacity() - 4) {
         log.info("Call %u/%u retransmission buffer at %d", localCallId, remoteCallId,
             reTx.getUsed());
     }
@@ -2798,8 +2803,8 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     // Look for things waiting to go out on the network (like retransmits)
     reTx.retransmitIfNecessary(localElapsedMs(clock), expectedInSeqNo, 
         // The callback that will be fired for anything that reTx needs to send
-        [&context=line, call=this](const IAX2FrameFull& frame) {
-            context._sendFrameToPeer(frame, (const sockaddr&)call->peerAddr);
+        [this, &context=line](const IAX2FrameFull& frame) {
+            context._sendFrameToPeer(frame, (const sockaddr&)peerAddr);
         });
 
 }
