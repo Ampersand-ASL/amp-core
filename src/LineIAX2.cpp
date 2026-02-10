@@ -1149,7 +1149,11 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // sends back might have lower ISeqNos than expected, meaning other 
     // previous messages have acknowledge more receipts already. This 
     // condition is ignored.
-    call.reTx.setExpectedSeq(frame.getISeqNo());
+    if (!call.reTx.setExpectedSeq(frame.getISeqNo())) {
+        _log.info("Call %d/%d not lowering expected sequence from %d to %d", 
+            call.localCallId, call.remoteCallId, 
+            (int)call.reTx.getExpectedSeq(), frame.getISeqNo());
+    }
 
     if (frame.isACK()) {
         if (_trace)
@@ -1161,7 +1165,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // before checking sequence coherence.
     if (frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_VNAK)) {
         _log.info("VNAK received, retransmitting to %d", (int)frame.getOSeqNo());
-        call.reTx.retransmitToSeq(frame.getOSeqNo(),        
+        call.reTx.retransmitToSeq(frame.getOSeqNo(), call.expectedInSeqNo,       
             // The callback that will be fired for anything that rxTx needs to send
             [context=this, call](const IAX2FrameFull& frame) {
                 context->_sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
@@ -1190,12 +1194,12 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             if (!frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_CALLTOKEN)) {
                 // Do nothing
             } else {
-                // ACK again with the same timetsamp and no change to expected sequence number.
+                // ACK again with the same timestamp and no change to expected sequence number.
                 // Hopefully this satisfies the peer. 
                 if (frame.isNoACKRequired()) {
                     // Do nothing
                 } else {
-                    // Being more agessive and sending an ACK unless we are sure 
+                    // Being more aggressive and sending an ACK unless we are sure 
                     // it's not needed.
                     _sendACK(frame.getTimeStamp(), call);   
                     // Display to help improve the list of ack/noack cases
@@ -1840,7 +1844,6 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
                 "DNS error (A)");
             _terminateCall(call);
         } else {
-            _log.info("Call %d ignoring DNS lookup failure", call.localCallId);
             call.state = Call::State::STATE_CALLER_VALIDATED;
         }
     }
@@ -2393,28 +2396,19 @@ void LineIAX2::_sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const ch
 
 void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {    
 
-    // Hand the frame into the retransmission buffer so it can be saved
-    // for future use (just in case)
+    // Save the frame into the retransmission buffer for future use 
+    // (just in case)
     if (!call.reTx.consume(frame)) {
         _log.error("Call %u retransmission buffer error", call.localCallId);
         assert(false);
     }
+
+    // Do the actual transmission on the socket
+    _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
+
+    // Adjust the outbound sequence number as needed
     if (frame.shouldIncrementSequence())
         call.outSeqNo++;
-
-    unsigned sendCount = 0;
-
-    // Do a quick poll to get that frame (and anything else waiting) out
-    // on the network immediately.
-    call.reTx.poll(call.localElapsedMs(_clock), 
-        // The callback that will be fired for anything that reTx needs to send
-        [this, &call, &sendCount](const IAX2FrameFull& frame) {
-            _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
-            sendCount++;
-        });
-
-    // ### SANITY CHECK: SOMETHING HAD BETTER GO OUT!
-    assert(sendCount != 0);
 }
 
 void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, 
@@ -2814,7 +2808,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     }
 
     // Look for things waiting to go out on the network (like retransmits)
-    reTx.poll(localElapsedMs(clock), 
+    reTx.retransmitIfNecessary(localElapsedMs(clock), expectedInSeqNo, 
         // The callback that will be fired for anything that reTx needs to send
         [&context=line, call=this](const IAX2FrameFull& frame) {
             context._sendFrameToPeer(frame, (const sockaddr&)call->peerAddr);

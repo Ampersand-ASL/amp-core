@@ -30,9 +30,7 @@ RetransmissionBufferStd::RetransmissionBufferStd()
 
 void RetransmissionBufferStd::reset() {
     _buffer.clear();
-    _nextOutSeq = 0;
     _nextExpectedSeq = 0;
-    _lastRetransmitAttemptMs = 0;
     _retransmitCount = 0;
 }
 
@@ -42,103 +40,72 @@ bool RetransmissionBufferStd::setExpectedSeq(uint8_t n) {
     // is larger. NOTE: There are some cases (PONG) when someone tries 
     // to set a lower expectation than had previously be set - this is 
     // ignored.
-    if (compareWrap(n, _nextExpectedSeq) >= 0) 
+    if (compareWrap(n, _nextExpectedSeq) >= 0) {
         _nextExpectedSeq = n;
-    else {
-        _log->info("Ignoring attempt to lower expectation from %d to %u",
-            _nextExpectedSeq, n);
+        // Remove everything that was just acknowledged.
+        _buffer.removeIf([mark = _nextExpectedSeq](const IAX2FrameFull& frame) {
+            bool remove = compareWrap(frame.getOSeqNo(), mark) < 0;
+            return remove;
+        });
+        return true;
+    } else {
+        return false;
     }
-
-    // Remove everything that was just acknowledged.
-    _buffer.removeIf([mark = _nextExpectedSeq](const IAX2FrameFull& frame) {
-        bool remove = compareWrap(frame.getOSeqNo(), mark) < 0;
-        return remove;
-    });
-
-    return true;
 }
 
-void RetransmissionBufferStd::poll(uint32_t elapsedMs, 
-    std::function<void(const IAX2FrameFull&)> sink) {
-    
-    // Send anything that hasn't been sent yet (i.e. first time transmission)
+void RetransmissionBufferStd::retransmitIfNecessary(uint32_t elapsedMs, 
+    uint8_t expectedInSeqNo, std::function<void(const IAX2FrameFull&)> sink) {    
 
-    bool sentAnything;
-    do {
-        sentAnything = false;
-        _buffer.visitIf(
-            // Visitor
-            // IMPORTANT: Get a reference here because we will be changing the
-            // sequence number.
-            [&nextOutSeq = _nextOutSeq, &sentAnything, sink](const IAX2FrameFull& frame) {
-                sink(frame);
-                // Bump the out sequence high-water mark forward so that we don't transmit 
-                // this one again. Yes, this will wrap often.
-                if (frame.getOSeqNo() == nextOutSeq) {
-                    nextOutSeq++;
-                }
-                sentAnything = true;
-                return true;
-            },
-            // Predicate - Do we have the next outbound message ready to go yet?
-            // IMPORTANT: Get a reference here because we will be changing the
-            // sequence number.
-            [&nextOutSeq = _nextOutSeq](const IAX2FrameFull& frame) {
-                return frame.getOSeqNo() == nextOutSeq;
-            }
-        );
-    } while (sentAnything);
-
-    // Retransmit things that haven't been acknowledged
-
-    if (elapsedMs > _lastRetransmitAttemptMs + RETRANSMIT_INTERVAL_MS) {
-        _buffer.visitIf(
-            // Visitor
-            [sink, context=this](const IAX2FrameFull& frame) {
-                // Make a copy of the frame with the retransmission flag on
-                IAX2FrameFull rf = frame;
-                rf.setRetransmit();
-                context->_log->info("Call %d/%d retransmitting %d",
-                        frame.getDestCallId(), frame.getSourceCallId(), 
-                        frame.getOSeqNo());
-                sink(rf);
-                context->_retransmitCount++;
-                return true;
-            },
-            // Predicate - Find the messages that have not been acknowledged yet
-            [elapsedMs, nextExpectedSeq = _nextExpectedSeq](const IAX2FrameFull& frame) {
-                return 
-                    // This comparison is conceptually the same as:
-                    // frame.getOSeqNo() >= nextExpectedSeq
-                    compareWrap(frame.getOSeqNo(), nextExpectedSeq) >= 0 &&
-                    // Message needs to have been hanging around long enough to 
-                    // justify a retransmission.
-                    elapsedMs > frame.getTimeStamp() + RETRANSMIT_INTERVAL_MS;
-            }
-        );
-        _lastRetransmitAttemptMs = elapsedMs;
-    }
+    _buffer.visitIf(
+        // Visitor
+        [this, sink, expectedInSeqNo](const IAX2FrameFull& frame) {
+            // Make a copy of the frame with the retransmission flag on and 
+            // the expected sequence number adjusted to match reality
+            IAX2FrameFull rf = frame;
+            rf.setRetransmit();
+            rf.setISeqNo(expectedInSeqNo);
+            _log->info("Call %d/%d retransmitting %d",
+                frame.getDestCallId(), frame.getSourceCallId(), 
+                frame.getOSeqNo());
+            sink(rf);
+            _retransmitCount++;
+            return true;
+        },
+        // Predicate - Find the messages that have not been acknowledged yet
+        [this, elapsedMs](const IAX2FrameFull& frame) {
+            return 
+                // This comparison is conceptually the same as:
+                // frame.getOSeqNo() >= nextExpectedSeq
+                compareWrap(frame.getOSeqNo(), _nextExpectedSeq) >= 0 &&
+                // Message needs to have been hanging around long enough to 
+                // justify a retransmission.
+                elapsedMs > frame.getTimeStamp() + RETRANSMIT_INTERVAL_MS;
+        }
+    );
 }
 
 void RetransmissionBufferStd::retransmitToSeq(uint8_t targetSeq,
+    uint8_t expectedInSeqNo, 
     std::function<void(const IAX2FrameFull&)> sink) {
 
     _buffer.visitIf(
         // Visitor
-        [sink, context=this](const IAX2FrameFull& frame) {
-            // Make a copy of the frame with the retransmission flag on
+        [this, sink, expectedInSeqNo](const IAX2FrameFull& frame) {
+            // Make a copy of the frame with the retransmission flag on and 
+            // the expected sequence number adjusted to match reality
             IAX2FrameFull rf = frame;
             rf.setRetransmit();
+            rf.setISeqNo(expectedInSeqNo);
             sink(rf);
-            context->_retransmitCount++;
+            _retransmitCount++;
             return true;
         },
         // Predicate - Find the messages that have not been acknowledged yet
-        [targetSeq, nextExpectedSeq = _nextExpectedSeq](const IAX2FrameFull& frame) {
+        [this, targetSeq](const IAX2FrameFull& frame) {
             return 
                 // This comparison is conceptually the same as:
                 // frame.getOSeqNo() >= nextExpectedSeq
-                compareWrap(frame.getOSeqNo(), nextExpectedSeq) >= 0 &&
+                compareWrap(frame.getOSeqNo(), _nextExpectedSeq) >= 0 &&
                 // Limit to the target specified
                 compareWrap(frame.getOSeqNo(), targetSeq) <= 0;
         }
@@ -154,7 +121,7 @@ bool RetransmissionBufferStd::consume(const IAX2FrameFull& frame) {
             _buffer.push(frame);
             return true;
         } else {
-            _log->info("Rejected %d", (int)frame.getOSeqNo());
+            _log->info("Retransmission buffer rejected duplicate %d", (int)frame.getOSeqNo());
             return false;
         }
     }

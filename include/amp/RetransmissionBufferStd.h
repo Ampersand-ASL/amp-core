@@ -42,10 +42,13 @@ public:
 
     virtual void reset();
     virtual bool setExpectedSeq(uint8_t );
-    virtual void poll(uint32_t elapsedMs, 
+    virtual uint8_t getExpectedSeq() const { return _nextExpectedSeq; }
+
+    virtual void retransmitIfNecessary(uint32_t elapsedMs, uint8_t expectedInSeqNo,
         std::function<void(const IAX2FrameFull&)> sink);
-    virtual void retransmitToSeq(uint8_t seq,
+    virtual void retransmitToSeq(uint8_t seq, uint8_t expectedInSeqNo,
         std::function<void(const IAX2FrameFull&)> sink);
+
     virtual bool empty() const { return _buffer.empty(); }
     virtual unsigned getRetransmitCount() const { return _retransmitCount; }
     virtual unsigned getCapacity() const { return BUFFER_CAPACITY; }
@@ -67,9 +70,9 @@ private:
     IAX2FrameFull _bufferStore[BUFFER_CAPACITY];
     fixedqueue<IAX2FrameFull> _buffer;
 
-    uint8_t _nextOutSeq = 0;
+    // This is controlled by the peer and tells us how many of our previous
+    // transmissions have been seen. Anything below this is safe.
     uint8_t _nextExpectedSeq = 0;
-    uint32_t _lastRetransmitAttemptMs = 0;
     unsigned _retransmitCount = 0;
     
     // Controls how quickly we start to re-transmit on missing ACK.

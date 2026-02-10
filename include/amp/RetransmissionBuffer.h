@@ -39,21 +39,26 @@ public:
      * This should be called any time a message is received from the peer
      * so that the peer's receive status can be tracked.
      * 
-     * @returns True if the sequence was as expected, false if something
-     * isn't right.
+     * @returns True if the sequence was as expected, false if an attempt
+     * is being made to lower the number.
      */
     virtual bool setExpectedSeq(uint8_t n) = 0;
 
     /**
-     * Give the buffer a chance to send out any frames that it needs to. This
-     * could either be new frames just consumed or old frames that need to 
-     * be re-transmitted.
-     * 
-     * Should be called frequently, and definitely after the consume() method
-     * has been called since it is likely that we'll need to forward that
-     * new frame along.
+     * @returns The peer's next expected sequence number.
      */
-    virtual void poll(uint32_t elapsedMs, 
+    virtual uint8_t getExpectedSeq() const = 0;
+
+    /**
+     * Give the buffer a chance to send out any frames that it needs to. 
+     * Should be called frequently to keep the link up.
+     *
+     * @param expectedInSeqNo This is put on any of the re-transmitted
+     * frames since the number has likely moved forward since the original
+     * transmission attempt and we don't want to confuse the peer with
+     * a low number.
+     */
+    virtual void retransmitIfNecessary(uint32_t elapsedMs, uint8_t expectedInSeqNo,
         std::function<void(const IAX2FrameFull&)> sink) = 0;
 
     /**
@@ -64,8 +69,13 @@ public:
      * 
      * Not doing this isn't the end of the world because the polling
      * logic should eventually come around and service the missing messages.
+     *
+     * @param expectedInSeqNo This is put on any of the re-transmitted
+     * frames since the number has likely moved forward since the original
+     * transmission attempt and we don't want to confuse the peer with
+     * a low number.
      */
-    virtual void retransmitToSeq(uint8_t seq,
+    virtual void retransmitToSeq(uint8_t seq, uint8_t expectedInSeqNo,
         std::function<void(const IAX2FrameFull&)> sink) { }
 
     /**

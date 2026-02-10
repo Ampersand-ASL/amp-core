@@ -45,6 +45,7 @@ public:
     uint8_t getOSeqNo() const { return _buf[8]; }
     void setOSeqNo(uint8_t s) {_buf[8] = s; }
     uint8_t getISeqNo() const { return _buf[9]; }
+    void setISeqNo(uint8_t s) {_buf[9] = s; }
     bool isRetransmit() const { return (_buf[2] & 0b10000000) != 0; }
     void setRetransmit() { _buf[2] |= 0b10000000; }
     bool isTypeClass(uint8_t t, uint8_t c) const { return _buf[10] == t && _buf[11] == c; }
