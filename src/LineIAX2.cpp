@@ -2379,8 +2379,10 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
 
     // Hand the frame into the retransmission buffer so it can be saved
     // for future use (just in case)
-    if (!call.reTx.consume(frame)) 
+    if (!call.reTx.consume(frame)) {
         _log.error("Call %u retransmission buffer error", call.localCallId);
+        assert(false);
+    }
     if (frame.shouldIncrementSequence())
         call.outSeqNo++;
 
