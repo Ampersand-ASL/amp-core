@@ -188,7 +188,7 @@ int LineIAX2::open(short addrFamily, int listenPort) {
         }
         else {
             if (buffer_size < 200000)
-                _log.warn("Low TX buffer size %d", buffer_size);
+                _log.error("Low TX buffer size %d", buffer_size);
         }
     }
 
