@@ -2398,12 +2398,19 @@ void LineIAX2::_sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const ch
 
 void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {    
 
+    // Check to see if we even have an address for this peer
+    if (call.peerAddr.ss_family == 0) {
+        _log.error("Call %d/%d attempted to send frame %d without peer address",
+            call.localCallId, call.remoteCallId, (int)frame.getType());
+        return;
+    }
+
     // Save the frame into the retransmission buffer for future use 
     // (just in case)
     if (!call.reTx.consume(frame)) {
         _log.error("Call %u/%u retx buffer error", call.localCallId, call.remoteCallId);
     }
-
+    
     // Do the actual transmission on the socket
     _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
 
@@ -2736,47 +2743,60 @@ void LineIAX2::Call::setNetworkDelayEstimate(unsigned ms, bool first) {
  * Take care of background, non-time-sensitive operations.
  */
 void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
-    // Need a ping?
-    uint32_t pingTargetMs;
-    // IMPORTANT: I noticed that sending a ping too early in the 
-    // call process resulted in the remote side hanging up.
-    // (Seen at 17:01 PM on 16-Nov-2025)
-    if (lastPingSentMs == 0)
-        pingTargetMs = localStartMs + NORMAL_PING_INTERVAL_MS;
-    // We are more agressive at the start to improve our understanding
-    // of the network latency of the connection.
-    else if (pingCount < 5)
-        pingTargetMs = lastPingSentMs + FAST_PING_INTERVAL_MS;
-    else 
-        pingTargetMs = lastPingSentMs + NORMAL_PING_INTERVAL_MS;
 
-    if (clock.isPast(pingTargetMs)) {
-        IAX2FrameFull pingFrame;
-        pingFrame.setHeader(localCallId, remoteCallId, 
-            dispenseElapsedMs(clock), 
-            outSeqNo, expectedInSeqNo, 6, 2);
-        line._sendFrameToPeer(pingFrame, *this);
-        lastPingSentMs = clock.time();
-    }
+    // The PING/LAGRQ is only performed on calls that are fully up.
+    // 10-Feb-2026 Bruce saw some problems where the PING was getting 
+    // generated before a call had even received the peer's IP address
+    // which was creating problems.
 
-    // Need a LAGRQ?
-    if (clock.isPast(lastLagrqMs + LAGRQ_INTERVAL_MS)) {
-        // 6.7.4.  LAGRQ Lag Request Message
-        // A LAGRQ is a lag request.  It is sent to determine the lag between
-        // two IAX endpoints, including the amount of time used to process a
-        // frame through a jitter buffer (if any).  It requires a clock-based
-        // time-stamp, and MUST be answered with a LAGRP, which MUST echo the
-        // LAGRQ's time-stamp.  The lag between the two peers can be computed on
-        // the peer sending the LAGRQ by comparing the time-stamp of the LAGRQ
-        // and the time the LAGRP was received.
-        // This message does not require any IEs.
-        //
-        IAX2FrameFull lagrqFrame;
-        lagrqFrame.setHeader(localCallId, remoteCallId, 
-            dispenseElapsedMs(clock), 
-            outSeqNo, expectedInSeqNo, 6, 0x0b);
-        line._sendFrameToPeer(lagrqFrame, *this);
-        lastLagrqMs = clock.time();
+    // There's also the issue of terminated calls. The way things are 
+    // currently setup the pings will not be sent to calls that are in 
+    // the process of terminating.
+
+    if (state == State::STATE_UP) {
+
+        // Need a ping?
+        uint32_t pingTargetMs;
+        // IMPORTANT: I noticed that sending a ping too early in the 
+        // call process resulted in the remote side hanging up.
+        // (Seen at 17:01 PM on 16-Nov-2025)
+        if (lastPingSentMs == 0)
+            pingTargetMs = localStartMs + NORMAL_PING_INTERVAL_MS;
+        // We are more agressive at the start to improve our understanding
+        // of the network latency of the connection.
+        else if (pingCount < 5)
+            pingTargetMs = lastPingSentMs + FAST_PING_INTERVAL_MS;
+        else 
+            pingTargetMs = lastPingSentMs + NORMAL_PING_INTERVAL_MS;
+
+        if (clock.isPast(pingTargetMs)) {
+            IAX2FrameFull pingFrame;
+            pingFrame.setHeader(localCallId, remoteCallId, 
+                dispenseElapsedMs(clock), 
+                outSeqNo, expectedInSeqNo, 6, 2);
+            line._sendFrameToPeer(pingFrame, *this);
+            lastPingSentMs = clock.time();
+        }
+
+        // Need a LAGRQ?
+        if (clock.isPast(lastLagrqMs + LAGRQ_INTERVAL_MS)) {
+            // 6.7.4.  LAGRQ Lag Request Message
+            // A LAGRQ is a lag request.  It is sent to determine the lag between
+            // two IAX endpoints, including the amount of time used to process a
+            // frame through a jitter buffer (if any).  It requires a clock-based
+            // time-stamp, and MUST be answered with a LAGRP, which MUST echo the
+            // LAGRQ's time-stamp.  The lag between the two peers can be computed on
+            // the peer sending the LAGRQ by comparing the time-stamp of the LAGRQ
+            // and the time the LAGRP was received.
+            // This message does not require any IEs.
+            //
+            IAX2FrameFull lagrqFrame;
+            lagrqFrame.setHeader(localCallId, remoteCallId, 
+                dispenseElapsedMs(clock), 
+                outSeqNo, expectedInSeqNo, 6, 0x0b);
+            line._sendFrameToPeer(lagrqFrame, *this);
+            lastLagrqMs = clock.time();
+        }
     }
 
     // Inactive call?

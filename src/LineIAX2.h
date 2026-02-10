@@ -246,13 +246,17 @@ public:
 
         enum State {
             STATE_NONE,
+            // (CALLER) Waiting to trigger a DNS SRV query to locate target node
             STATE_LOOKUP_0,
+            // (CALLER) Waiting for the DNS SRC response
             STATE_LOOKUP_0A,
+            // (CALLER) Waiting for the DNS A response when locating target node
             STATE_LOOKUP_1A,
             // Go into this state when ready to start initiating a call
             STATE_INITIATION_WAIT,
+            // (CALLER) After a NEW has been sent and waiting for a response
             STATE_WAITING,
-            // Sent out the DNS request to get the caller's public key
+            // (CALLED) Sent out the DNS request to get the caller's public key
             STATE_AUTHREP_WAIT_0,
             // Sent out the AUTHREQ challenge and waiting for the response
             STATE_AUTHREP_WAIT_1,
@@ -260,7 +264,9 @@ public:
             STATE_IP_VALIDATION_0,
             // All validations complete, clear to send accept
             STATE_CALLER_VALIDATED,
+            // (CALLER) Have received the ACCEPT, waiting for the ANSWER
             STATE_LINKED,
+            // Normal operation
             STATE_UP,
             // This is the state that requests a termination. 
             STATE_TERMINATE_WAITING,
