@@ -310,7 +310,7 @@ public:
         float _ndi_1 = 0;
         float _nvi = 0;
         float _nvi_1 = 0;
-        float _nAlpha = 0.75;
+        const float _nAlpha = 0.75;
 
         // Here is where outbound frames are stored in case
         // they are needed for retransmission later.

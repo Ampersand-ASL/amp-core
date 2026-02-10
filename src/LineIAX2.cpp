@@ -1214,7 +1214,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         IAX2FrameFull invalFrame;
         invalFrame.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
-            call.outSeqNo, call.expectedInSeqNo, 6, 5);
+            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_IAX,
+                IAXSubclass::IAX2_SUBCLASS_IAX_HANGUP);
         _sendFrameToPeer(invalFrame, call);
         return;
     }
@@ -1341,7 +1342,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     }
     // ANSWER
     else if (frame.getType() == FrameType::IAX2_TYPE_CONTROL && 
-             frame.getSubclass() == 4) {
+             frame.getSubclass() == ControlSubclass::IAX2_SUBCLASS_CONTROL_ANSWER) {
         
         _log.info("Call %u got ANSWER", call.localCallId);            
 
@@ -2360,7 +2361,8 @@ void LineIAX2::_sendACK(uint32_t timeStamp, Call& call) {
     //
     IAX2FrameFull frame;
     frame.setHeader(call.localCallId, call.remoteCallId, timeStamp,
-        call.outSeqNo, call.expectedInSeqNo, 6, 4);
+        call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_IAX, 
+        IAXSubclass::IAX2_SUBCLASS_IAX_ACK);
     // Go straight to the wire, bypassing the retransmit buffer
     _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
 }
@@ -2377,17 +2379,24 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
 
     // Hand the frame into the retransmission buffer so it can be saved
     // for future use (just in case)
-    call.reTx.consume(frame);
+    if (!call.reTx.consume(frame)) 
+        _log.error("Call %u retransmission buffer error", call.localCallId);
     if (frame.shouldIncrementSequence())
         call.outSeqNo++;
+
+    unsigned sendCount = 0;
 
     // Do a quick poll to get that frame (and anything else waiting) out
     // on the network immediately.
     call.reTx.poll(call.localElapsedMs(_clock), 
         // The callback that will be fired for anything that reTx needs to send
-        [this, &call](const IAX2FrameFull& frame) {
+        [this, &call, &sendCount](const IAX2FrameFull& frame) {
             _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
+            sendCount++;
         });
+
+    // ### SANITY CHECK: SOMETHING HAD BETTER GO OUT!
+    assert(sendCount != 0);
 }
 
 void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, 
@@ -2636,6 +2645,7 @@ void LineIAX2::Call::reset() {
     callUser.clear();
     callPassword.clear();
     calltoken.clear();
+    memset(publicKeyBin, 0, sizeof(publicKeyBin));
     memset(&peerAddr, 0, sizeof(peerAddr));
     supportedCodecs = 0;
     desiredCodecs = 0;

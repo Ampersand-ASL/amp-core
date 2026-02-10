@@ -49,8 +49,6 @@ public:
      */
     static int compareWrap(uint8_t a, uint8_t b);
 
-    // ----- From FrameSink --------------------------------------------------
-
     virtual bool consume(const IAX2FrameFull& frame);
 
 private:

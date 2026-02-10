@@ -107,7 +107,8 @@ bool IAX2FrameFull::isACKRequired() const {
 // See RFC Section 7
 // https://datatracker.ietf.org/doc/html/rfc5456#section-7
 bool IAX2FrameFull::shouldIncrementSequence() const {
-    if (isACK() || isTypeClass(0x6, 0xa))
+    if (isACK() || 
+        isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_INVAL))
         return false;
     else
         return true;

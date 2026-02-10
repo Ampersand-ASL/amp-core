@@ -37,12 +37,13 @@ void RetransmissionBufferStd::reset() {
 bool RetransmissionBufferStd::setExpectedSeq(uint8_t n) {
 
     // Allow our internal high-water mark to advance if the new number
-    // is larger. NOTE: There are some cases (PONG) when someone tries to set 
-    // a lower expectation than had previously be set - this is ingored.
+    // is larger. NOTE: There are some cases (PONG) when someone tries 
+    // to set a lower expectation than had previously be set - this is 
+    // ignored.
     if (compareWrap(n, _nextExpectedSeq) >= 0) 
         _nextExpectedSeq = n;
 
-    // Remove everything that was just acknowledged
+    // Remove everything that was just acknowledged.
     _buffer.removeIf([mark = _nextExpectedSeq](const IAX2FrameFull& frame) {
         bool remove = compareWrap(frame.getOSeqNo(), mark) < 0;
         return remove;
@@ -145,11 +146,13 @@ bool RetransmissionBufferStd::consume(const IAX2FrameFull& frame) {
             _buffer.push(frame);
             return true;
         } else {
+            // ### TODO: REAL LOG
             cout << "Rejected " << (int)frame.getOSeqNo() << " dup " << endl;
             return false;
         }
     }
-    return false;
+    else 
+        return false;
 }
 
 int RetransmissionBufferStd::compareWrap(uint8_t a, uint8_t b) {

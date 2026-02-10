@@ -45,11 +45,11 @@ public:
     virtual bool setExpectedSeq(uint8_t n) = 0;
 
     /**
-     * Give the buffer a chance to sent out any frames that it needs to. This
+     * Give the buffer a chance to send out any frames that it needs to. This
      * could either be new frames just consumed or old frames that need to 
      * be re-transmitted.
      * 
-     * Should be call frequently, and definitely after the consume() method
+     * Should be called frequently, and definitely after the consume() method
      * has been called since it is likely that we'll need to forward that
      * new frame along.
      */
@@ -71,7 +71,7 @@ public:
     /**
      * Frames can be consumed in any order, but they will be sent out
      * sequentially by sequence number. That means if a number is missing
-     * the buffer will get stuck forwever waiting for it to be consumed.
+     * the buffer will get stuck forever waiting for it to be consumed.
      * 
      * @returns true if the frame was consumed, false if not (i.e. out of 
      * space)
@@ -89,7 +89,6 @@ public:
      * @returns The number of times a message needed to be retransmitted.
      */
     virtual unsigned getRetransmitCount() const = 0;
-
 };
     }
 }

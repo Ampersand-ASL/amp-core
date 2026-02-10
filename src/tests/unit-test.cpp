@@ -358,8 +358,49 @@ static void speedTest1() {
     //bridge.audioRateTick(1040);
 }
 
+static void lambaTest1() {
+
+    unsigned a = 8;
+    std::function<void()> l0;
+    l0 = [&b = a]() { 
+        assert(b == 8);
+        b = 10;
+        assert(b == 10);
+    };
+    // Fire the lambda
+    l0();
+    assert(a == 10);
+}
+
+static int compareWrap8(uint8_t a, uint8_t b) {
+    if (a == b)
+        return 0;
+    else if (a < 0x80) {
+        if (b > a && b < a + 0x80)
+            return -1;
+        else 
+            return 1;
+    } else {
+        if (b < a && b > a - 0x80)
+            return 1;
+        else
+            return -1;
+    }
+}
+
+static void wrapTest1() {
+    assert(compareWrap8(7, 8) == -1);
+    for (unsigned i = 0; i < 256; i++)
+        assert(compareWrap8(254 + i, 8 + i) == -1);
+    assert(compareWrap8(254 + 128, 8 + 128) == -1);
+    for (unsigned i = 0; i < 256; i++)
+        assert(compareWrap8(8 + i, 7 + i) == 1);
+}
+
 int main(int, const char**) {
-    speedTest1();
+    wrapTest1();
+    lambaTest1();
+    //speedTest1();
     fixedMath1();
     sizeCheck1();
     snprintfCheck();
