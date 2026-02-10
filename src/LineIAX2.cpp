@@ -70,6 +70,10 @@ static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
 
+// The size of the IAX2 socket transmit buffer. This is adjusted
+// upwards to help with the large transmission case.
+#define IAX_SOCKET_SNDBUF_BYTES (512 * 1024)
+
 namespace kc1fsz {
 
 static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
@@ -172,13 +176,18 @@ int LineIAX2::open(short addrFamily, int listenPort) {
 
     // #### TODO RAAI TO ADDRESS LEAKS BELOW
     
-    // Configure reuse
     int optval = 1; 
     // This allows the socket to bind to a port that is in TIME_WAIT state,
     // or allows multiple sockets to bind to the same port (useful for multicast).
     if (setsockopt(iaxSockFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) < 0) {
         _log.error("IAX setsockopt SO_REUSEADDR failed (%d)", errno);
+        ::close(iaxSockFd);
         return -1;
+    }
+
+    optval = IAX_SOCKET_SNDBUF_BYTES;
+    if (setsockopt(iaxSockFd, SOL_SOCKET, SO_SNDBUF, (const char*)&optval, sizeof(optval)) == -1) {
+        _log.error("Failed to adjust socket send buffer");
     }
 
     // Get the current send buffer size
