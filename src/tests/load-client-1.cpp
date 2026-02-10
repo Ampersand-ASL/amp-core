@@ -26,8 +26,8 @@
 // Non-AMP stuff from my C++ tools library
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/linux/StdClock.h"
-#include "kc1fsz-tools/MTLog2.h"
 #include "kc1fsz-tools/threadsafequeue2.h"
+#include "kc1fsz-tools/MTLog2.h"
 
 // All of this comes from AMP Core
 #include "TraceLog.h"

@@ -57,7 +57,7 @@ void EventLoop::run(Log& log, Clock& clock,
         uint64_t pollStartUs = clock.timeUs();
 
         // Gather the FDs that we care about
-        const unsigned fdsCapacity = 256;
+        const unsigned fdsCapacity = 512;
         unsigned fdsSize = 0;
         pollfd fds[fdsCapacity];
 
