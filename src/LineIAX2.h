@@ -338,6 +338,8 @@ public:
         uint64_t lastTxVoiceFrameMs = 0;
         // When a NEW request is sent out during call initiation
         uint32_t _callInitiatedMs = 0;
+        // The number of times we have received an out-of-sequence message
+        unsigned _rxSeqErrorCount = 0;
         
         void reset();
 

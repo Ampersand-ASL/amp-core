@@ -1150,9 +1150,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // previous messages have acknowledge more receipts already. This 
     // condition is ignored.
     if (!call.reTx.setExpectedSeq(frame.getISeqNo())) {
-        _log.info("Call %d/%d not lowering expected sequence from %d to %d", 
-            call.localCallId, call.remoteCallId, 
-            (int)call.reTx.getExpectedSeq(), frame.getISeqNo());
+        //_log.info("Call %d/%d not lowering expected sequence from %d to %d", 
+        //    call.localCallId, call.remoteCallId, 
+        //    (int)call.reTx.getExpectedSeq(), frame.getISeqNo());
     }
 
     if (frame.isACK()) {
@@ -1213,6 +1213,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         else {
             _log.info("Ignoring message already acknowledged (low sequence) %d",
                 (int)frame.getOSeqNo());
+            call._rxSeqErrorCount++;
         }
         // NOTE: We return with no further processing since we already processed the message
         return;
@@ -1220,9 +1221,10 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // If the sequence number is wrong then ignore the message (retransmit 
     // requests will clean this up later).
     else {
-        _log.info("Call %u/%u ignoring high sequence frame %d, expected %d", 
-            call.localCallId, call.remoteCallId,
-            (int)frame.getOSeqNo(), (int)call.expectedInSeqNo);
+        //_log.info("Call %u/%u ignoring high sequence frame %d, expected %d", 
+        //    call.localCallId, call.remoteCallId,
+        //    (int)frame.getOSeqNo(), (int)call.expectedInSeqNo);
+        call._rxSeqErrorCount++;
         return;
     }
 
@@ -1391,7 +1393,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         unkeyMsg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(unkeyMsg);
 
-        _traceLog.info("UNK", frame.getTimeStamp());
+        //_traceLog.info("UNK", frame.getTimeStamp());
     }
     // LAGRQ
     // 6.7.4.  LAGRQ Lag Request Message
@@ -2680,6 +2682,7 @@ void LineIAX2::Call::reset() {
     lastRxVoiceFrameMs = 0;
     lastTxVoiceFrameMs = 0;
     _callInitiatedMs = 0;
+    _rxSeqErrorCount = 0;
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
@@ -2756,21 +2759,6 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
         line._sendFrameToPeer(pingFrame, *this);
         lastPingSentMs = clock.time();
     }
-
-    /*
-    // Need top send out a L text packet?
-    if (clock.isPast(lastLMs + L_INTERVAL_MS)) {
-        IAX2FrameFull respFrame2;
-        respFrame2.setHeader(localCallId, remoteCallId, 
-            dispenseElapsedMs(clock), 
-            outSeqNo, expectedInSeqNo, 7, 0);
-        // #### TODO: MAKE A LIST OF NODES
-        // NOTE: INCLUDING NULL!
-        respFrame2.setBody((const uint8_t*)"L ", 3);
-        line._sendFrameToPeer(respFrame2, *this);
-        lastLMs = clock.time();
-    }
-    */
 
     // Need a LAGRQ?
     if (clock.isPast(lastLagrqMs + LAGRQ_INTERVAL_MS)) {

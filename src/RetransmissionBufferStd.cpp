@@ -14,9 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-//#include <iostream>
-
 #include "kc1fsz-tools/Log.h"
+
 #include "amp/RetransmissionBufferStd.h"
 
 using namespace std;
@@ -64,9 +63,9 @@ void RetransmissionBufferStd::retransmitIfNecessary(uint32_t elapsedMs,
             IAX2FrameFull rf = frame;
             rf.setRetransmit();
             rf.setISeqNo(expectedInSeqNo);
-            _log->info("Call %d/%d retransmitting %d",
-                frame.getDestCallId(), frame.getSourceCallId(), 
-                frame.getOSeqNo());
+            //_log->info("Call %d/%d retransmitting %d",
+            //    frame.getDestCallId(), frame.getSourceCallId(), 
+            //    frame.getOSeqNo());
             sink(rf);
             _retransmitCount++;
             return true;
@@ -121,7 +120,8 @@ bool RetransmissionBufferStd::consume(const IAX2FrameFull& frame) {
             _buffer.push(frame);
             return true;
         } else {
-            _log->info("Retransmission buffer rejected duplicate %d", (int)frame.getOSeqNo());
+            _log->error("Retransmission buffer rejected duplicate %d", 
+                (int)frame.getOSeqNo());
             return false;
         }
     }
