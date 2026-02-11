@@ -144,6 +144,7 @@ target_include_directories(unit-test PRIVATE cmsis-dsp-mock/include)
 target_include_directories(unit-test PRIVATE alsa-mock/include)
 target_include_directories(unit-test PRIVATE hid-mock/include)
 target_include_directories(unit-test PRIVATE json/include)
+target_include_directories(unit-test PRIVATE argparse/include)
 target_link_libraries(unit-test)
 
 # ----- Protocol Test
@@ -611,6 +612,7 @@ target_include_directories(load-client-1 PRIVATE alsa-mock/include)
 target_include_directories(load-client-1 PRIVATE hid-mock/include)
 target_include_directories(load-client-1 PRIVATE json/include)
 target_include_directories(load-client-1 PRIVATE ed25519/src)
+target_include_directories(load-client-1 PRIVATE argparse/include)
 
 # ----- audio-test-2 --------------------------------------------------------
 
