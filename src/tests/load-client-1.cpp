@@ -53,8 +53,11 @@ static const unsigned maxLineCount = 256;
 static LineIAX2::Call iax2CallSpace[maxLineCount];
 static const char* VERSION = "20260211.0";
 
-// EX: ./load-client-1 --count 75 --local 2000
-
+/*
+EX: 
+./load-client-1 --count 250 --local 2000 --ttlsec 120
+./load-client-1 --count 250 --local 3000 --ttlsec 120
+*/
 int main(int argc, const char** argv) {
 
     StdClock clock;
