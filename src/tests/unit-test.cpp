@@ -26,6 +26,7 @@
 #include "NullConsumer.h"
 #include "KerchunkFilter.h"
 #include "LineIAX2.h"
+#include "VoterUtil.h"
 
 #include "TestUtil.h"
 #include "dsp_util.h"
@@ -397,7 +398,14 @@ static void wrapTest1() {
         assert(compareWrap8(8 + i, 7 + i) == 1);
 }
 
+static void voterTest1() {
+
+    
+
+}
+
 int main(int, const char**) {
+    voterTest1();
     wrapTest1();
     lambaTest1();
     //speedTest1();

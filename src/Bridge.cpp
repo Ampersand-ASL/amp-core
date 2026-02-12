@@ -396,11 +396,6 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
     uint64_t startUs = _clock.timeUs();
     
-    // ####
-    uint64_t tA = 0;
-    uint64_t tB = 0;
-    uint64_t tC = 0;
-
     // Tick each call so that we have an input frame for each.
     _visitActiveCalls(
         [tickMs](BridgeCall& call) { 
@@ -410,14 +405,9 @@ void Bridge::audioRateTick(uint32_t tickMs) {
         }
     );
 
-    // ####
-    tA = _clock.timeUs() - startUs;
-
     // Perform mixing and create a mixed output for each active call
     for (unsigned i = 0; i < _calls.size(); i++) {
-
-        uint64_t startBUs = _clock.timeUs();
-        
+       
         if (!_calls[i].isActive())
             continue;
 
@@ -456,16 +446,8 @@ void Bridge::audioRateTick(uint32_t tickMs) {
             }
         }
 
-        uint64_t endBUs = _clock.timeUs();
-        tB += (endBUs - startBUs);
-
         // Output the result
-        uint64_t startCUs = _clock.timeUs();
-
         _calls[i].setConferenceOutput(mixedFrame, BLOCK_SIZE_48K, tickMs, mixCount);
-
-        uint64_t endCUs = _clock.timeUs();
-        tC += (endCUs - startCUs);
     }
 
     // Clear all contributions for this tick

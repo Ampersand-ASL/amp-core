@@ -102,51 +102,6 @@ target_include_directories(mixer-test-1 PRIVATE src)
 target_include_directories(mixer-test-1 PRIVATE kc1fsz-tools-cpp/include)
 target_link_libraries(mixer-test-1 -lasound)
 
-# ----- unit-test
-
-add_executable(unit-test
-  src/tests/unit-test.cpp
-  src/tests/dsp_util.cpp
-  src/Message.cpp
-  src/Line.cpp
-  src/IAX2FrameFull.cpp
-  src/IAX2Util.cpp
-  src/Resampler.cpp
-  #src/Transcoder_G711_ULAW.cpp
-  #src/NodeParrot.cpp
-  src/Bridge.cpp
-  src/BridgeCall.cpp
-  src/BridgeIn.cpp
-  src/BridgeOut.cpp
-  src/KerchunkFilter.cpp
-  src/Transcoder_G711_ULAW.cpp
-  src/Transcoder_SLIN_48K.cpp
-  src/Transcoder_SLIN_16K.cpp
-  src/Transcoder_SLIN_8K.cpp
-  kc1fsz-tools-cpp/src/Common.cpp
-  kc1fsz-tools-cpp/src/NetUtils.cpp
-  kc1fsz-tools-cpp/src/DTMFDetector2.cpp
-  kc1fsz-tools-cpp/src/StdPollTimer.cpp
-  kc1fsz-tools-cpp/src/linux/StdClock.cpp
-  kc1fsz-tools-cpp/src/fixed_math.cpp
-  itu-g711-codec/src/codec.cpp
-  itu-g711-codec/src/Plc.cpp
-  cmsis-dsp-mock/src/main.cpp
-  #alsa-mock/src/asoundlib.c
-)
-target_compile_options(unit-test PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
-
-target_include_directories(unit-test PRIVATE src)
-target_include_directories(unit-test PRIVATE include)
-target_include_directories(unit-test PRIVATE kc1fsz-tools-cpp/include)
-target_include_directories(unit-test PRIVATE itu-g711-codec/src)
-target_include_directories(unit-test PRIVATE cmsis-dsp-mock/include)
-target_include_directories(unit-test PRIVATE alsa-mock/include)
-target_include_directories(unit-test PRIVATE hid-mock/include)
-target_include_directories(unit-test PRIVATE json/include)
-target_include_directories(unit-test PRIVATE argparse/include)
-target_link_libraries(unit-test)
-
 # ----- Protocol Test
 
 add_executable(protocol-test
@@ -631,3 +586,49 @@ target_include_directories(audio-test-2 PRIVATE src)
 target_include_directories(audio-test-2 PRIVATE include)
 target_include_directories(audio-test-2 PRIVATE kc1fsz-tools-cpp/include)
 target_include_directories(audio-test-2 PRIVATE cmsis-dsp-mock/include)
+
+# ----- unit-test
+
+add_executable(unit-test
+  src/tests/unit-test.cpp
+  src/tests/dsp_util.cpp
+  src/Message.cpp
+  src/Line.cpp
+  src/IAX2FrameFull.cpp
+  src/IAX2Util.cpp
+  src/Resampler.cpp
+  src/VoterUtil.cpp
+  #src/Transcoder_G711_ULAW.cpp
+  #src/NodeParrot.cpp
+  src/Bridge.cpp
+  src/BridgeCall.cpp
+  src/BridgeIn.cpp
+  src/BridgeOut.cpp
+  src/KerchunkFilter.cpp
+  src/Transcoder_G711_ULAW.cpp
+  src/Transcoder_SLIN_48K.cpp
+  src/Transcoder_SLIN_16K.cpp
+  src/Transcoder_SLIN_8K.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/DTMFDetector2.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+  kc1fsz-tools-cpp/src/fixed_math.cpp
+  itu-g711-codec/src/codec.cpp
+  itu-g711-codec/src/Plc.cpp
+  cmsis-dsp-mock/src/main.cpp
+  #alsa-mock/src/asoundlib.c
+)
+target_compile_options(unit-test PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
+
+target_include_directories(unit-test PRIVATE src)
+target_include_directories(unit-test PRIVATE include)
+target_include_directories(unit-test PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(unit-test PRIVATE itu-g711-codec/src)
+target_include_directories(unit-test PRIVATE cmsis-dsp-mock/include)
+target_include_directories(unit-test PRIVATE alsa-mock/include)
+target_include_directories(unit-test PRIVATE hid-mock/include)
+target_include_directories(unit-test PRIVATE json/include)
+target_include_directories(unit-test PRIVATE argparse/include)
+target_link_libraries(unit-test)
