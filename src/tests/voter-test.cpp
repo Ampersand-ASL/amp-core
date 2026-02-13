@@ -32,34 +32,147 @@ to validate whether the authentication handshake is working.
 */
 static void voterTest2() {
 
+    Log log;
+
     string serverPwd = "server123";
+    string serverChallenge = VoterPeer::makeChallenge();
     string client0Pwd = "client000";
 
-    amp::VoterPeer server;
-    server.setLocalPassword(serverPwd.c_str());
-    server.setRemotePassword(client0Pwd.c_str());
+    amp::VoterPeer server0;
+    server0.init(&log);
+    server0.setLocalPassword(serverPwd.c_str());
+    server0.setLocalChallenge(serverChallenge.c_str());
+    server0.setRemotePassword(client0Pwd.c_str());
 
     amp::VoterPeer client0;
+    client0.init(&log);
     client0.setLocalPassword(client0Pwd.c_str());
     client0.setRemotePassword(serverPwd.c_str());
 
-    uint8_t serverOut[256];
-    unsigned serverOutLen;
+    bool server0Sent = false;
+    uint8_t server0Out[256];
+    unsigned server0OutLen;
 
+    bool client0Sent = false;
     uint8_t client0Out[256];
     unsigned client0OutLen;
 
     // Hook the server/client up to some buffers so we can look at the outbound traffic
-    server.setSink([&serverOut, &serverOutLen](const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
+    server0.setSink([&log, &server0Sent, &server0Out, &server0OutLen]
+        (const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
         assert(dataLen <= 256);
-        memcpy(serverOut, data, dataLen);
-        serverOutLen = dataLen;
+        server0Sent = true;
+        memcpy(server0Out, data, dataLen);
+        server0OutLen = dataLen;
+        // Tracing
+        char addrStr[64];
+        formatIPAddrAndPort(addr, addrStr, sizeof(addrStr));
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Server sending to %s:", addrStr);
+        log.infoDump(msg, data, dataLen);
     });
-    client0.setSink([&client0Out, &client0OutLen](const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
+    client0.setSink([&log, &client0Sent, &client0Out, &client0OutLen]
+        (const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
         assert(dataLen <= 256);
+        client0Sent = true;
         memcpy(client0Out, data, dataLen);
         client0OutLen = dataLen;
+        // Tracing
+        char addrStr[64];
+        formatIPAddrAndPort(addr, addrStr, sizeof(addrStr));
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Client sending to %s:", addrStr);
+        log.infoDump(msg, data, dataLen);
     });
+
+    sockaddr_storage serverAddr;
+    serverAddr.ss_family = AF_INET;
+    setIPAddr(serverAddr,"1.1.1.1");
+    setIPPort(serverAddr, 1667);
+
+    sockaddr_storage client0Addr;
+    client0Addr.ss_family = AF_INET;
+    setIPAddr(client0Addr,"2.2.2.2");
+    setIPPort(client0Addr, 1667);
+
+    // Give the client the server's address
+    client0.setPeerAddr(serverAddr);
+
+    assert(!client0.isPeerTrusted());
+    assert(!server0.isPeerTrusted());
+
+    // ----- Tick ----------------------------------------------------------
+    // 1. The client should send a challenge to the server
+    // 2. The server shouldn't do anything
+    log.info("Tick 0");
+    server0.oneSecTick();
+    client0.oneSecTick();
+
+    // Server is quiet at the start
+    assert(!server0Sent);
+    // The client starts by sending a type 0 packet
+    assert(client0Sent);
+
+    // The client's message shouldn't belong to server0 yet
+    assert(!server0.belongsTo(client0Out, client0OutLen));
+
+    // Make a response to send back to the potential new client
+    int rc = VoterPeer::makeInitialChallengeResponse(client0Out,
+        serverChallenge.c_str(), serverPwd.c_str(),
+        server0Out);
+    assert(rc == 24);
+    server0OutLen = rc;
+    log.info("Server is sending initial challenge response:");
+    log.infoDump("", server0Out, server0OutLen);
+
+    // The client should be satisfied with the server now
+    client0.consumePacket((const sockaddr&)serverAddr, server0Out, server0OutLen);
+    assert(client0.isPeerTrusted());
+
+    // Since the client is happy it sends some audio to the server.
+    uint8_t testAudio[160];
+    client0.sendAudio(1000, testAudio, sizeof(testAudio));
+
+    // The server should now see that the message belongs to server0
+    assert(!server0.isPeerTrusted());
+    assert(server0.belongsTo(client0Out, client0OutLen));
+    
+    // The server should be happy now
+    server0.consumePacket((const sockaddr&)client0Addr, client0Out, client0OutLen);
+    assert(server0.isPeerTrusted());
+   
+    // ----- Tick ----------------------------------------------------------
+    log.info("Tick 1");
+    server0Sent = false;
+    client0Sent = false;
+    server0.oneSecTick();
+    client0.oneSecTick();
+
+    // Nobody should be sending spontaneous messages yet
+    assert(!server0Sent);
+    assert(!client0Sent);
+
+    // ----- Tick ----------------------------------------------------------
+    log.info("Tick 2 (10 second)");
+    server0Sent = false;
+    client0Sent = false;
+    server0.oneSecTick();
+    client0.oneSecTick();
+    server0.tenSecTick();
+    client0.tenSecTick();
+
+    // Should see pings in both directions
+    assert(server0Sent);
+    assert(client0Sent);
+
+    server0Sent = false;
+    client0Sent = false;
+
+    assert(server0.belongsTo(client0Out, client0OutLen));
+    server0.consumePacket((const sockaddr&)client0Addr, client0Out, client0OutLen);
+
+    // Should see the ping response
+    assert(server0Sent);
 }
 
 int main(int, const char**) {

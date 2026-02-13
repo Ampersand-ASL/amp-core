@@ -48,11 +48,20 @@ public:
 
     void reset();
 
+    unsigned getBadPackets() const { return _badPackets; }
+
     /**
      * Make the connection to support transmission to the 
      * remote Voter device.
      */
     void setSink(sinkCb cb) { _sendCb = cb; };
+
+    /**
+     * @param p The the local side's challenge string. It should 
+     * be a random string (<=9 chars + null) that stays constant
+     * through the life of the session.
+     */
+    void setLocalChallenge(const char* p) { _localChallenge = p; }
 
     /**
      * @param p The the local side's password. For a server-side 
@@ -66,12 +75,27 @@ public:
      */
     void setRemotePassword(const char* p) { _remotePassword = p; }
 
+    /**
+     * Used when the address of the peer is known in advance, like
+     * for a client that knows the location of its server.
+     */
+    void setPeerAddr(const sockaddr_storage& addr);
+
+    bool isPeerTrusted() const { return _peerTrusted; }
+
+    /**
+     * @returns true if the packets is signed by someone that knows
+     * this peer's password. This is used for the server case to 
+     * determine which peer a message belongs to.
+     */
+    bool belongsTo(const uint8_t* packet, unsigned packetLen) const;
+
     // ----- For the Voter-facing side of the system ------------------
 
     /**
      * Called for all inbound packets from the voter unit.
      */
-    void consumePacket(const uint8_t* packet, unsigned packetLen);
+    void consumePacket(const sockaddr& peerAddr, const uint8_t* packet, unsigned packetLen);
 
     // ----- For the conference-facing side of the system ---------------
 
@@ -96,20 +120,29 @@ public:
      */
     void sendAudio(uint64_t ms, const uint8_t* frame, unsigned frameLen);
 
+    static bool isValidPacket(const uint8_t* packet, unsigned packetLen);
+
+    static bool isInitialChallenge(const uint8_t* packet, unsigned packetLen);
+
+    static int makeInitialChallengeResponse(const uint8_t* inPacket, 
+        const char* localChallenge, const char* localPassword, uint8_t* resp);
+
+    /**
+     * @returns A random challenge used for the session.
+     */
+    static std::string makeChallenge();
+
     // ----- From Runnable2 --------------------------------------------------
 
     virtual void oneSecTick();
+    virtual void tenSecTick();
 
 private:
 
     Log* _log = 0;
 
     void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
-
-    /**
-     * @returns A random challenge used for the session.
-     */
-    static std::string _makeChallenge();
+    void _populateAuth(uint8_t* resp) const;
 
     sockaddr_storage _peerAddr;
     unsigned _badPackets = 0;

@@ -114,7 +114,7 @@ int VoterUtil::getType1Audio(const uint8_t* packet,
 }
 
 void VoterUtil::setHeaderPayloadType(uint8_t* packet, uint16_t t) {
-	pack_uint16_be(t, packet);
+	pack_uint16_be(t, packet + 22);
 }
 
 void VoterUtil::setHeaderAuthChallenge(uint8_t* packet, const char* challenge) {

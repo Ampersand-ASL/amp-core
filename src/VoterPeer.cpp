@@ -16,8 +16,10 @@
  */
 #include <iostream>
 #include <string>
+#include <cstring>
 
 #include "kc1fsz-tools/Log.h"
+#include "kc1fsz-tools/NetUtils.h"
 
 #include "VoterUtil.h"
 #include "VoterPeer.h"
@@ -28,63 +30,6 @@ namespace kc1fsz {
 
     namespace amp {
 
-VoterPeer::VoterPeer() {
-}
-
-VoterPeer::~VoterPeer() {
-}
-
-void VoterPeer::reset() {
-    _peerTrusted = false;
-}
-
-void VoterPeer::consumePacket(const uint8_t* packet, unsigned packetLen) {
-
-    // Ignore spurious packets
-    if ((packetLen < 24) ||
-        (VoterUtil::getHeaderPayloadType(packet) == 0 && packetLen != 24) ||
-        (VoterUtil::getHeaderPayloadType(packet) == 1 && packetLen != 185) ||
-        (VoterUtil::getHeaderPayloadType(packet) == 5 && packetLen != 224)) {
-        _log->infoDump("Bad packet length ignored", packet, packetLen);
-        _badPackets++;
-        return;
-    }
-    if (VoterUtil::getHeaderPayloadType(packet) != 0 &&
-        VoterUtil::getHeaderPayloadType(packet) != 1 &&
-        VoterUtil::getHeaderPayloadType(packet) != 2 &&
-        VoterUtil::getHeaderPayloadType(packet) != 3 &&
-        VoterUtil::getHeaderPayloadType(packet) != 4 &&
-        VoterUtil::getHeaderPayloadType(packet) != 5) {
-        _log->infoDump("Bad packet type ignored", packet, packetLen);
-        _badPackets++;
-        return;
-    }
-
-    // Quietly Ignore a few types
-    if (VoterUtil::getHeaderPayloadType(packet) != 3 &&
-        VoterUtil::getHeaderPayloadType(packet) != 4) {
-        _badPackets++;
-        return;
-    }
-
-    // Determine if we know this client already or whether a authentication cycle
-    // needs to be started.
-    if (VoterUtil::getHeaderAuthResponse(packet) != 0) {
-        // ### TODO SPEED THIS UP
-        char buf[64];
-        snprintf(buf, sizeof(buf),"%s%s", _localChallenge.c_str(), _remotePassword.c_str());
-        if (VoterUtil::crc32(buf) == VoterUtil::getHeaderAuthResponse(packet)) {
-            _peerTrusted = true;
-        } else {
-            _log->info("Authentication failed.");
-            _localChallenge.clear();
-            _remoteChallenge.clear();
-            _peerTrusted = false;
-            return;
-        }
-    }
-    // If there is no authentication response then use this to start a 
-    // new authentication cycle.
     /* From docs:       
        When the client starts operating, it starts periodically sending VOTER packets 
        to the host containing a payload value of 0, the client's challenge string and 
@@ -94,7 +39,98 @@ void VoterPeer::consumePacket(const uint8_t* packet, unsigned packetLen) {
        an authentication response (digest) based upon the calculated CRC-32 value of the 
        challenge string it received from the client and the host's password, and option flags.    
     */
-    else {
+
+
+VoterPeer::VoterPeer() {
+    reset();
+}
+
+VoterPeer::~VoterPeer() {
+}
+
+void VoterPeer::init(Log* log) {
+    _log = log;
+}
+
+void VoterPeer::reset() {
+    _badPackets = 0;
+    _peerTrusted = false;
+    _localChallenge.clear();
+    _remoteChallenge.clear();
+    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+}
+
+void VoterPeer::setPeerAddr(const sockaddr_storage& addr) {
+    memcpy(&_peerAddr, &addr, sizeof(sockaddr_storage));
+}
+
+bool VoterPeer::isInitialChallenge(const uint8_t* packet, unsigned packetLen) {
+    if (!isValidPacket(packet, packetLen))
+        return false;
+    return VoterUtil::getHeaderPayloadType(packet) == 0 &&
+        VoterUtil::getHeaderAuthResponse(packet) == 0;
+}
+
+int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet, 
+    const char* localChallenge, const char* localPassword, uint8_t* resp) {
+    // Grab the remote challenge since we'll need it for any responses.
+    char remoteChallenge[10];
+    if (VoterUtil::getHeaderAuthChallenge(packet, 
+        remoteChallenge, sizeof(remoteChallenge)) != 0)
+        return -1;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%s%s", remoteChallenge, localPassword);
+    uint32_t crc = VoterUtil::crc32(buf);
+    VoterUtil::setHeaderPayloadType(resp, 0);
+    VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
+    VoterUtil::setHeaderAuthResponse(resp, crc);
+    return 24;
+}
+
+bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
+    if (!isValidPacket(packet, packetLen))
+        return false;
+    if (VoterUtil::getHeaderAuthResponse(packet) == 0) 
+        return false;
+    // ### TODO SPEED THIS UP
+    char buf[64];
+    snprintf(buf, sizeof(buf),"%s%s", _localChallenge.c_str(), _remotePassword.c_str());
+    return VoterUtil::crc32(buf) == VoterUtil::getHeaderAuthResponse(packet);
+}
+
+bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
+    if ((packetLen < 24) ||
+        (VoterUtil::getHeaderPayloadType(packet) == 0 && packetLen != 24) ||
+        (VoterUtil::getHeaderPayloadType(packet) == 1 && packetLen != 185) ||
+        (VoterUtil::getHeaderPayloadType(packet) == 5 && packetLen != 224)) {
+        return false;
+    }
+    if (VoterUtil::getHeaderPayloadType(packet) != 0 &&
+        VoterUtil::getHeaderPayloadType(packet) != 1 &&
+        VoterUtil::getHeaderPayloadType(packet) != 2 &&
+        VoterUtil::getHeaderPayloadType(packet) != 3 &&
+        VoterUtil::getHeaderPayloadType(packet) != 4 &&
+        VoterUtil::getHeaderPayloadType(packet) != 5) {
+        return false;
+    }
+    return true;
+}
+
+void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet, 
+    unsigned packetLen) {
+
+    // Quietly Ignore a few types
+    if (VoterUtil::getHeaderPayloadType(packet) == 3 ||
+        VoterUtil::getHeaderPayloadType(packet) == 4) {
+        _badPackets++;
+        return;
+    }
+
+    // Look for the transition into trust
+    if (!_peerTrusted) {
+        _log->info("%s now trusts its peer", _localPassword.c_str());
+        _peerTrusted = true;
+        // Grab the remote challenge since we'll need it for any responses.
         char remoteChallenge[10];
         if (VoterUtil::getHeaderAuthChallenge(packet, 
             remoteChallenge, sizeof(remoteChallenge)) != 0) {
@@ -102,52 +138,81 @@ void VoterPeer::consumePacket(const uint8_t* packet, unsigned packetLen) {
             _badPackets++;
             return;
         }
-
-        // Setup the information that wil be used on the next transmission
-        _localChallenge = _makeChallenge();
         _remoteChallenge = remoteChallenge;
+        // Grab the peer address
+        memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
     }
 
-    if (_peerTrusted) {
-        _consumePacketTrusted(packet, packetLen);
-    }
+    _consumePacketTrusted(packet, packetLen);
 }
 
 void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen) {
+    if (VoterUtil::getHeaderPayloadType(packet) == 5) {
+        // Make a pong
+        uint8_t resp[224];
+        _populateAuth(resp);
+        VoterUtil::setHeaderPayloadType(resp, 5);
+        // From Docs:
+        // Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
+        // quality. When a client receives this packet, it is intended to be transmitted 
+        // (with the payload information intact) immediately back to the host from which 
+        // it came. The actual contents of the payload are not specifically defined for 
+        // the purposes of this protocol, and is entirely determined by the implementation 
+        // of the applicable function in the host.
+        memcpy(resp + 24, packet + 24, 200);
+        _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+    }
 }
 
 void VoterPeer::sendAudio(uint64_t ms, const uint8_t* frame, unsigned frameLen) {
 
-    /* From docs:
-        If the client approves of the host's response, it may then start sending packets 
-        with a payload type of 1 or 3, the client's challenge string, and an 
-        authentication response (digest) based upon the calculated CRC-32 value of the 
-        challenge string it received from the host and the client's password, 
-    */
+    uint8_t resp[24 + 1 + 160];
 
+    _populateAuth(resp);
+    VoterUtil::setHeaderPayloadType(resp, 1);
 
-    // When computing authentication response we concatenate the most recent challenge 
-    // received from the client with the host's our password. This order is described
-    // in the Voter documentation and is confirmed around line 3359 of chan_voter
-    // https://github.com/AllStarLink/app_rpt/blob/master/channels/chan_voter.c#L3359
-    char buf[64];
-    snprintf(buf, sizeof(buf),"%s%s", _remoteChallenge.c_str(), _localPassword.c_str());
-    uint32_t crc = VoterUtil::crc32(buf);
-
-    uint8_t resp[24];
-    VoterUtil::setHeaderPayloadType(resp, 0);
-    VoterUtil::setHeaderAuthChallenge(resp, _localChallenge.c_str());
-    VoterUtil::setHeaderAuthResponse(resp, crc);
-
-    _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
+    _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
 }
 
-string VoterPeer::_makeChallenge() {
+string VoterPeer::makeChallenge() {
     // ### TODO RANDOMIZE!
     return string("hello");
 }
 
 void VoterPeer::oneSecTick() {    
+    // Check to see if an authentication packet should be sent out
+    if (_peerAddr.ss_family != 0 && !_peerTrusted) {
+        uint8_t resp[24];
+        _localChallenge = makeChallenge();
+        VoterUtil::setHeaderPayloadType(resp, 0);
+        VoterUtil::setHeaderAuthChallenge(resp, _localChallenge.c_str());
+        VoterUtil::setHeaderAuthResponse(resp, 0);
+        _log->info("%s initiating handshake", _localPassword.c_str());
+        _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
+    }
+}
+
+void VoterPeer::tenSecTick() {
+    if (_peerTrusted) {
+        // Generate a ping
+        uint8_t resp[224];
+        memset(resp + 24, 0xba, 200);
+        _populateAuth(resp);
+        VoterUtil::setHeaderPayloadType(resp, 5);
+        _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+    }
+}
+
+void VoterPeer::_populateAuth(uint8_t* resp) const {
+    char buf[64];
+    // When computing authentication response we concatenate the most recent challenge 
+    // received from the client with the host's our password. This order is described
+    // in the Voter documentation and is confirmed around line 3359 of chan_voter
+    // https://github.com/AllStarLink/app_rpt/blob/master/channels/chan_voter.c#L3359
+    // #### TODO: SPEED UP
+    snprintf(buf, sizeof(buf), "%s%s", _remoteChallenge.c_str(), _localPassword.c_str());
+    VoterUtil::setHeaderAuthResponse(resp, VoterUtil::crc32(buf));
+    VoterUtil::setHeaderAuthChallenge(resp, _localChallenge.c_str());
 }
 
 }
