@@ -125,5 +125,13 @@ void VoterUtil::setHeaderAuthResponse(uint8_t* packet, uint32_t crc32) {
 	pack_uint32_be(crc32, packet + 18);
 }
 
+void VoterUtil::setHeaderTimeS(uint8_t* packet, uint32_t s) {
+	pack_uint32_be(s, packet);
+}
+
+void VoterUtil::setHeaderTimeNs(uint8_t* packet, uint32_t ns) {
+	pack_uint32_be(ns, packet + 4);
+}
+
 }
     }

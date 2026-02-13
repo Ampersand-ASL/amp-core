@@ -44,7 +44,7 @@ public:
     VoterPeer();
     ~VoterPeer();
 
-    void init(Log* log);
+    void init(Clock* clock, Log* log);
 
     void reset();
 
@@ -70,6 +70,13 @@ public:
     void setLocalPassword(const char* p) { _localPassword = p; }
 
     /**
+     * @param p The the remote side's challenge string. Probably
+     * only needed for unit testing since this will normally
+     * be exchanged during the handshake
+     */
+    void setRemoteChallenge(const char* p) { _remoteChallenge = p; }
+
+    /**
      * @param p The remote sides's password. For a server-side 
      * peer this is the client's password.
      */
@@ -82,6 +89,8 @@ public:
     void setPeerAddr(const sockaddr_storage& addr);
 
     bool isPeerTrusted() const { return _peerTrusted; }
+
+    void setPeerTrusted(bool v) { _peerTrusted = true; }
 
     /**
      * @returns true if the packets is signed by someone that knows
@@ -118,7 +127,7 @@ public:
      * Called by the conference to transmit a frame of audio to the
      * Voter device.
      */
-    void sendAudio(uint64_t ms, const uint8_t* frame, unsigned frameLen);
+    void sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen);
 
     static bool isValidPacket(const uint8_t* packet, unsigned packetLen);
 
@@ -139,6 +148,22 @@ public:
 
 private:
 
+    struct AudioFrame {
+        bool valid;
+        uint64_t arrivalUs;
+        uint32_t packetS;
+        uint32_t packetNs;
+        uint8_t content[160];
+        uint8_t rssi;
+    };
+
+    friend class AudioFrame;
+
+    static const unsigned FRAME_COUNT = 4;
+    AudioFrame _frames[FRAME_COUNT];
+    unsigned _framePtr = 0;
+
+    Clock* _clock = 0;
     Log* _log = 0;
 
     void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
@@ -152,6 +177,16 @@ private:
     std::string _remotePassword;
     std::string _localChallenge;
     std::string _remoteChallenge;
+
+    uint32_t _audioSeq = 0;
+
+    bool _inSpurt = false;
+    // This is the actual time the spurt started
+    uint64_t _spurtStartUs = 0;
+    // This is the time/sequence number reported by the peer of the first frame
+    // of a new spurt.
+    uint32_t _spurtStartPacketS = 0;
+    uint32_t _spurtStartPacketNs = 0;
 };
 
 }

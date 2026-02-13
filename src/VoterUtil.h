@@ -53,6 +53,8 @@ public:
     static void setHeaderPayloadType(uint8_t* packet, uint16_t t);
     static void setHeaderAuthChallenge(uint8_t* packet, const char* challenge);
     static void setHeaderAuthResponse(uint8_t* packet, uint32_t crc32);
+    static void setHeaderTimeS(uint8_t* packet, uint32_t s);
+    static void setHeaderTimeNs(uint8_t* packet, uint32_t ns);
 };
 
 }

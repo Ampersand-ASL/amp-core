@@ -17,6 +17,7 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <cassert>
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/NetUtils.h"
@@ -48,7 +49,8 @@ VoterPeer::VoterPeer() {
 VoterPeer::~VoterPeer() {
 }
 
-void VoterPeer::init(Log* log) {
+void VoterPeer::init(Clock* clock, Log* log) {
+    _clock = clock;
     _log = log;
 }
 
@@ -58,6 +60,13 @@ void VoterPeer::reset() {
     _localChallenge.clear();
     _remoteChallenge.clear();
     memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+    for (AudioFrame& f : _frames)
+        f.valid = false;
+    _inSpurt = false;
+    _spurtStartUs = 0;
+    _spurtStartPacketS = 0;
+    _spurtStartPacketNs= 0;
+    _audioSeq = 1;
 }
 
 void VoterPeer::setPeerAddr(const sockaddr_storage& addr) {
@@ -147,7 +156,29 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 }
 
 void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen) {
-    if (VoterUtil::getHeaderPayloadType(packet) == 5) {
+    // Audio packet
+    if (VoterUtil::getHeaderPayloadType(packet) == 1) {
+
+        // Capture in the circular frame buffer
+        _frames[_framePtr].valid = true;
+        _frames[_framePtr].arrivalUs = _clock->timeUs();
+        _frames[_framePtr].packetS = VoterUtil::getHeaderTimeS(packet);
+        _frames[_framePtr].packetNs= VoterUtil::getHeaderTimeNs(packet);
+        _frames[_framePtr].rssi = VoterUtil::getType1RSSI(packet);
+        VoterUtil::getType1Audio(packet, _frames[_framePtr].content, 160);
+        if (++_framePtr == FRAME_COUNT)
+            _framePtr = 0;
+
+        // Look for the leading edge of a spurt
+        if (!_inSpurt) {
+            _inSpurt = true;
+            _spurtStartUs = _clock->timeUs();
+            _spurtStartPacketS = VoterUtil::getHeaderTimeS(packet);
+            _spurtStartPacketNs = VoterUtil::getHeaderTimeNs(packet);
+            _log->info("Start of TS for %s", _localPassword.c_str());
+        }
+
+    } else if (VoterUtil::getHeaderPayloadType(packet) == 5) {
         // Make a pong
         uint8_t resp[224];
         _populateAuth(resp);
@@ -164,14 +195,22 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     }
 }
 
-void VoterPeer::sendAudio(uint64_t ms, const uint8_t* frame, unsigned frameLen) {
+void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen) {
+
+    assert(frameLen == 160);
 
     uint8_t resp[24 + 1 + 160];
-
     _populateAuth(resp);
     VoterUtil::setHeaderPayloadType(resp, 1);
-
+    uint32_t nowS = _clock->timeUs() / 1000000;
+    VoterUtil::setHeaderTimeS(resp, nowS);
+    VoterUtil::setHeaderTimeNs(resp, _audioSeq);
+    // #### TODO: FUNCTIONS FOR THIS
+    resp[24] = rssi;
+    memcpy(resp + 25, frame, 160);
     _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+
+    _audioSeq++;
 }
 
 string VoterPeer::makeChallenge() {
