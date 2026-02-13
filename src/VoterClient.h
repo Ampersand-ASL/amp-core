@@ -21,6 +21,8 @@
 #include <cstdint>
 #include <functional>
 
+#include "Runnable2.h"
+
 namespace kc1fsz {
 
 class Log;
@@ -28,25 +30,31 @@ class Clock;
 
     namespace amp {
 
-class VoterClient {
+class VoterClient : public Runnable2 {
 public:
+
+    using sinkCb = std::function<void(const sockaddr& addr, 
+        const uint8_t* packet, unsigned packetLen)>;
+
+    void init(Log* log);
+
+    void reset();
 
     /**
      * Make the connection to support transmission to the 
      * remote Voter device.
      */
-    void setSink(std::function<void(const sockaddr& addr, 
-        const uint8_t* packet, unsigned packetLen)> sendCb);
+    void setSink(sinkCb cb) { _sendCb = cb; };
 
     /**
-     * @param password The host's password.
+     * @param p The host's password.
      */
-    void setHostPassword(const char* password);
+    void setHostPassword(const char* p) { _hostPassword = p; }
 
     /**
-     * @param password The client's password.
+     * @param p The client's password.
      */
-    void setClientPassword(const char* password);
+    void setClientPassword(const char* p) { _clientPassword = p; }
 
     // ----- For the Voter-facing side of the system ------------------
 
@@ -77,6 +85,27 @@ public:
      * Voter device.
      */
     void sendAudio(uint64_t ms, const uint8_t* frame, unsigned frameLen);
+
+    // ----- From Runnable2 --------------------------------------------------
+
+    virtual void oneSecTick();
+
+private:
+
+    Log* _log = 0;
+
+    /**
+     * @returns A random challenge used for the session.
+     */
+    static std::string _makeChallenge();
+
+    sockaddr_storage _peerAddr;
+    unsigned _authState = 0;
+    unsigned _badPackets = 0;
+    sinkCb _sendCb;
+    std::string _hostPassword;
+    std::string _clientPassword;
+    std::string _hostChallenge;
 };
 
 }

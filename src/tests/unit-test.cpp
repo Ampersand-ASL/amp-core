@@ -398,13 +398,16 @@ static void wrapTest1() {
         assert(compareWrap8(8 + i, 7 + i) == 1);
 }
 
-static void voterTest1() {
+static void voterTest1() { 
+}
 
-    
-
+static void crcTest1() { 
+    uint32_t r1 = VoterUtil::crc32("IzzyHenry");
+    assert(r1 == 3749699513);
 }
 
 int main(int, const char**) {
+    crcTest1();
     voterTest1();
     wrapTest1();
     lambaTest1();

@@ -598,6 +598,7 @@ add_executable(unit-test
   src/IAX2Util.cpp
   src/Resampler.cpp
   src/VoterUtil.cpp
+  src/VoterClient.cpp
   #src/Transcoder_G711_ULAW.cpp
   #src/NodeParrot.cpp
   src/Bridge.cpp
