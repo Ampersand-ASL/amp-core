@@ -597,8 +597,6 @@ add_executable(unit-test
   src/IAX2FrameFull.cpp
   src/IAX2Util.cpp
   src/Resampler.cpp
-  src/VoterUtil.cpp
-  src/VoterClient.cpp
   #src/Transcoder_G711_ULAW.cpp
   #src/NodeParrot.cpp
   src/Bridge.cpp
@@ -633,3 +631,20 @@ target_include_directories(unit-test PRIVATE hid-mock/include)
 target_include_directories(unit-test PRIVATE json/include)
 target_include_directories(unit-test PRIVATE argparse/include)
 target_link_libraries(unit-test)
+
+# ----- voter-test
+
+add_executable(voter-test
+  src/tests/voter-test.cpp
+  src/VoterUtil.cpp
+  src/VoterPeer.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+)
+target_compile_options(voter-test PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
+
+target_include_directories(voter-test PRIVATE src)
+target_include_directories(voter-test PRIVATE include)
+target_include_directories(voter-test PRIVATE kc1fsz-tools-cpp/include)

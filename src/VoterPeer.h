@@ -30,11 +30,19 @@ class Clock;
 
     namespace amp {
 
-class VoterClient : public Runnable2 {
+/**
+ * An instance of this class represents either the server or client side of
+ * a voter link. The protocol is reasonably symmetric so we are going to avoid
+ * creating separate classes for each side.
+ */
+class VoterPeer : public Runnable2 {
 public:
 
     using sinkCb = std::function<void(const sockaddr& addr, 
         const uint8_t* packet, unsigned packetLen)>;
+
+    VoterPeer();
+    ~VoterPeer();
 
     void init(Log* log);
 
@@ -47,14 +55,16 @@ public:
     void setSink(sinkCb cb) { _sendCb = cb; };
 
     /**
-     * @param p The host's password.
+     * @param p The the local side's password. For a server-side 
+     * peer this is the server's password.
      */
-    void setHostPassword(const char* p) { _hostPassword = p; }
+    void setLocalPassword(const char* p) { _localPassword = p; }
 
     /**
-     * @param p The client's password.
+     * @param p The remote sides's password. For a server-side 
+     * peer this is the client's password.
      */
-    void setClientPassword(const char* p) { _clientPassword = p; }
+    void setRemotePassword(const char* p) { _remotePassword = p; }
 
     // ----- For the Voter-facing side of the system ------------------
 
@@ -94,18 +104,21 @@ private:
 
     Log* _log = 0;
 
+    void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
+
     /**
      * @returns A random challenge used for the session.
      */
     static std::string _makeChallenge();
 
     sockaddr_storage _peerAddr;
-    unsigned _authState = 0;
     unsigned _badPackets = 0;
     sinkCb _sendCb;
-    std::string _hostPassword;
-    std::string _clientPassword;
-    std::string _hostChallenge;
+    bool _peerTrusted = false;
+    std::string _localPassword;
+    std::string _remotePassword;
+    std::string _localChallenge;
+    std::string _remoteChallenge;
 };
 
 }
