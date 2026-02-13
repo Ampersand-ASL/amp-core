@@ -66,6 +66,7 @@ void VoterClient::consumePacket(const uint8_t* packet, unsigned packetLen) {
             }
 
             char buf[64];
+            // #### TODO: VALIDATE ORDER!
             snprintf(buf, sizeof(buf),"%s%s", _hostPassword.c_str(), clientChallenge);
             uint32_t crc = VoterUtil::crc32(buf);
             _hostChallenge = _makeChallenge();
@@ -94,6 +95,7 @@ void VoterClient::consumePacket(const uint8_t* packet, unsigned packetLen) {
             // Is the first time through a new authentication?
             else if (_authState == 1) {
                 char buf[64];
+                // #### TODO: VALIDATE ORDER!
                 snprintf(buf, sizeof(buf),"%s%s", _hostChallenge.c_str(), _clientPassword.c_str());
                 uint32_t crc = VoterUtil::crc32(buf);
                 if (crc == VoterUtil::getHeaderAuthResponse(packet)) {
