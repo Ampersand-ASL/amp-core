@@ -328,6 +328,7 @@ static void voterTest2() {
     // Send some audio client0->server0
     uint8_t testAudio[160];
     memset(testAudio, 0xab, 160);
+
     client0.sendAudio(0x77, testAudio, sizeof(testAudio));
     assert(server0.isPeerTrusted());
     assert(server0.belongsTo(client0Out, client0OutLen));
@@ -337,8 +338,84 @@ static void voterTest2() {
     assert(server0.isPeerTrusted());
     assert(client0.isPeerTrusted());
 
-    uint8_t extractedAudio[160];
-    server0.getAudioFrame(1000, extractedAudio, 160);
+    // Shouldn't see the audio on the conference side yet (delayed playout)
+    assert(server0.getRSSI(1000) == 0);
+
+    // ----- Tick -----------------------------------------------------
+    uint32_t t = 1000;
+    server0.audioRateTick(t);
+    client0.audioRateTick(t);
+
+    // Contribute the next audio frame
+    client0.sendAudio(0x78, testAudio, sizeof(testAudio));
+    assert(server0.belongsTo(client0Out, client0OutLen));
+    server0.consumePacket((const sockaddr&)client0Addr, client0Out, client0OutLen);
+
+    // Shouldn't see the audio on the conference side yet (delayed playout)
+    assert(server0.getRSSI(t) == 0);
+
+    // ----- Tick -----------------------------------------------------
+    t = 1020;
+    server0.audioRateTick(t);
+    client0.audioRateTick(t);
+
+    // NOTE: CONTRIBUTION GAP
+
+    // Should see the audio on the conference side now (first frame)
+    assert(server0.getRSSI(t) == 0x77);
+
+    // ----- Tick -----------------------------------------------------
+    t = 1040;
+    server0.audioRateTick(t);
+    client0.audioRateTick(t);
+
+    // NOTE: CONTRIBUTION GAP
+
+    // Should see the audio on the conference side now (second frame)
+    assert(server0.getRSSI(t) == 0x78);
+
+    // ----- Tick -----------------------------------------------------
+    // Should have seen 79, but it's late
+    t = 1060;
+    server0.audioRateTick(t);
+    client0.audioRateTick(t);
+
+    // Gap
+    assert(server0.getRSSI(1000) == 0);
+
+    // ----- Tick -----------------------------------------------------
+    // Should have seen 80, but it's late
+    t = 1060;
+    server0.audioRateTick(1000);
+    client0.audioRateTick(1000);
+
+    // Contribute the next audio frame (late)
+    client0.sendAudio(0x79, testAudio, sizeof(testAudio));
+    assert(server0.belongsTo(client0Out, client0OutLen));
+    server0.consumePacket((const sockaddr&)client0Addr, client0Out, client0OutLen);
+
+    // Gap
+    assert(server0.getRSSI(1000) == 0);
+
+    // ----- Tick -----------------------------------------------------
+    // Should see 81. Notice that 0x79 and 0x80 were flushed because
+    // they were too late to be used.
+    t = 1080;
+    server0.audioRateTick(t);
+    client0.audioRateTick(t);
+
+    // Contribute the next audio frame (late)
+    client0.sendAudio(0x80, testAudio, sizeof(testAudio));
+    assert(server0.belongsTo(client0Out, client0OutLen));
+    server0.consumePacket((const sockaddr&)client0Addr, client0Out, client0OutLen);
+
+    // Contribute the next audio frame (late)
+    client0.sendAudio(0x81, testAudio, sizeof(testAudio));
+    assert(server0.belongsTo(client0Out, client0OutLen));
+    server0.consumePacket((const sockaddr&)client0Addr, client0Out, client0OutLen);
+
+
+    assert(server0.getRSSI(t) == 0x81);
 }
 
 int main(int, const char**) {

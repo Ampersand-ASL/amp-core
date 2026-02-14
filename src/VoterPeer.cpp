@@ -61,12 +61,14 @@ void VoterPeer::reset() {
     _remoteChallenge.clear();
     memset(&_peerAddr, 0, sizeof(sockaddr_storage));
     for (AudioFrame& f : _frames)
-        f.valid = false;
+        f.rssi = 0;
     _inSpurt = false;
     _spurtStartUs = 0;
-    _spurtStartPacketS = 0;
-    _spurtStartPacketNs= 0;
     _audioSeq = 1;
+    _frameWrPtr = 0;
+    _frameRdPtr = 0;
+    _playCursorS = 0;
+    _playCursorNs = 0;
 }
 
 void VoterPeer::setPeerAddr(const sockaddr_storage& addr) {
@@ -160,21 +162,20 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     if (VoterUtil::getHeaderPayloadType(packet) == 1) {
 
         // Capture in the circular frame buffer
-        _frames[_framePtr].valid = true;
-        _frames[_framePtr].arrivalUs = _clock->timeUs();
-        _frames[_framePtr].packetS = VoterUtil::getHeaderTimeS(packet);
-        _frames[_framePtr].packetNs= VoterUtil::getHeaderTimeNs(packet);
-        _frames[_framePtr].rssi = VoterUtil::getType1RSSI(packet);
-        VoterUtil::getType1Audio(packet, _frames[_framePtr].content, 160);
-        if (++_framePtr == FRAME_COUNT)
-            _framePtr = 0;
+        _frames[_frameWrPtr].arrivalUs = _clock->timeUs();
+        _frames[_frameWrPtr].packetS = VoterUtil::getHeaderTimeS(packet);
+        _frames[_frameWrPtr].packetNs= VoterUtil::getHeaderTimeNs(packet);
+        _frames[_frameWrPtr].rssi = VoterUtil::getType1RSSI(packet);
+        VoterUtil::getType1Audio(packet, _frames[_frameWrPtr].content, 160);
+        if (++_frameWrPtr == FRAME_COUNT)
+            _frameWrPtr = 0;
 
         // Look for the leading edge of a spurt
         if (!_inSpurt) {
             _inSpurt = true;
             _spurtStartUs = _clock->timeUs();
-            _spurtStartPacketS = VoterUtil::getHeaderTimeS(packet);
-            _spurtStartPacketNs = VoterUtil::getHeaderTimeNs(packet);
+            _playCursorS = 0;
+            _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMargin;
             _log->info("Start of TS for %s", _localPassword.c_str());
         }
 
@@ -213,9 +214,45 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
     _audioSeq++;
 }
 
+uint8_t VoterPeer::getRSSI(uint64_t ms) {
+    _flushExpiredFrames();
+    if (_frames[_frameRdPtr].packetNs == _playCursorNs)
+        return _frames[_frameRdPtr].rssi;
+    else 
+        return 0;
+}
+
+void VoterPeer::getAudioFrame(uint64_t ms, uint8_t* frame, unsigned frameLen) {    
+    _flushExpiredFrames();
+    if (_frames[_frameRdPtr].packetNs == _playCursorNs)
+        memcpy(frame, _frames[_frameRdPtr].content, 160);
+    else 
+        memset(frame, 0, 160);
+}
+
+void VoterPeer::_flushExpiredFrames() {
+    while (true) {
+        // Is the current packet empty or in the future? If so, 
+        // nothing to flush.
+        if (_frames[_frameRdPtr].packetNs == 0 ||
+            _frames[_frameRdPtr].packetNs >= _playCursorNs)
+            break;
+        // Are we on the verge of underflow? If so, nothing to flush
+        if (_frameRdPtr + 1 % FRAME_COUNT == _frameWrPtr)
+            break;
+        // Flush and manage wrap
+        if (++_frameRdPtr == FRAME_COUNT)
+            _frameRdPtr = 0;
+    }
+}
+
 string VoterPeer::makeChallenge() {
     // ### TODO RANDOMIZE!
     return string("hello");
+}
+
+void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
+    _playCursorNs++;
 }
 
 void VoterPeer::oneSecTick() {    

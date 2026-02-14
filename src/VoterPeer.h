@@ -115,7 +115,7 @@ public:
      * @returns Zero if this client has no audio to contribute in
      * the specified time interval.
      */
-    uint8_t getRSSI(uint64_t ms) const;
+    uint8_t getRSSI(uint64_t ms);
 
     /**
      * Extracts the audio frame from this client for the specified
@@ -143,13 +143,13 @@ public:
 
     // ----- From Runnable2 --------------------------------------------------
 
+    virtual void audioRateTick(uint32_t tickTimeMs);
     virtual void oneSecTick();
     virtual void tenSecTick();
 
 private:
 
     struct AudioFrame {
-        bool valid;
         uint64_t arrivalUs;
         uint32_t packetS;
         uint32_t packetNs;
@@ -159,15 +159,18 @@ private:
 
     friend class AudioFrame;
 
-    static const unsigned FRAME_COUNT = 4;
-    AudioFrame _frames[FRAME_COUNT];
-    unsigned _framePtr = 0;
-
     Clock* _clock = 0;
     Log* _log = 0;
 
+    static const unsigned FRAME_COUNT = 4;
+    AudioFrame _frames[FRAME_COUNT];
+    // Pointers used to manage circular buffer
+    unsigned _frameWrPtr = 0;
+    unsigned _frameRdPtr = 0;
+
     void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
     void _populateAuth(uint8_t* resp) const;
+    void _flushExpiredFrames();
 
     sockaddr_storage _peerAddr;
     unsigned _badPackets = 0;
@@ -183,10 +186,13 @@ private:
     bool _inSpurt = false;
     // This is the actual time the spurt started
     uint64_t _spurtStartUs = 0;
-    // This is the time/sequence number reported by the peer of the first frame
-    // of a new spurt.
-    uint32_t _spurtStartPacketS = 0;
-    uint32_t _spurtStartPacketNs = 0;
+
+    uint32_t _playCursorS = 0;
+    uint32_t _playCursorNs = 0;
+    // The controls how far behind the playout should lag the initial
+    // network arrival in order to provide enough time for the 
+    // inbound packets to "fill in" before being used.
+    uint32_t _initialMargin = 2;
 };
 
 }
