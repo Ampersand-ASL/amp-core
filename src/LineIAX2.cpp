@@ -803,6 +803,15 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             }
 
             // What CODECs are desired by the caller?
+            //
+            // Section 8.6.8 provides an important clarification:
+            //
+            // The purpose of the FORMAT information element is to indicate a single
+            // preferred media CODEC.  When sent with a NEW message, the indicated
+            // CODEC is the desired CODEC an IAX peer wishes to use for a call.
+            // When sent with an ACCEPT message, it indicates the actual CODEC that
+            // has been selected for the call.  Its data is represented in a 4-octet
+            // bitmask according to Section 8.7.  
             uint32_t desiredCodecs = 0;
             if (!frame.getIE_uint32(IEType::IAX2_IE_FORMAT, &desiredCodecs)) {
                 _log.info("No desired CODECs provided");
@@ -2002,12 +2011,15 @@ bool LineIAX2::_progressCall(Call& call) {
             IAX2FrameFull frame;
             frame.setHeader(call.localCallId, call.remoteCallId, 
                 call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 6, 1);
-            frame.addIE_uint16(11, 0x0002);
+                call.outSeqNo, call.expectedInSeqNo, 
+                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_NEW);
+            // From RFC: A NEW message MUST include the 'version' IE, and it MUST 
+            // be the first IE; the order of other IEs is unspecified. 
+            frame.addIE_uint16(IEType::IAX2_IE_VERSION, 0x0002);
             frame.addIE_str(1, call.remoteNumber);
-            // TODO: Figure out what this means
-            //frame.addIE_str(0x2d, "D", 1);
-            frame.addIE_str(0x2d, "DGC", 3);
+            // CODECs are mapped to letters staring with "A". D means
+            // ulaw.
+            frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "D", 1);
             frame.addIE_str(2, call.localNumber);
             frame.addIE_uint8(38, 0x00);
             frame.addIE_uint8(39, 0x00);
@@ -2071,8 +2083,36 @@ bool LineIAX2::_progressCall(Call& call) {
     else if (call.side == Call::Side::SIDE_CALLED) {
         if (call.state == Call::State::STATE_CALLER_VALIDATED) {
 
-            // Here we assign the CODEC based on what the caller 
-            // said they could handle.
+            // Here we assign the CODEC based on what the caller said they 
+            // could handle.
+            //
+            // From RFC section 6.2.3: 
+            //
+            // An ACCEPT response is issued when a NEW message 
+            // is received, and authentication has taken place (if required).
+            // It acknowledges receipt of a NEW message and indicates that 
+            // the call leg has been set up on the terminating side, including 
+            // assigning a CODEC.  An ACCEPT message MUST include the 'format' 
+            // IE to indicate its desired CODEC to the originating peer.  The 
+            // CODEC format MUST be one of the formats sent in the associated 
+            // NEW command.
+            //
+            // Upon receipt of an ACCEPT, an ACK MUST be sent and the CODEC for 
+            // the call MAY be configured using the 'format' IE from the received
+            // ACCEPT.  The call then waits for an ANSWER, HANGUP, or other call
+            // control signal.  (See Section 6.3.)  If a subsequent ACCEPT message
+            // is received for a call that has already started, or has not sent a
+            // NEW message, the message MUST be ignored.
+            //
+            // Section 8.6.8 provides an important clarification:
+            //
+            // The purpose of the FORMAT information element is to indicate a single
+            // preferred media CODEC.  When sent with a NEW message, the indicated
+            // CODEC is the desired CODEC an IAX peer wishes to use for a call.
+            // When sent with an ACCEPT message, it indicates the actual CODEC that
+            // has been selected for the call.  Its data is represented in a 4-octet
+            // bitmask according to Section 8.7.  Only one 
+
             // CODEC related. Unclear why this is 9 bytes?
             const uint8_t* codec64 = 0;
             const uint8_t buf_G711_ULAW[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 4 };
@@ -2097,11 +2137,13 @@ bool LineIAX2::_progressCall(Call& call) {
             }
 
             // Send the ACCEPT message
+            //
             IAX2FrameFull acceptFrame;
             acceptFrame.setHeader(call.localCallId, call.remoteCallId, 
                 call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 6, 7);
-            acceptFrame.addIE_uint32(9, call.codec);
+                call.outSeqNo, call.expectedInSeqNo, 
+                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_ACCEPT);
+            acceptFrame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.codec);
             acceptFrame.addIE_str(0x38, (const char*)codec64, 9);
             _sendFrameToPeer(acceptFrame, call);
 

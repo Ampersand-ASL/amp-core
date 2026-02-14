@@ -93,6 +93,7 @@ unsigned codecBlockSize(CODECType type);
 enum IEType {
     IAX2_IE_CALLING_NUMBER = 0x02,
     IAX2_IE_FORMAT = 0x09,
+    IAX2_IE_VERSION = 0x0b,
     IAX2_IE_AUTHMETHODS = 0x0e,
     IAX2_IE_CHALLENGE = 0x0f,
     IAX2_IE_APPARENT_ADDR = 0x12,
@@ -100,7 +101,8 @@ enum IEType {
     IAX2_IE_ED25519_RESULT = 0x20,
     // NOTE: Not in IANA yet
     IAX2_IE_TARGET_ADDR = 0x21,
-    IAX2_IE_TARGET_ADDR2 = 0x22
+    IAX2_IE_TARGET_ADDR2 = 0x22,
+    IAX2_IE_CODEC_PREFS = 0x2d
 };
 
 /**
