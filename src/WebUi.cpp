@@ -89,12 +89,11 @@ namespace kc1fsz {
 
     namespace amp {
 
-WebUi::WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
+WebUi::WebUi(Log& log, Clock& clock, unsigned listenPort,
     unsigned networkDestLineId, unsigned radioDestLineId, const char* configFileName,
     const char* version, TraceLog& traceLog) 
 :   _log(log), 
     _clock(clock),
-    _consumer(cons),
     _listenPort(listenPort),
     _networkDestLineId(networkDestLineId),
     _radioDestLineId(radioDestLineId),

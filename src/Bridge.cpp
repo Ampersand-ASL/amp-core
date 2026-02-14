@@ -30,9 +30,9 @@ namespace kc1fsz {
 
 Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
     BridgeCall::Mode defaultMode, 
-    unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
+    unsigned lineId, unsigned ttsLineId, unsigned netTestLineId, 
     const char* netTestBindAddr,
-    unsigned networkDestLineId,
+    unsigned networkDestLineId, unsigned statsLineId,
     BridgeCall* callSpace, unsigned callSpaceLen)
 :   _log(log),
     _traceLog(traceLog),
@@ -43,6 +43,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _ttsLineId(ttsLineId),
     _netTestLineId(netTestLineId),
     _networkDestLineId(networkDestLineId),
+    _statsLineId(statsLineId),
     _calls(callSpace, callSpaceLen) { 
 
     // One-time (static) setup of all calls
@@ -504,13 +505,28 @@ void Bridge::oneSecTick() {
 }
 
 void Bridge::tenSecTick() {
-    // Tick each call
+
+    std::vector<std::string> linkReports;
+
     _visitActiveCalls(
-        [](BridgeCall& call) { 
+        [&linkReports](BridgeCall& call) { 
+            // Pass the tick down
             call.tenSecTick();
+            // Gather a comprehensive link report
+            linkReports.push_back(call.getLinkReport());
             return true;
         }
     );
+
+    // Make up a comprehensive link message
+    string linkReport;
+    for (string& r : linkReports) {
+        if (!linkReport.empty() && !linkReport.ends_with(","))
+            linkReport += ",";
+        linkReport += r;
+    }
+    
+    cout << "Full link report: " << linkReport << endl;
 }
 
 void Bridge::_visitActiveCalls(std::function<bool(BridgeCall&)> cb) {

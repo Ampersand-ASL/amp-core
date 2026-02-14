@@ -40,6 +40,11 @@ class Clock;
 
     namespace amp {
 
+/**
+ * This is a very central/important class in the system. All lines contribute
+ * audio/controls into the Bridge and it is responsible for mixing the audio
+ * and redistributing it.
+ */
 class Bridge : public MessageConsumer, public Runnable2 {
 public:
 
@@ -58,6 +63,7 @@ public:
     static std::string addSpaces(const char* text);
 
     /**
+     * @param bus Used to request TTS, network tests, and to post link messages.
      * @param netDestLineId The line ID of the IAX network connection.
      * @param callSpace The pre-allocated bank of BrideCalls. This is 
      * passed as a parameter to allow flexibility around the max number
@@ -66,8 +72,9 @@ public:
      */
     Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus, 
         BridgeCall::Mode defaultMode, 
-        unsigned lineId, unsigned ttsLineId, unsigned netTestLineId,
-        const char* netTestBindAddr, unsigned netDestLineId,
+        unsigned lineId, unsigned ttsLineId, 
+        unsigned netTestLineId, const char* netTestBindAddr, 
+        unsigned netDestLineId, unsigned statsLineId,
         BridgeCall* callSpace, unsigned callSpaceLen);
 
     void reset();
@@ -133,6 +140,7 @@ private:
     unsigned _ttsLineId;
     unsigned _netTestLineId;
     unsigned _networkDestLineId;
+    unsigned _statsLineId;
     std::string _nodeNumber;
     std::string _greetingText;
     std::vector<std::string> _kerchunkFilterNodes;

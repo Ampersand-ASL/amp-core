@@ -43,7 +43,7 @@ class TraceLog;
 class WebUi : public Runnable2, public MessageConsumer {
 public:
 
-    WebUi(Log& log, Clock& clock, MessageConsumer& cons, unsigned listenPort,
+    WebUi(Log& log, Clock& clock, unsigned listenPort,
         unsigned networkDestLineId, unsigned radioDestLineId,
         const char* configFileName, const char* version, TraceLog& traceLog);
 
@@ -64,7 +64,6 @@ private:
 
     Log& _log;
     Clock& _clock;
-    MessageConsumer& _consumer;
     const unsigned _listenPort;
     const unsigned _networkDestLineId;
     const unsigned _radioDestLineId;

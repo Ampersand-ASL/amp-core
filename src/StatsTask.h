@@ -57,6 +57,7 @@ private:
     const time_t _startTime;
     fixedstring _url;
     fixedstring _nodeNumber;
+    std::string _nodeList;
 
     // Here is were we accumulate the received data
     static const unsigned RESULT_AREA_SIZE = 128;
@@ -67,7 +68,6 @@ private:
     uint32_t _lastAttemptMs = 0;
     uint32_t _lastSuccessMs = 0;
 
-    CURL* _curl = 0;
     unsigned _seqCounter = 1;
 };
 

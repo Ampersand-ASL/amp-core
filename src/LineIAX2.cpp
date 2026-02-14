@@ -1639,7 +1639,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         //
         //  If no other nodes are connected, the list is empty and only L is sent.
         else if (textMessage[0] == 'L') {
-            //_log.info("Link text from %s: [%s]", call.remoteNumber.c_str(), textMessage);
             MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT, 
                 // The initial "L " gets stripped here
                 strlen(textMessage) - 2, (const uint8_t*)textMessage + 2, 
@@ -2861,6 +2860,7 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
         // Anything above the limit will be quietly dropped.
         const unsigned textBufferCapacity = IAX2FrameFull::MAX_BODY_LEN;
         char textBuffer[textBufferCapacity];
+
         strcpy(textBuffer, "L ");
         unsigned textBufferLen = 2;
 
@@ -2881,7 +2881,7 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
             }
         );
         // Add terminating null which will cover the last comma
-        textBuffer[textBufferLen] = 0;   
+        textBuffer[textBufferLen - 1] = 0;   
 
         IAX2FrameFull respFrame2;
         respFrame2.setHeader(localCallId, remoteCallId, 

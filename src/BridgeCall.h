@@ -74,6 +74,7 @@ public:
 
     /**
      * One-time initialization. Connects the call to the outside world.
+     * @param sink The message consumer used to request TTS and Network Tests.
      */
     void init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock, 
         MessageConsumer* sink, 
@@ -183,6 +184,11 @@ public:
      * UI display.
      */
     json getLevelsDoc() const;
+
+    /**
+     * @return The latest link report for this call.
+     */
+    std::string getLinkReport() const { return _linkReport; }
 
     // ----- MessageConsumer -------------------------------------------------
 

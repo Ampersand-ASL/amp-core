@@ -53,51 +53,48 @@ void StatsTask::tenSecTick() {
 void StatsTask::_doStats() {  
     
     // Todo: Get uptime working
-    char msg[256];
-    snprintf(msg, 256, 
-        "%s?node=%s&time=%ld&seqno=%u&nodes=&apprptvers=%s&apprptuptime=%ld&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
+    char msg[1024];
+    snprintf(msg, 1024, 
+        "%s?node=%s&time=%ld&seqno=%u&nodes=%s&apprptvers=%s&apprptuptime=%ld&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
         _url.c_str(),
         _nodeNumber.c_str(),
         time(0),
         _seqCounter++,
+        _nodeList.c_str(),
         _version.c_str(),
         time(0) - _startTime);
 
-    //_log.info("Stats URL: %s", msg);
+    _log.info("Stats URL: %s", msg);
     
-    _curl = curl_easy_init();
+    CURL* curl = curl_easy_init();
 
-    curl_easy_setopt(_curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(_curl, CURLOPT_USERAGENT, AST_CURL_USER_AGENT);
-    curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, _writeCallback);
-    curl_easy_setopt(_curl, CURLOPT_WRITEDATA, this);
-    curl_easy_setopt(_curl, CURLOPT_URL, msg);    
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, AST_CURL_USER_AGENT);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, _writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+    curl_easy_setopt(curl, CURLOPT_URL, msg);    
     // cache the CA cert bundle in memory for a week 
-    curl_easy_setopt(_curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
+    curl_easy_setopt(curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
 
     _resultAreaLen = 0;
   
-    CURLcode res = curl_easy_perform(_curl);
+    CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         _log.error("Registration failed (1) for %s", _nodeNumber.c_str());
     }
     else {
         long http_code = 0;
-        curl_easy_getinfo(_curl, CURLINFO_RESPONSE_CODE, &http_code);
-        //printf("HTTP code %ld\n", http_code);
-        //printf("GOT %s\n", _resultArea);
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         char* r0 = strstr(_resultArea, "ok");
         if (http_code == 200 && r0 != 0) {
-            //_log.info("Stats success");
             _lastSuccessMs = _clock.time();
         }
         else {
-            _log.info("Stats failed");
+            _log.info("Stats failed %d: %s", http_code, _resultArea);
         }
     }
 
-    curl_easy_cleanup(_curl);
-    _curl = 0;
+    curl_easy_cleanup(curl);
 }
 
 // Callback function to handle received data

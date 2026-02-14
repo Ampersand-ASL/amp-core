@@ -12,7 +12,7 @@ using namespace kc1fsz;
 
 /*
 Development:
-export AMP_NODE0_NUMBER=nnnnn
+export AMP_NODE0_NUMBER=672731
 export AMP_IAX_PROTO=IPV4
 export AMP_ASL_STAT_URL=http://stats.allstarlink.org/uhandler
 */
@@ -30,14 +30,13 @@ int main(int,const char**) {
     log.info("Start");
     StdClock clock;
 
-    StatsTask task(log, clock);
+    StatsTask task(log, clock, "1.0");
     task.configure(
         getenv("AMP_ASL_STAT_URL"), getenv("AMP_NODE0_NUMBER"));
   
     // Main loop        
-    const unsigned task2Count = 1;
-    Runnable2* tasks2[task2Count] = { &task };
-    EventLoop::run(log, clock, 0, 0, tasks2, task2Count);
+    Runnable2* tasks2[] = { &task };
+    EventLoop::run(log, clock, 0, 0, tasks2, std::size(tasks2), nullptr, false);
 
     curl_global_cleanup();
 
