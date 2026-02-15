@@ -809,6 +809,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 _sendREJECT(destCallId, peerAddr, "No supported CODECs");
                 return;
             }
+            _log.info("Caller capable CODECs %08X", capableCodecs);
 
             // What CODECs are desired by the caller?
             //
