@@ -71,27 +71,46 @@ enum ControlSubclass {
 
 // See: https://datatracker.ietf.org/doc/html/rfc5457#page-19
 enum CODECType {
-    IAX2_CODEC_UNKNOWN   = 0,
-    IAX2_CODEC_G711_ULAW = 0x00000004,
+    IAX2_CODEC_UNKNOWN    = 0,
+    IAX2_CODEC_GSM_FULL   = 0x00000002,
+    IAX2_CODEC_G711_ULAW  = 0x00000004,
+    IAX2_CODEC_G711_ALAW  = 0x00000008,
     // (8k 16-bit SLIN, little endian)
-    IAX2_CODEC_SLIN_8K   = 0x00000040,
+    IAX2_CODEC_SLIN_8K    = 0x00000040,
     // (16k 16-bit SLIN, little endian)
-    IAX2_CODEC_SLIN_16K  = 0x00008000,
+    IAX2_CODEC_SLIN_16K   = 0x00008000,
     // (48k 16-bit SLIN, little endian)
     // NOT OFFICIAL!
-    IAX2_CODEC_SLIN_48K  = 0x20000000,
+    IAX2_CODEC_SLIN_48K   = 0x20000000,
     // 16-bit PCM audio in native format
     // NOT OFFICIAL!
-    IAX2_CODEC_PCM_48K   = 0x40000000
+    IAX2_CODEC_PCM_48K    = 0x40000000
 };
 
-bool codecSupported(CODECType type);
+/**
+ * @returns True if the specified CODEC is supported
+ */
+bool isCodecSupported(CODECType type);
+
+/**
+ * @returns The bitmask of all of the CODECs supported.
+ */
+uint32_t getSupportedCodecs();
+
+/**
+ * Fills in the array with the CODECs that are supported in preference order.
+ * @returns The number of CODECs currently supported.
+ */
+unsigned getCodecPrefs(uint32_t* codecs, unsigned codecsCapacity);
+
 unsigned maxVoiceFrameSize(CODECType type);
 unsigned codecSampleRate(CODECType type);
 unsigned codecBlockSize(CODECType type);
 
 enum IEType {
     IAX2_IE_CALLING_NUMBER = 0x02,
+    /** Actual CODEC capability */
+    IAX2_IE_CAPABILITY = 0x08,
     IAX2_IE_FORMAT = 0x09,
     IAX2_IE_VERSION = 0x0b,
     IAX2_IE_AUTHMETHODS = 0x0e,
@@ -102,7 +121,9 @@ enum IEType {
     // NOTE: Not in IANA yet
     IAX2_IE_TARGET_ADDR = 0x21,
     IAX2_IE_TARGET_ADDR2 = 0x22,
-    IAX2_IE_CODEC_PREFS = 0x2d
+    IAX2_IE_CODEC_PREFS = 0x2d,
+    // NOTE: NOT IN IANA!
+    IAX2_IE_FORMAT_WIDE = 0x38
 };
 
 /**
@@ -112,5 +133,48 @@ enum IEType {
  * have just wrapped around.
  */
 int compareSeqWrap(uint8_t a, uint8_t b);
+
+/**
+ * Converts the CODEC letter ("A offset") to a 32-bit CODEC mask.
+ * @returns The CODEC mask, or zero on fail.
+ */
+uint32_t codecLetterToMask(char letter);
+
+char codecMaskToLetter(uint32_t mask);
+
+/**
+ * Takes the string that is returned in the CODEC_PREF information element (0x2b)
+ * and parses it into a list of 32-bit CODEC masks in order of the expressed
+ * preference.
+ * @param prefList A null-terminated string of characters that represent the 
+ * CODECs ("A offset").
+ * @param codecs The array where the result will be written
+ * @param codecsCapacity The space available in codecs.
+ * @returns The number of CODECs in the resulting list.
+ */
+unsigned parseCodecPref(const char* prefList, uint32_t* codecs, unsigned codecsCapacity);
+
+/**
+ * Makes a decision about the CODEC that should be used for the call based 
+ * on capabilities and preferences. The caller's preferences have priority.
+ * @param callerCapability A mask with 1s for all the CODECs supported by the 
+ * caller.
+ * @param callerDesire A single CODEC that the caller would prefer.
+ * @param calleeCapability A mask with 1s for all the CODECs supported by the 
+ * callee.
+ * @returns The CODEC that should be assigned, or zero if there was no assignment
+ * possible.
+ */
+uint32_t assignCodec(uint32_t callerCapability, 
+    uint32_t callerDesire,
+    const uint32_t* callerPrefs, unsigned callerPrefsLen,
+    uint32_t calleeCapability,
+    const uint32_t* calleePrefs, unsigned calleePrefsLen);
+
+/**
+ * Provides the "wide" representation of the CODEC.
+ * @param buf Must be a 9-byte buffer.
+ */
+void fillCodecWide(uint32_t codecs, char* buf);
 
 }

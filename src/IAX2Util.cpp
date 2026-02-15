@@ -16,6 +16,7 @@
  */
 #include <ctime>
 #include <cstdint>
+#include <cstring>
 
 #include "IAX2Util.h"
 
@@ -125,15 +126,16 @@ int compareSeqWrap(uint8_t a, uint8_t b) {
     }
 }
 
-bool codecSupported(CODECType type) {
-    if (type == CODECType::IAX2_CODEC_G711_ULAW)
-        return true;
-    else if (type == CODECType::IAX2_CODEC_SLIN_8K)
-        return true;
-    else if (type == CODECType::IAX2_CODEC_SLIN_16K)
-        return true;
-    else 
-        return false;
+/**
+ * @returns The bitmask of all of the CODECs supported.
+ */
+uint32_t getSupportedCodecs() { 
+    return CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_8K | 
+        CODECType::IAX2_CODEC_SLIN_16K;
+}
+
+bool isCodecSupported(CODECType type) {
+    return (type & getSupportedCodecs()) != 0;
 }
 
 unsigned maxVoiceFrameSize(CODECType type) {
@@ -160,8 +162,94 @@ unsigned codecSampleRate(CODECType type) {
         return 0;
 }
 
+/**
+ * Fills in the array with the CODECs that are supported in preference order.
+ * @returns The number of CODECs currently supported.
+ */
+unsigned getCodecPrefs(uint32_t* codecs, unsigned codecsCapacity) {
+    unsigned count = 0;
+    if (codecsCapacity > 0)
+        codecs[count++] = CODECType::IAX2_CODEC_SLIN_16K;
+    if (codecsCapacity > 1)
+        codecs[count++] = CODECType::IAX2_CODEC_SLIN_8K;
+    if (codecsCapacity > 2)
+        codecs[count++] = CODECType::IAX2_CODEC_G711_ULAW;
+    return count;
+}
+
+//void getCodecPrefs(char* codecPrefs, unsigned capacity) {
+//    snprintf(codecPrefs, capacity, "D")
+//}
+
 unsigned codecBlockSize(CODECType type) {
     return codecSampleRate(type) / 50;
+}
+
+static const char baseAscii = 'B';
+
+char codecMaskToLetter(uint32_t mask) {
+    char letter = baseAscii;
+    for (unsigned i = 0; i < 32 && (mask & 1) == 0; i++) {
+        letter++;
+        mask = mask >> 1;
+    }
+    return letter;
+}
+
+uint32_t codecLetterToMask(char letter) {
+    // I found this comment in the Asterisk source code:
+    //
+    // "Shift an audio codec preference list up or down 65 bytes so that it becomes 
+    // an ASCII string. NOTE: Due to a misunderstanding in how codec preferences are 
+    // stored, this list starts at 'B', not 'A'.  For backwards compatibility reasons, 
+    // this cannot change.
+    if (letter < baseAscii)        
+        return 0;
+    return 1 << ((unsigned)letter - (unsigned)baseAscii);
+}
+
+unsigned parseCodecPref(const char* prefList, uint32_t* codecs, unsigned codecsCapacity) {
+    unsigned count = 0;
+    while (*prefList != 0 && count < codecsCapacity) {
+        uint32_t codec = codecLetterToMask(*prefList);
+        if (codec)
+            codecs[count++] = codec;
+        prefList++;
+    }
+    return count;
+}
+
+uint32_t assignCodec(uint32_t callerCapability, 
+    uint32_t callerDesire,
+    const uint32_t* callerPrefs, unsigned callerPrefsLen,
+    uint32_t calleeCapability,
+    const uint32_t* calleePrefs, unsigned calleePrefsLen) {
+    // First try to match the caller's desire
+    if (callerDesire & calleeCapability)
+        return callerDesire;
+    // Next go by the caller's preferences
+    for (unsigned i = 0; i < callerPrefsLen; i++)        
+        if (callerPrefs[i] & callerCapability & calleeCapability)
+            return callerPrefs[i];
+    // If there is no match then go by the callee's preferences
+    for (unsigned i = 0; i < calleePrefsLen; i++)        
+        if (calleePrefs[i] & callerCapability & calleeCapability)
+            return calleePrefs[i];
+    return 0;
+}
+
+void fillCodecWide(uint32_t types, char* buf) {
+    memset(buf, 0, 9);
+    if (types & 0x00000002)     
+        buf[8] |= 2;
+    if (types & 0x00000004)     
+        buf[8] |= 4;
+    if (types & 0x00000008)     
+        buf[8] |= 8;
+    if (types & 0x00000040)     
+        buf[7] |= 4;
+    if (types & 0x00008000)     
+        buf[5] |= 8;  
 }
 
 }

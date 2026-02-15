@@ -795,10 +795,18 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             }
 
             // What CODECs are supported by the caller?
-            uint32_t supportedCodecs;
-            if (!frame.getIE_uint32(8, &supportedCodecs)) {
-                _log.error("No actual CODECs provided");
-                _sendREJECT(destCallId, peerAddr, "Actual CODECs missing");
+            uint32_t capableCodecs = 0;
+            if (!frame.getIE_uint32(IEType::IAX2_IE_CAPABILITY, &capableCodecs)) {
+                _log.error("No CODEC capability provided");
+                _sendREJECT(destCallId, peerAddr, "CODEC capability missing");
+                return;
+            }
+
+            // If we're in a situation where the caller isn't capable of any of the 
+            // codecs that we're capable of then reject the call.
+            if ((capableCodecs & getSupportedCodecs()) == 0) {
+                _log.error("No supported CODECs provided %08X", capableCodecs);
+                _sendREJECT(destCallId, peerAddr, "No supported CODECs");
                 return;
             }
 
@@ -812,10 +820,58 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             // When sent with an ACCEPT message, it indicates the actual CODEC that
             // has been selected for the call.  Its data is represented in a 4-octet
             // bitmask according to Section 8.7.  
-            uint32_t desiredCodecs = 0;
-            if (!frame.getIE_uint32(IEType::IAX2_IE_FORMAT, &desiredCodecs)) {
-                _log.info("No desired CODECs provided");
-            }
+            uint32_t desiredCodec = 0;
+            frame.getIE_uint32(IEType::IAX2_IE_FORMAT, &desiredCodec);
+            _log.info("Caller desired CODEC %08X", desiredCodec);
+
+            // Get the caller's CODEC preferences (optional). This is represented a 
+            // string which gets converted to a list of masks.
+            char codecPrefs[8] = { 0 };
+            frame.getIE_str(IEType::IAX2_IE_CODEC_PREFS, codecPrefs, 8);
+            _log.info("Caller CODEC preferences [%s]", codecPrefs);
+
+            const unsigned preferredCodecsCapacity = 8;
+            uint32_t preferredCodecs[preferredCodecsCapacity];
+            const unsigned preferredCodecCount = parseCodecPref(codecPrefs, 
+                preferredCodecs, preferredCodecsCapacity);
+
+            // Here we assign the CODEC based on what the caller said they 
+            // could handle.
+            //
+            // From RFC section 6.2.3: 
+            //
+            // An ACCEPT response is issued when a NEW message 
+            // is received, and authentication has taken place (if required).
+            // It acknowledges receipt of a NEW message and indicates that 
+            // the call leg has been set up on the terminating side, including 
+            // assigning a CODEC.  An ACCEPT message MUST include the 'format' 
+            // IE to indicate its desired CODEC to the originating peer.  The 
+            // CODEC format MUST be one of the formats sent in the associated 
+            // NEW command.
+            //
+            // Upon receipt of an ACCEPT, an ACK MUST be sent and the CODEC for 
+            // the call MAY be configured using the 'format' IE from the received
+            // ACCEPT.  The call then waits for an ANSWER, HANGUP, or other call
+            // control signal.  (See Section 6.3.)  If a subsequent ACCEPT message
+            // is received for a call that has already started, or has not sent a
+            // NEW message, the message MUST be ignored.
+            //
+            // Section 8.6.8 provides an important clarification:
+            //
+            // The purpose of the FORMAT information element is to indicate a single
+            // preferred media CODEC.  When sent with a NEW message, the indicated
+            // CODEC is the desired CODEC an IAX peer wishes to use for a call.
+            // When sent with an ACCEPT message, it indicates the actual CODEC that
+            // has been selected for the call.  Its data is represented in a 4-octet
+            // bitmask according to Section 8.7.  Only one 
+            const unsigned ourPreferredCodecsCapacity = 8;
+            uint32_t ourPreferredCodecs[ourPreferredCodecsCapacity];
+            const unsigned ourPreferredCodecCount = getCodecPrefs(ourPreferredCodecs,
+                ourPreferredCodecsCapacity);
+            const uint32_t assignedCodec = assignCodec(capableCodecs, desiredCodec,
+                preferredCodecs, preferredCodecCount, 
+                getSupportedCodecs(),
+                ourPreferredCodecs, ourPreferredCodecCount);
 
             // All good, allocate the call
             int callIx = _allocateCallIx();
@@ -841,8 +897,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             // Schedule the ping out
             call.lastLagrqMs = _clock.time();
             call.lastFrameRxMs = _clock.time();
-            call.supportedCodecs = supportedCodecs;
-            call.desiredCodecs = desiredCodecs;
+            call.codec = (CODECType)assignedCodec;
 
             // Explicit ACK 
             _sendACK(0, call);
@@ -1330,7 +1385,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             return;
         } 
         else {
-            if (codecSupported((CODECType)codec)) {
+            if (isCodecSupported((CODECType)codec)) {
                 call.codec = (CODECType)codec;
                 _log.info("CODEC assigned %08X", call.codec);
             } else {
@@ -2017,10 +2072,11 @@ bool LineIAX2::_progressCall(Call& call) {
             // be the first IE; the order of other IEs is unspecified. 
             frame.addIE_uint16(IEType::IAX2_IE_VERSION, 0x0002);
             frame.addIE_str(1, call.remoteNumber);
-            // CODECs are mapped to letters staring with "A". D means
-            // ulaw.
-            frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "D", 1);
+            // CODECs are mapped to letters staring with "B". D means ulaw.
+            // This code means SLIN16, SLIN8, ULAW
+            frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "QHD", 3);
             frame.addIE_str(2, call.localNumber);
+            // Not sure what these are for?
             frame.addIE_uint8(38, 0x00);
             frame.addIE_uint8(39, 0x00);
             frame.addIE_uint16(40, 0x0000);
@@ -2031,27 +2087,19 @@ bool LineIAX2::_progressCall(Call& call) {
             //frame.addIE_str(4, 0, 0);
             frame.addIE_str(10, "en", 2);
             frame.addIE_str(6, call.callUser);
+
             // Desired CODEC
-            if (call.desiredCodec == CODECType::IAX2_CODEC_SLIN_16K) {
-                frame.addIE_uint32(IEType::IAX2_IE_FORMAT, CODECType::IAX2_CODEC_SLIN_16K);
-                // ##### TODO
-                uint8_t desiredCodecBuf[9] = { 0,0,0,0,0,8,0,0,0 };
-                // Desired 64-bit CODEC
-                frame.addIE_str(0x38, (const char*)desiredCodecBuf, 9);        
-            } else {
-                frame.addIE_uint32(IEType::IAX2_IE_FORMAT, CODECType::IAX2_CODEC_G711_ULAW);
-                // ##### TODO
-                uint8_t desiredCodecBuf[9] = { 0,0,0,0,0,0,0,0,4 };
-                // Desired 64-bit CODEC
-                frame.addIE_str(0x38, (const char*)desiredCodecBuf, 9);        
-            }
-            // Actual CODEC capability
-            frame.addIE_uint32(8, 
-                CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_16K );
-            // ##### TODO
-            uint8_t actualCodecBuf[9] = { 0,0,0,0,0,8,0,0,4 };
-            // Actual 64-bit CODEC
-            frame.addIE_str(0x37, (const char*)actualCodecBuf, 9);
+            frame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.desiredCodec);
+            char desiredCodecWide[9];
+            fillCodecWide(call.desiredCodec, desiredCodecWide);
+            frame.addIE_str(0x38, desiredCodecWide, 9);        
+
+            // CODEC capabilities
+            frame.addIE_uint32(IEType::IAX2_IE_CAPABILITY, getSupportedCodecs());
+            char capabilityCodecWide[9];
+            fillCodecWide(getSupportedCodecs(), capabilityCodecWide);
+            frame.addIE_str(0x37, capabilityCodecWide, 9);
+
             // CPE ADSI - "Analog display services interface (ADSI)"
             // TODO: WHAT IS THIS FOR?
             frame.addIE_uint16(12, 0x0002);
@@ -2083,73 +2131,21 @@ bool LineIAX2::_progressCall(Call& call) {
     else if (call.side == Call::Side::SIDE_CALLED) {
         if (call.state == Call::State::STATE_CALLER_VALIDATED) {
 
-            // Here we assign the CODEC based on what the caller said they 
-            // could handle.
-            //
-            // From RFC section 6.2.3: 
-            //
-            // An ACCEPT response is issued when a NEW message 
-            // is received, and authentication has taken place (if required).
-            // It acknowledges receipt of a NEW message and indicates that 
-            // the call leg has been set up on the terminating side, including 
-            // assigning a CODEC.  An ACCEPT message MUST include the 'format' 
-            // IE to indicate its desired CODEC to the originating peer.  The 
-            // CODEC format MUST be one of the formats sent in the associated 
-            // NEW command.
-            //
-            // Upon receipt of an ACCEPT, an ACK MUST be sent and the CODEC for 
-            // the call MAY be configured using the 'format' IE from the received
-            // ACCEPT.  The call then waits for an ANSWER, HANGUP, or other call
-            // control signal.  (See Section 6.3.)  If a subsequent ACCEPT message
-            // is received for a call that has already started, or has not sent a
-            // NEW message, the message MUST be ignored.
-            //
-            // Section 8.6.8 provides an important clarification:
-            //
-            // The purpose of the FORMAT information element is to indicate a single
-            // preferred media CODEC.  When sent with a NEW message, the indicated
-            // CODEC is the desired CODEC an IAX peer wishes to use for a call.
-            // When sent with an ACCEPT message, it indicates the actual CODEC that
-            // has been selected for the call.  Its data is represented in a 4-octet
-            // bitmask according to Section 8.7.  Only one 
-
-            // CODEC related. Unclear why this is 9 bytes?
-            const uint8_t* codec64 = 0;
-            const uint8_t buf_G711_ULAW[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 4 };
-            const uint8_t buf_SLIN_16K[9] = { 0, 0, 0, 0, 0, 8, 0, 0, 0 };
-            // Look for the explicit downgrade
-            if ((call.desiredCodecs & CODECType::IAX2_CODEC_G711_ULAW) && 
-                (call.supportedCodecs & CODECType::IAX2_CODEC_G711_ULAW)) {
-                call.codec = CODECType::IAX2_CODEC_G711_ULAW;
-                codec64 = buf_G711_ULAW;
-            } 
-            // Otherwise, we control
-            else if (call.supportedCodecs & CODECType::IAX2_CODEC_SLIN_16K) {
-                call.codec = CODECType::IAX2_CODEC_SLIN_16K;
-                codec64 = buf_SLIN_16K;
-            } else if (call.supportedCodecs & CODECType::IAX2_CODEC_G711_ULAW) {
-                call.codec = CODECType::IAX2_CODEC_G711_ULAW;
-                codec64 = buf_G711_ULAW;
-            } else {
-                _log.info("Caller's CODECs aren't supported, defaulting");
-                call.codec = CODECType::IAX2_CODEC_G711_ULAW;
-                codec64 = buf_G711_ULAW;
-            }
-
             // Send the ACCEPT message
-            //
             IAX2FrameFull acceptFrame;
             acceptFrame.setHeader(call.localCallId, call.remoteCallId, 
                 call.dispenseElapsedMs(_clock), 
                 call.outSeqNo, call.expectedInSeqNo, 
                 FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_ACCEPT);
             acceptFrame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.codec);
-            acceptFrame.addIE_str(0x38, (const char*)codec64, 9);
+            char codecWide[9];
+            fillCodecWide(call.codec, codecWide);
+            acceptFrame.addIE_str(IEType::IAX2_IE_FORMAT_WIDE, codecWide, 9);
             _sendFrameToPeer(acceptFrame, call);
 
-            _log.info("Call %u accepted from %s %s",
+            _log.info("Call %u accepted from %s %s using CODEC %08X",
                 call.localCallId,
-                call.remoteNumber.c_str(), call.callUser.c_str());
+                call.remoteNumber.c_str(), call.callUser.c_str(), call.codec);
 
             call.trusted = true;
             call.state = Call::State::STATE_LINKED;
@@ -2317,8 +2313,10 @@ void LineIAX2::consume(const Message& msg) {
             [line=this, &msg](Call& call) {
                 if (msg.getType() == Message::Type::AUDIO) {
 
-                    if (!codecSupported((CODECType)msg.getFormat())) {
-                        line->_log.error("Unsupported CODEC");
+                    // At the moment we are assuming that the CODEC isn't changing 
+                    // after negotiation.
+                    if ((CODECType)msg.getFormat() != call.codec) {
+                        line->_log.error("Voice frame with unexpected CODEC");
                         return;
                     }
 
@@ -2356,7 +2354,8 @@ void LineIAX2::consume(const Message& msg) {
                         IAX2FrameFull voiceFrame;
                         voiceFrame.setHeader(call.localCallId, call.remoteCallId, 
                             elapsed, 
-                            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_VOICE, call.codec);
+                            call.outSeqNo, call.expectedInSeqNo, 
+                            FrameType::IAX2_TYPE_VOICE, call.codec);
                         voiceFrame.setBody(msg.body(), msg.size());
                         line->_sendFrameToPeer(voiceFrame, call);
                     }
@@ -2733,8 +2732,6 @@ void LineIAX2::Call::reset() {
     calltoken.clear();
     memset(publicKeyBin, 0, sizeof(publicKeyBin));
     memset(&peerAddr, 0, sizeof(peerAddr));
-    supportedCodecs = 0;
-    desiredCodecs = 0;
     desiredCodec = CODECType::IAX2_CODEC_SLIN_16K;
     codec = CODECType::IAX2_CODEC_UNKNOWN;
     lastFrameRxMs = 0;

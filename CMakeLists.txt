@@ -648,3 +648,18 @@ target_compile_options(voter-test PRIVATE -fstack-protector-all -Wall -Wpedantic
 target_include_directories(voter-test PRIVATE src)
 target_include_directories(voter-test PRIVATE include)
 target_include_directories(voter-test PRIVATE kc1fsz-tools-cpp/include)
+
+# ----- codec-assignment-test
+
+add_executable(codec-assignment-test
+  src/tests/codec-assignment-test.cpp
+  src/IAX2Util.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+  kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/StdPollTimer.cpp
+  kc1fsz-tools-cpp/src/linux/StdClock.cpp
+)
+
+target_include_directories(codec-assignment-test PRIVATE src)
+target_include_directories(codec-assignment-test PRIVATE include)
+target_include_directories(codec-assignment-test PRIVATE kc1fsz-tools-cpp/include)

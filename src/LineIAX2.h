@@ -306,7 +306,6 @@ public:
         // This is the ED5519 public key in binary format
         unsigned char publicKeyBin[32];
         sockaddr_storage peerAddr;
-        uint32_t supportedCodecs = 0;
         uint32_t desiredCodecs = 0;
 
         // Relevant when we are initiating the call
