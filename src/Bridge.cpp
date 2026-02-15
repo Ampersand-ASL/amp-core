@@ -505,28 +505,13 @@ void Bridge::oneSecTick() {
 }
 
 void Bridge::tenSecTick() {
-
-    std::vector<std::string> linkReports;
-
     _visitActiveCalls(
-        [&linkReports](BridgeCall& call) { 
+        [](BridgeCall& call) { 
             // Pass the tick down
             call.tenSecTick();
-            // Gather a comprehensive link report
-            linkReports.push_back(call.getLinkReport());
             return true;
         }
     );
-
-    // Make up a comprehensive link message
-    string linkReport;
-    for (string& r : linkReports) {
-        if (!linkReport.empty() && !linkReport.ends_with(","))
-            linkReport += ",";
-        linkReport += r;
-    }
-    
-    cout << "Full link report: " << linkReport << endl;
 }
 
 void Bridge::_visitActiveCalls(std::function<bool(BridgeCall&)> cb) {
