@@ -147,13 +147,6 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
     svr.set_pre_request_handler([ui](const auto& req, auto& res) {
         if (!ui->_uiPwd.empty()) {
-            // If the correct cookie is asserted by the client then just 
-            // continue normally
-            //if (req.has_header("Cookie"))
-            //    if (req.get_header_value("Cookie") == ui->_authCookie) 
-            //        return httplib::Server::HandlerResponse::Unhandled;
-            // Challenge for the password
-            //res.set_header("Set-Cookie", ui->_authCookie);
             if (req.has_header("Authorization")) {
                 if (ui->_checkAuthorization(req.get_header_value("Authorization"))) 
                     return httplib::Server::HandlerResponse::Unhandled;
@@ -165,16 +158,6 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             return httplib::Server::HandlerResponse::Handled;
         }
         return httplib::Server::HandlerResponse::Unhandled;
-        /*
-        if (req.matched_route == "/user/:user") {
-            auto user = req.path_params.at("user");
-            if (user != "john") {
-            res.status = StatusCode::Forbidden_403;
-            res.set_content("error", "text/html");
-            return Server::HandlerResponse::Handled;
-            }
-        }
-        */
     });
 
     // ------ Common -----------------------------------------------------------
