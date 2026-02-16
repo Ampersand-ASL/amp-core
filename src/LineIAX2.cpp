@@ -2277,7 +2277,8 @@ void LineIAX2::consume(const Message& msg) {
     else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
-        int rc = call(payload->localNumber, payload->targetNumber);
+        // #### TODO REMOVE!
+        int rc = call(payload->localNumber, payload->targetNumber, CODECType::IAX2_CODEC_G726);
         if (rc != 0) {
             // If the call fails then build a message that contains
             // the details suitable for display to an end-user.

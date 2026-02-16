@@ -54,6 +54,7 @@ void BridgeOut::consume(const Message& frame) {
             assert(frame.size() == BLOCK_SIZE_48K * 2);
     
             if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
+                _codecType == CODECType::IAX2_CODEC_G726 ||
                 _codecType == CODECType::IAX2_CODEC_SLIN_16K ||
                 _codecType == CODECType::IAX2_CODEC_SLIN_8K) {             
                 
@@ -66,6 +67,8 @@ void BridgeOut::consume(const Message& frame) {
                     t1 = &_transcoder1c;
                 else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
                     t1 = &_transcoder1d;
+                else if (_codecType == CODECType::IAX2_CODEC_G726)
+                    t1 = &_transcoder1e;
                 else 
                     assert(false);
 
@@ -109,6 +112,7 @@ void BridgeOut::consume(const Message& frame) {
             assert(frame.size() == BLOCK_SIZE_48K * 2);
     
             if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
+                _codecType == CODECType::IAX2_CODEC_G726 ||
                 _codecType == CODECType::IAX2_CODEC_SLIN_16K ||
                 _codecType == CODECType::IAX2_CODEC_SLIN_8K) {             
                 
@@ -121,6 +125,8 @@ void BridgeOut::consume(const Message& frame) {
                     t1 = &_transcoder1c;
                 else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
                     t1 = &_transcoder1d;
+                else if (_codecType == CODECType::IAX2_CODEC_G726)
+                    t1 = &_transcoder1e;
                 else 
                     assert(false);
 

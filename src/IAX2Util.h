@@ -75,6 +75,8 @@ enum CODECType {
     IAX2_CODEC_GSM_FULL   = 0x00000002,
     IAX2_CODEC_G711_ULAW  = 0x00000004,
     IAX2_CODEC_G711_ALAW  = 0x00000008,
+    // 8k
+    IAX2_CODEC_G726       = 0x00000010,
     // (8k 16-bit SLIN, little endian)
     IAX2_CODEC_SLIN_8K    = 0x00000040,
     // (16k 16-bit SLIN, little endian)
@@ -103,8 +105,16 @@ uint32_t getSupportedCodecs();
  */
 unsigned getCodecPrefs(uint32_t* codecs, unsigned codecsCapacity);
 
+/**
+ * @returns Frame size in bytes
+ */
 unsigned maxVoiceFrameSize(CODECType type);
+
 unsigned codecSampleRate(CODECType type);
+
+/**
+ * @returns The number of samples in a frame.
+ */
 unsigned codecBlockSize(CODECType type);
 
 enum IEType {

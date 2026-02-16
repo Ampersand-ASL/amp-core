@@ -129,9 +129,15 @@ int compareSeqWrap(uint8_t a, uint8_t b) {
 /**
  * @returns The bitmask of all of the CODECs supported.
  */
+// #### TODO: TEMP!
+/*
 uint32_t getSupportedCodecs() { 
     return CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_8K | 
-        CODECType::IAX2_CODEC_SLIN_16K;
+        CODECType::IAX2_CODEC_SLIN_16K | CODECType::IAX2_CODEC_G726;
+}
+*/
+uint32_t getSupportedCodecs() { 
+    return CODECType::IAX2_CODEC_G726;
 }
 
 bool isCodecSupported(CODECType type) {
@@ -139,7 +145,9 @@ bool isCodecSupported(CODECType type) {
 }
 
 unsigned maxVoiceFrameSize(CODECType type) {
-    if (type == CODECType::IAX2_CODEC_G711_ULAW)
+    if (type == CODECType::IAX2_CODEC_G726)
+        return 80;
+    else if (type == CODECType::IAX2_CODEC_G711_ULAW)
         return 160;
     else if (type == CODECType::IAX2_CODEC_SLIN_8K)
         return 160 * 2;
@@ -151,6 +159,8 @@ unsigned maxVoiceFrameSize(CODECType type) {
 
 unsigned codecSampleRate(CODECType type) {
     if (type == CODECType::IAX2_CODEC_G711_ULAW)
+        return 8000;
+    else if (type == CODECType::IAX2_CODEC_G726)
         return 8000;
     else if (type == CODECType::IAX2_CODEC_SLIN_8K)
         return 8000;
@@ -174,12 +184,10 @@ unsigned getCodecPrefs(uint32_t* codecs, unsigned codecsCapacity) {
         codecs[count++] = CODECType::IAX2_CODEC_SLIN_8K;
     if (codecsCapacity > 2)
         codecs[count++] = CODECType::IAX2_CODEC_G711_ULAW;
+    if (codecsCapacity > 3)
+        codecs[count++] = CODECType::IAX2_CODEC_G726;
     return count;
 }
-
-//void getCodecPrefs(char* codecPrefs, unsigned capacity) {
-//    snprintf(codecPrefs, capacity, "D")
-//}
 
 unsigned codecBlockSize(CODECType type) {
     return codecSampleRate(type) / 50;
@@ -246,6 +254,8 @@ void fillCodecWide(uint32_t types, char* buf) {
         buf[8] |= 4;
     if (types & 0x00000008)     
         buf[8] |= 8;
+    if (types & 0x00000010)     
+        buf[7] |= 1;
     if (types & 0x00000040)     
         buf[7] |= 4;
     if (types & 0x00008000)     

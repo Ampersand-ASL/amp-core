@@ -153,7 +153,8 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
         // #### THE SPECIAL CASE.
 
         if (_codecType == CODECType::IAX2_CODEC_G711_ULAW ||
-            _codecType == CODECType::IAX2_CODEC_SLIN_8K) {
+            _codecType == CODECType::IAX2_CODEC_SLIN_8K ||
+            _codecType == CODECType::IAX2_CODEC_G726) {
             if (frame.getType() == Message::Type::AUDIO) {
                 int16_t pcm1[BLOCK_SIZE_8K];
                 Transcoder* tc = 0;
@@ -161,6 +162,8 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
                     tc = &_transcoder0a;
                 else if (_codecType == CODECType::IAX2_CODEC_SLIN_8K)
                     tc = &_transcoder0b;
+                else if (_codecType == CODECType::IAX2_CODEC_G726)
+                    tc = &_transcoder0e;
                 else 
                     assert(false);
                 // Transcode
