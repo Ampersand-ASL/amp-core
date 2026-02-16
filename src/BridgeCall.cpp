@@ -770,6 +770,10 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
                 prompt += "CODEC is 8K mulaw. ";
             else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_16K) 
                 prompt += "CODEC is 16K linear. ";
+            else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_SLIN_8K) 
+                prompt += "CODEC is 8K linear. ";
+            else if (_bridgeIn.getCodec() == CODECType::IAX2_CODEC_G726_AAL2) 
+                prompt += "CODEC is G 726. ";
 
             prompt += "Ready to record.";
 
