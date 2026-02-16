@@ -617,7 +617,7 @@ add_executable(unit-test
   itu-g711-codec/src/codec.cpp
   itu-g711-codec/src/Plc.cpp
   cmsis-dsp-mock/src/main.cpp
-  #alsa-mock/src/asoundlib.c
+  cpp-base64/base64.cpp
 )
 target_compile_options(unit-test PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
 

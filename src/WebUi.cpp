@@ -16,6 +16,10 @@
  */
 #include "httplib.h"
 
+extern "C" {
+    #include "base64.h"
+}
+
 #ifdef _WIN32
 #include <process.h>
 #endif
@@ -100,6 +104,11 @@ WebUi::WebUi(Log& log, Clock& clock, unsigned listenPort,
     _configFileName(configFileName),
     _version(version),
     _traceLog(traceLog) {
+
+    // Make a random cookie that will be used to eliminate extra authentications
+    char cookie[16];
+    snprintf(cookie, sizeof(cookie), "auth=%08X", rand());
+    _authCookie = cookie; 
 }
 
 void WebUi::consume(const Message& msg) {   
@@ -115,6 +124,18 @@ void WebUi::consume(const Message& msg) {
     }
 }
 
+// https://github.com/joedf/base64.c/blob/master/base64.h
+bool WebUi::_checkAuthorization(const string& auth) const {
+    string up = string("user:") + _uiPwd;
+    // Prevent an overrun on the output of the encoding process
+    if (b64e_size(up.length() > 64))
+        return false;
+    unsigned char encoded[65];
+    b64_encode((const unsigned char*)up.c_str(), up.length(), encoded);
+    string target = string("Basic ") + string((const char*)encoded);
+    return auth == target;
+}
+
 void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
     amp::setThreadName("amp-ui");
@@ -123,6 +144,38 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
     // HTTP
     httplib::Server svr;
+
+    svr.set_pre_request_handler([ui](const auto& req, auto& res) {
+        if (!ui->_uiPwd.empty()) {
+            // If the correct cookie is asserted by the client then just 
+            // continue normally
+            //if (req.has_header("Cookie"))
+            //    if (req.get_header_value("Cookie") == ui->_authCookie) 
+            //        return httplib::Server::HandlerResponse::Unhandled;
+            // Challenge for the password
+            //res.set_header("Set-Cookie", ui->_authCookie);
+            if (req.has_header("Authorization")) {
+                if (ui->_checkAuthorization(req.get_header_value("Authorization"))) 
+                    return httplib::Server::HandlerResponse::Unhandled;
+            }
+            ui->_log.info("Requesting authentication");
+            // Generate challenge
+            res.set_header("WWW-Authenticate", "Basic realm=\"Ampersand\"");
+            res.status = httplib::StatusCode::Unauthorized_401;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+        /*
+        if (req.matched_route == "/user/:user") {
+            auto user = req.path_params.at("user");
+            if (user != "john") {
+            res.status = StatusCode::Forbidden_403;
+            res.set_content("error", "text/html");
+            return Server::HandlerResponse::Handled;
+            }
+        }
+        */
+    });
 
     // ------ Common -----------------------------------------------------------
 

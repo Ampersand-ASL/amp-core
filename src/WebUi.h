@@ -46,13 +46,15 @@ public:
     WebUi(Log& log, Clock& clock, unsigned listenPort,
         unsigned networkDestLineId, unsigned radioDestLineId,
         const char* configFileName, const char* version, TraceLog& traceLog);
-
+        
     void setConfig(const json& j) { _config.set(j); }
     void setBridgeStatus(const json& j) { _status.set(j); }
     void setBridgeLevels(const json& j) { _levels.set(j); }
+    void setUiPWd(const std::string& uipwd) { _uiPwd = uipwd; }
 
     /**
-     * Start this on a background thread.
+     * Start this on a background thread since the HTTP server listen call 
+     * is blocking.
      */
     static void uiThread(WebUi* ui, MessageConsumer* bus);
 
@@ -62,6 +64,8 @@ public:
 
 private:
 
+    bool _checkAuthorization(const std::string& auth) const;
+
     Log& _log;
     Clock& _clock;
     const unsigned _listenPort;
@@ -70,6 +74,9 @@ private:
     const std::string _configFileName;
     const std::string _version;
     TraceLog& _traceLog;
+
+    std::string _uiPwd;
+    std::string _authCookie;
     
     std::atomic<bool> _ptt;
 
