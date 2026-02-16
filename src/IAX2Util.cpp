@@ -129,15 +129,10 @@ int compareSeqWrap(uint8_t a, uint8_t b) {
 /**
  * @returns The bitmask of all of the CODECs supported.
  */
-// #### TODO: TEMP!
-/*
+
 uint32_t getSupportedCodecs() { 
     return CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_8K | 
-        CODECType::IAX2_CODEC_SLIN_16K | CODECType::IAX2_CODEC_G726;
-}
-*/
-uint32_t getSupportedCodecs() { 
-    return CODECType::IAX2_CODEC_G726;
+        CODECType::IAX2_CODEC_SLIN_16K | CODECType::IAX2_CODEC_G726_AAL2;
 }
 
 bool isCodecSupported(CODECType type) {
@@ -145,7 +140,7 @@ bool isCodecSupported(CODECType type) {
 }
 
 unsigned maxVoiceFrameSize(CODECType type) {
-    if (type == CODECType::IAX2_CODEC_G726)
+    if (type == CODECType::IAX2_CODEC_G726_AAL2)
         return 80;
     else if (type == CODECType::IAX2_CODEC_G711_ULAW)
         return 160;
@@ -160,7 +155,7 @@ unsigned maxVoiceFrameSize(CODECType type) {
 unsigned codecSampleRate(CODECType type) {
     if (type == CODECType::IAX2_CODEC_G711_ULAW)
         return 8000;
-    else if (type == CODECType::IAX2_CODEC_G726)
+    else if (type == CODECType::IAX2_CODEC_G726_AAL2)
         return 8000;
     else if (type == CODECType::IAX2_CODEC_SLIN_8K)
         return 8000;
@@ -185,7 +180,7 @@ unsigned getCodecPrefs(uint32_t* codecs, unsigned codecsCapacity) {
     if (codecsCapacity > 2)
         codecs[count++] = CODECType::IAX2_CODEC_G711_ULAW;
     if (codecsCapacity > 3)
-        codecs[count++] = CODECType::IAX2_CODEC_G726;
+        codecs[count++] = CODECType::IAX2_CODEC_G726_AAL2;
     return count;
 }
 

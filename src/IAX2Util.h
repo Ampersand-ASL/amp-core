@@ -76,7 +76,7 @@ enum CODECType {
     IAX2_CODEC_G711_ULAW  = 0x00000004,
     IAX2_CODEC_G711_ALAW  = 0x00000008,
     // 8k
-    IAX2_CODEC_G726       = 0x00000010,
+    IAX2_CODEC_G726_AAL2  = 0x00000010,
     // (8k 16-bit SLIN, little endian)
     IAX2_CODEC_SLIN_8K    = 0x00000040,
     // (16k 16-bit SLIN, little endian)

@@ -64,7 +64,7 @@ void StatsTask::_doStats() {
         _version.c_str(),
         time(0) - _startTime);
 
-    _log.info("Stats URL: %s", msg);
+    //_log.info("Stats URL: %s", msg);
     
     CURL* curl = curl_easy_init();
 

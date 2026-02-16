@@ -185,6 +185,7 @@ int LineIAX2::open(short addrFamily, int listenPort) {
         return -1;
     }
 
+#ifndef _WIN32
     optval = IAX_SOCKET_SNDBUF_BYTES;
     if (setsockopt(iaxSockFd, SOL_SOCKET, SO_SNDBUF, (const char*)&optval, sizeof(optval)) == -1) {
         _log.error("Failed to adjust socket send buffer");
@@ -200,6 +201,7 @@ int LineIAX2::open(short addrFamily, int listenPort) {
             _txSocketBufferSize = bufferSize;
         }
     }
+#endif
 
     struct sockaddr_storage servaddr;
     memset(&servaddr, 0, sizeof(servaddr));
@@ -2074,8 +2076,8 @@ bool LineIAX2::_progressCall(Call& call) {
             frame.addIE_uint16(IEType::IAX2_IE_VERSION, 0x0002);
             frame.addIE_str(1, call.remoteNumber);
             // CODECs are mapped to letters staring with "B". D means ulaw.
-            // This code means SLIN16, SLIN8, ULAW
-            frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "QHD", 3);
+            // This code means SLIN16, ULAW, G726_AAL2, SLIN8
+            frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "QDFH", 3);
             frame.addIE_str(2, call.localNumber);
             // Not sure what these are for?
             frame.addIE_uint8(38, 0x00);
@@ -2277,8 +2279,7 @@ void LineIAX2::consume(const Message& msg) {
     else if (msg.isSignal(Message::SignalType::CALL_NODE)) {
         PayloadCall* payload = (PayloadCall*)msg.body();
         assert(msg.size() == sizeof(PayloadCall));
-        // #### TODO REMOVE!
-        int rc = call(payload->localNumber, payload->targetNumber, CODECType::IAX2_CODEC_G726);
+        int rc = call(payload->localNumber, payload->targetNumber);
         if (rc != 0) {
             // If the call fails then build a message that contains
             // the details suitable for display to an end-user.
@@ -2526,13 +2527,16 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
             _log.error("Send error %d", errno);
     }
 
-    // Take a look at the kernel buffer
+#ifndef _WIN32
+    // Take a look at the kernel buffer. Relevant for large-scale
+    // servers where the UDP buffers may overflow.
     int bytes_in_buffer = 0;
     if (ioctl(_iaxSockFd, SIOCOUTQ, &bytes_in_buffer) == -1) {
     } else {
         if ((unsigned)bytes_in_buffer > ((_txSocketBufferSize * 3) / 4))
             _log.info("Socket transmit buffer >75 percent at %d", bytes_in_buffer);
     }
+#endif
 }
 
 int LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) {
