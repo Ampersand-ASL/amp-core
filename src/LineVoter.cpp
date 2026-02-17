@@ -41,6 +41,8 @@
 #include "VoterPeer.h"
 #include "LineVoter.h"
 
+#define CALL_ID_FIXED (1)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -49,12 +51,13 @@ namespace kc1fsz {
 //    return (ts / tick) * tick;
 //}
 
-LineVoter::LineVoter(Log& log, Clock& clock, int lineId,
-    MessageConsumer& bus)
+LineVoter::LineVoter(Log& log, Clock& clock, unsigned lineId,
+    MessageConsumer& bus, unsigned audioDestLineId)
 :   _log(log),
     _clock(clock),
     _lineId(lineId),
-    _bus(bus) {
+    _bus(bus),
+    _audioDestLineId(audioDestLineId) {
 
     _client0.init(&clock, &log);
     // Make the connection so we can send packets out to the client
@@ -132,6 +135,23 @@ int LineVoter::open(short addrFamily, int listenPort) {
 
     _sockFd = sockFd;
 
+    // Generate a start of call message so that the bridge will accept audio
+    // when it arrives.
+    PayloadCallStart payload;
+    payload.codec = CODECType::IAX2_CODEC_G711_ULAW;
+    payload.bypassJitterBuffer = true;
+    payload.echo = false;
+    payload.startMs = _clock.time();
+    payload.localNumber[0] = 0;
+    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "Voter");
+    payload.originated = true;
+    payload.permanent = true;
+    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+        sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+    msg.setSource(_lineId, CALL_ID_FIXED);
+    msg.setDest(_audioDestLineId, Message::BROADCAST);
+    _bus.consume(msg);
+
     return 0;
 }
 
@@ -165,6 +185,16 @@ bool LineVoter::run2() {
 
 void LineVoter::audioRateTick(uint32_t ms) {
     _client0.audioRateTick(ms);
+
+    // Extract the current audio frame from the Voter buffer
+    uint8_t ulaw8[BLOCK_SIZE_8K];
+    _client0.getAudioFrame(ms, ulaw8, BLOCK_SIZE_8K);
+
+    // Make a message and transmit to the Bridge
+    MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
+    msg.setSource(_lineId, CALL_ID_FIXED);
+    msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
+    _bus.consume(msg);
 }
 
 void LineVoter::oneSecTick() {    

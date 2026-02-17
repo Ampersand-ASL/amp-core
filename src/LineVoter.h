@@ -34,12 +34,14 @@ class Clock;
 class LineVoter : public Line {
 public:
 
+    static const unsigned BLOCK_SIZE_8K = 160;
+
     /**
      * @param consumer This is the sink interface that received messages
-     * will be sent to. VERY IMPORTANT: Audio frames will not have been 
-     * de-jittered before they are passed to this sink. 
+     * will be sent to. 
      */
-    LineVoter(Log& log, Clock& clock, int lineId, MessageConsumer& consumer);
+    LineVoter(Log& log, Clock& clock, unsigned lineId, MessageConsumer& consumer, 
+        unsigned audioDestLineId);
 
     /**
      * Opens the network connection for in/out traffic for this line.
@@ -95,6 +97,8 @@ private:
     Clock& _clock;
     const unsigned _lineId;
     MessageConsumer& _bus;
+    // Where the inbound audio gets sent
+    const unsigned _audioDestLineId;
     // The IP address family used for this connection. Either AF_INET
     // or AF_INET6.
     short _addrFamily = 0;
