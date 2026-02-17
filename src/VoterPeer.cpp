@@ -42,7 +42,8 @@ namespace kc1fsz {
     */
 
 
-VoterPeer::VoterPeer() {
+VoterPeer::VoterPeer(bool isClient)
+:   _isClient(isClient) {
     reset();
 }
 
@@ -55,6 +56,8 @@ void VoterPeer::init(Clock* clock, Log* log) {
 }
 
 void VoterPeer::reset() {
+    _masterTimingSource = false;
+    _generalPurposeMode = false;
     _badPackets = 0;
     _peerTrusted = false;
     _localChallenge.clear();
@@ -152,6 +155,14 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
         _remoteChallenge = remoteChallenge;
         // Grab the peer address
         memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
+
+        // Send one more type 0 packet in case it is needed to establish
+        // trust in the other direction.
+        uint8_t resp[24];
+        VoterUtil::setHeaderPayloadType(resp, 0);
+        _populateAuth(resp);
+        // #### TODO - LOOK AT HEADER!
+        _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 
     _consumePacketTrusted(packet, packetLen);
@@ -179,20 +190,25 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
             _log->info("Start of TS for %s", _localPassword.c_str());
         }
 
-    } else if (VoterUtil::getHeaderPayloadType(packet) == 5) {
-        // Make a pong
-        uint8_t resp[224];
-        _populateAuth(resp);
-        VoterUtil::setHeaderPayloadType(resp, 5);
-        // From Docs:
-        // Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
-        // quality. When a client receives this packet, it is intended to be transmitted 
-        // (with the payload information intact) immediately back to the host from which 
-        // it came. The actual contents of the payload are not specifically defined for 
-        // the purposes of this protocol, and is entirely determined by the implementation 
-        // of the applicable function in the host.
-        memcpy(resp + 24, packet + 24, 200);
-        _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+    } 
+    // Ping packet
+    else if (VoterUtil::getHeaderPayloadType(packet) == 5) {
+        if (_isClient) {
+            // Make a pong
+            uint8_t resp[224];
+            _populateAuth(resp);
+            // #### TODO: LOOK AT FLAGS
+            VoterUtil::setHeaderPayloadType(resp, 5);
+            // From Docs:
+            // Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
+            // quality. When a client receives this packet, it is intended to be transmitted 
+            // (with the payload information intact) immediately back to the host from which 
+            // it came. The actual contents of the payload are not specifically defined for 
+            // the purposes of this protocol, and is entirely determined by the implementation 
+            // of the applicable function in the host.
+            memcpy(resp + 24, packet + 24, 200);
+            _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+        }
     }
 }
 
@@ -257,9 +273,9 @@ void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
 
 void VoterPeer::oneSecTick() {    
     // Check to see if an authentication packet should be sent out
-    if (_peerAddr.ss_family != 0 && !_peerTrusted) {
+    if (_peerAddr.ss_family != 0 && !_peerTrusted && 
+        !_localChallenge.empty() && !_localPassword.empty()) {
         uint8_t resp[24];
-        _localChallenge = makeChallenge();
         VoterUtil::setHeaderPayloadType(resp, 0);
         VoterUtil::setHeaderAuthChallenge(resp, _localChallenge.c_str());
         VoterUtil::setHeaderAuthResponse(resp, 0);
@@ -269,8 +285,8 @@ void VoterPeer::oneSecTick() {
 }
 
 void VoterPeer::tenSecTick() {
-    if (_peerTrusted) {
-        // Generate a ping
+    if (_peerTrusted && !_isClient) {
+        // Generate a ping (only the server does this)
         uint8_t resp[224];
         memset(resp + 24, 0xba, 200);
         _populateAuth(resp);

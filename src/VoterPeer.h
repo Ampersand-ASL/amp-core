@@ -41,12 +41,30 @@ public:
     using sinkCb = std::function<void(const sockaddr& addr, 
         const uint8_t* packet, unsigned packetLen)>;
 
-    VoterPeer();
+    /**
+     * @param isClient Controls certain behaviors that are server-only or client-only.
+     */
+    VoterPeer(bool isClient = false);
     ~VoterPeer();
 
     void init(Clock* clock, Log* log);
 
     void reset();
+
+    /**
+     * Master Timing Source Mode. If not set, payload 1, 2 and 3 packets are delayed 
+     * (approx 6mS) to guarantee that the packets from the device designated as "Master 
+     * Timing Source" are received by the host previous to packets from any other device. 
+     * If set, no delay is performed, and the packets are sent immediately. This must be 
+     * set on only one device in the network. (sent by host only)
+     */
+    void setMasterTimingSource(bool t) { _masterTimingSource = t; }
+
+    /** 
+     * Operate in “general-purpose” mode (non-GPS-based). (sent by client, responded 
+     * to by host)
+     */
+    void setGeneralPurposeMode(bool m) { _generalPurposeMode = m; }
 
     unsigned getBadPackets() const { return _badPackets; }
 
@@ -159,8 +177,12 @@ private:
 
     friend class AudioFrame;
 
+    const bool _isClient;
     Clock* _clock = 0;
     Log* _log = 0;
+
+    bool _masterTimingSource = false;
+    bool _generalPurposeMode = false;
 
     static const unsigned FRAME_COUNT = 4;
     AudioFrame _frames[FRAME_COUNT];
