@@ -16,9 +16,11 @@
  */
 #pragma once
 
+#include <cstdint>
+
 // NOTE: This may be the real ARM library or a mock, depending on the
 // platfom that we are building for.
-#include <arm_math.h>
+//#include <arm_math.h>
 
 #include "Transcoder.h"
 
