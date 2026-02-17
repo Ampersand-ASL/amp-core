@@ -198,6 +198,10 @@ private:
     unsigned _badPackets = 0;
     sinkCb _sendCb;
     bool _peerTrusted = false;
+
+    // Last time we heard from the peer
+    uint64_t _lastRxMs = 0;
+
     std::string _localPassword;
     std::string _remotePassword;
     std::string _localChallenge;

@@ -25,6 +25,10 @@
 #include "VoterUtil.h"
 #include "VoterPeer.h"
 
+// How long we can go without hearing from the other side before
+// giving up and resetting.
+#define TIMEOUT_INTERVAL_MS (60 * 1000)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -59,10 +63,6 @@ void VoterPeer::reset() {
     _masterTimingSource = false;
     _generalPurposeMode = false;
     _badPackets = 0;
-    _peerTrusted = false;
-    _localChallenge.clear();
-    _remoteChallenge.clear();
-    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
     for (AudioFrame& f : _frames)
         f.rssi = 0;
     _inSpurt = false;
@@ -72,6 +72,10 @@ void VoterPeer::reset() {
     _frameRdPtr = 0;
     _playCursorS = 0;
     _playCursorNs = 0;
+    _lastRxMs = 0;
+    _peerTrusted = false;
+    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+    _remoteChallenge.clear();
 }
 
 void VoterPeer::setPeerAddr(const sockaddr_storage& addr) {
@@ -132,6 +136,8 @@ bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
 
 void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet, 
     unsigned packetLen) {
+
+    _lastRxMs = _clock->timeMs();
 
     // Quietly Ignore a few types
     if (VoterUtil::getHeaderPayloadType(packet) == 3 ||
@@ -263,8 +269,9 @@ void VoterPeer::_flushExpiredFrames() {
 }
 
 string VoterPeer::makeChallenge() {
-    // ### TODO RANDOMIZE!
-    return string("hello");
+    char ch[16];
+    snprintf(ch, sizeof(ch), "hello%d", rand());
+    return string(ch);
 }
 
 void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
@@ -285,13 +292,20 @@ void VoterPeer::oneSecTick() {
 }
 
 void VoterPeer::tenSecTick() {
+
+    // Generate a ping (only the server does this)
     if (_peerTrusted && !_isClient) {
-        // Generate a ping (only the server does this)
         uint8_t resp[224];
         memset(resp + 24, 0xba, 200);
         _populateAuth(resp);
         VoterUtil::setHeaderPayloadType(resp, 5);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+    }
+
+    // Check for timeout
+    if (_peerTrusted && _clock->isPastWindow(_lastRxMs, TIMEOUT_INTERVAL_MS)) {
+        _log->info("Timing out connection with %s", _remotePassword.c_str());
+        reset();        
     }
 }
 
