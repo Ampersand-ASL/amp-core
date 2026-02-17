@@ -27,7 +27,7 @@
 
 // How long we can go without hearing from the other side before
 // giving up and resetting.
-#define TIMEOUT_INTERVAL_MS (60 * 1000)
+#define TIMEOUT_INTERVAL_MS (30 * 1000)
 
 using namespace std;
 
@@ -74,8 +74,10 @@ void VoterPeer::reset() {
     _playCursorNs = 0;
     _lastRxMs = 0;
     _peerTrusted = false;
-    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
     _remoteChallenge.clear();
+    // Only clear out the peer address if we are a server
+    if (!_isClient)
+        memset(&_peerAddr, 0, sizeof(sockaddr_storage));
 }
 
 void VoterPeer::setPeerAddr(const sockaddr_storage& addr) {
