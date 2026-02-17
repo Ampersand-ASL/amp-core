@@ -59,6 +59,11 @@ public:
     
     void setServerPassword(const char* p);
 
+    /**
+     * @param ps A comma-separated list of client passwords. 
+     */
+    void setClientPasswords(const char* ps);
+
     void setTrace(bool a) { _trace = a; }
 
     // ----- Line/MessageConsumer-----------------------------------------------------
@@ -68,6 +73,7 @@ public:
     // ----- Runnable -------------------------------------------------------
 
     virtual bool run2();  
+    virtual void audioRateTick(uint32_t tickTimeMs);
     virtual void oneSecTick();
     virtual void tenSecTick();
 
@@ -82,6 +88,8 @@ private:
     bool _processInboundData();
     void _processReceivedPacket(const uint8_t* buf, unsigned bufLen, 
         const sockaddr& peerAddr, uint32_t stampMs);
+    void _sendPacketToPeer(const uint8_t* b, unsigned len, 
+        const sockaddr& peerAddr);
 
     Log& _log;
     Clock& _clock;
@@ -97,7 +105,10 @@ private:
     // Enables detailed network tracing
     bool _trace = false;
 
-    amp::VoterPeer _server0;
+    std::string _serverChallenge;
+    std::string _serverPassword;
+
+    amp::VoterPeer _client0;
 };
 
 }

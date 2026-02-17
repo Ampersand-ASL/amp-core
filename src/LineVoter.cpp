@@ -37,17 +37,17 @@
 
 #include "MessageConsumer.h"
 #include "Message.h"
+#include "VoterUtil.h"
+#include "VoterPeer.h"
 #include "LineVoter.h"
 
 using namespace std;
 
-static unsigned AUDIO_TICK_MS = 20;
-
 namespace kc1fsz {
 
-static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
-    return (ts / tick) * tick;
-}
+//static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
+//    return (ts / tick) * tick;
+//}
 
 LineVoter::LineVoter(Log& log, Clock& clock, int lineId,
     MessageConsumer& bus)
@@ -56,7 +56,13 @@ LineVoter::LineVoter(Log& log, Clock& clock, int lineId,
     _lineId(lineId),
     _bus(bus) {
 
-    _server0.init(&clock, &log);
+    _client0.init(&clock, &log);
+    // Make the connection so we can send packets out to the client
+    _client0.setSink([this]
+        (const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
+            _sendPacketToPeer(data, dataLen, addr);
+        }
+    );
 }
 
 int LineVoter::open(short addrFamily, int listenPort) {
@@ -126,11 +132,6 @@ int LineVoter::open(short addrFamily, int listenPort) {
 
     _sockFd = sockFd;
 
-    //server0.setLocalPassword(serverPwd.c_str());
-    //server0.setLocalChallenge(serverChallenge.c_str());
-    //server0.setRemotePassword(client0Pwd.c_str());
-
-
     return 0;
 }
 
@@ -143,7 +144,16 @@ void LineVoter::close() {
 } 
 
 void LineVoter::setServerPassword(const char* p) {
-    _server0.setLocalPassword(p);
+    // A random challenge for security reasons
+    _serverPassword = p;
+    _serverChallenge = amp::VoterPeer::makeChallenge();
+    _client0.setLocalPassword(p);
+    _client0.setLocalChallenge(_serverChallenge.c_str());
+}
+
+void LineVoter::setClientPasswords(const char* ps) {
+    // ### TODO: PARSE THE LIST
+    _client0.setRemotePassword(ps);
 }
 
 void LineVoter::consume(const Message& m) {   
@@ -153,10 +163,16 @@ bool LineVoter::run2() {
     return _processInboundData();
 }
 
+void LineVoter::audioRateTick(uint32_t ms) {
+    _client0.audioRateTick(ms);
+}
+
 void LineVoter::oneSecTick() {    
+    _client0.oneSecTick();
 }
 
 void LineVoter::tenSecTick() {
+    _client0.tenSecTick();
 }
 
 int LineVoter::getPolls(pollfd* fds, unsigned fdsCapacity) {
@@ -202,8 +218,57 @@ bool LineVoter::_processInboundData() {
 }
 
 void LineVoter::_processReceivedPacket(
-    const uint8_t* potentiallyDangerousBuf, unsigned bufLen,
+    const uint8_t* packet, unsigned packetLen,
     const sockaddr& peerAddr, uint32_t rxStampMs) {
+   
+    if (_trace) {
+        char addr[64];
+        formatIPAddrAndPort((const sockaddr&)peerAddr, addr, 64);
+        char msg[128];
+        snprintf(msg, sizeof(msg), "VOTER packet from %s", addr);
+        _log.infoDump(msg, packet, packetLen);
+    }
+   
+    // Figure out who the packet belongs to
+    if (_client0.belongsTo(packet, packetLen)) {
+        _client0.consumePacket(peerAddr, packet, packetLen);
+    } 
+    else {
+        _log.info("Packet doesn't belong to active client");
+        // Make a response to send back to the potential new client
+        uint8_t resp[24];
+        int rc = amp::VoterPeer::makeInitialChallengeResponse(packet,
+            _serverChallenge.c_str(), _serverPassword.c_str(), resp);
+        assert(rc == 24);
+        _sendPacketToPeer(resp, rc, peerAddr);
+    }
+}
+
+void LineVoter::_sendPacketToPeer(const uint8_t* b, unsigned len, 
+    const sockaddr& peerAddr) {
+
+    if (!_sockFd)
+        return;
+
+    int rc = ::sendto(_sockFd, 
+        b,
+        len, 0, &peerAddr, getIPAddrSize(peerAddr));
+    if (rc < 0) {
+        if (errno == 101) {
+            char temp[64];
+            formatIPAddrAndPort(peerAddr, temp, 64);
+            _log.error("Network is unreachable to %s", temp);
+        } else 
+            _log.error("Send error %d", errno);
+    }
+
+    if (_trace) {
+        char addr[64];
+        formatIPAddrAndPort((const sockaddr&)peerAddr, addr, 64);
+        char msg[128];
+        snprintf(msg, sizeof(msg), "VOTER packet to %s", addr);
+        _log.infoDump(msg, b, len);
+    }
 }
 
 }
