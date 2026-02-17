@@ -99,6 +99,7 @@ int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet,
     char buf[64];
     snprintf(buf, sizeof(buf), "%s%s", remoteChallenge, localPassword);
     uint32_t crc = VoterUtil::crc32(buf);
+    memset(resp, 0, 24);
     VoterUtil::setHeaderPayloadType(resp, 0);
     VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
     VoterUtil::setHeaderAuthResponse(resp, crc);
@@ -106,10 +107,12 @@ int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet,
 }
 
 bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
-    if (!isValidPacket(packet, packetLen))
+    if (!isValidPacket(packet, packetLen)) {
         return false;
-    if (VoterUtil::getHeaderAuthResponse(packet) == 0) 
+    }
+    if (VoterUtil::getHeaderAuthResponse(packet) == 0) {
         return false;
+    }
     // ### TODO SPEED THIS UP
     char buf[64];
     snprintf(buf, sizeof(buf),"%s%s", _localChallenge.c_str(), _remotePassword.c_str());
@@ -148,7 +151,8 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
     // Look for the transition into trust
     if (!_peerTrusted) {
-        _log->info("%s now trusts its peer", _localPassword.c_str());
+        _log->info("%s now trusts its peer %s", _localPassword.c_str(),
+            _remotePassword.c_str());
         _peerTrusted = true;
         // Grab the remote challenge since we'll need it for any responses.
         char remoteChallenge[10];
@@ -270,7 +274,8 @@ void VoterPeer::_flushExpiredFrames() {
 
 string VoterPeer::makeChallenge() {
     char ch[16];
-    snprintf(ch, sizeof(ch), "hello%d", rand());
+    // Limit the randomness to a few  digits
+    snprintf(ch, sizeof(ch), "h%d", (rand() % 1000));
     return string(ch);
 }
 
