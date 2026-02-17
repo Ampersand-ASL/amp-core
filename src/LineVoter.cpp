@@ -55,6 +55,8 @@ LineVoter::LineVoter(Log& log, Clock& clock, int lineId,
     _clock(clock),
     _lineId(lineId),
     _bus(bus) {
+
+    _server0.init(&clock, &log);
 }
 
 int LineVoter::open(short addrFamily, int listenPort) {
@@ -124,6 +126,11 @@ int LineVoter::open(short addrFamily, int listenPort) {
 
     _sockFd = sockFd;
 
+    //server0.setLocalPassword(serverPwd.c_str());
+    //server0.setLocalChallenge(serverChallenge.c_str());
+    //server0.setRemotePassword(client0Pwd.c_str());
+
+
     return 0;
 }
 
@@ -134,6 +141,10 @@ void LineVoter::close() {
     _listenPort = 0;
     _addrFamily = 0;
 } 
+
+void LineVoter::setServerPassword(const char* p) {
+    _server0.setLocalPassword(p);
+}
 
 void LineVoter::consume(const Message& m) {   
 }

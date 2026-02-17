@@ -24,6 +24,7 @@
 #include "IAX2Util.h"
 #include "Message.h"
 #include "MessageConsumer.h"
+#include "VoterPeer.h"
 
 namespace kc1fsz {
 
@@ -55,6 +56,8 @@ public:
      * Resets all calls as a side-effect.
      */
     void close();
+    
+    void setServerPassword(const char* p);
 
     void setTrace(bool a) { _trace = a; }
 
@@ -93,6 +96,8 @@ private:
     int _sockFd = 0;
     // Enables detailed network tracing
     bool _trace = false;
+
+    amp::VoterPeer _server0;
 };
 
 }
