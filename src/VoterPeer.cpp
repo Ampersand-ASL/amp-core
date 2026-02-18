@@ -268,6 +268,9 @@ void VoterPeer::_flushExpiredFrames() {
         // Are we on the verge of underflow? If so, nothing to flush
         if (_frameRdPtr + 1 % FRAME_COUNT == _frameWrPtr)
             break;
+        // Make sure the frame we are flushing doesn't get mistaken for 
+        // audio later.
+        _frames[_frameRdPtr].rssi = 0;
         // Flush and manage wrap
         if (++_frameRdPtr == FRAME_COUNT)
             _frameRdPtr = 0;

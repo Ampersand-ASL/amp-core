@@ -184,7 +184,11 @@ bool LineVoter::run2() {
 }
 
 void LineVoter::audioRateTick(uint32_t ms) {
+
     _client0.audioRateTick(ms);
+
+    if (_client0.getRSSI(ms) == 0)
+        return;
 
     // Extract the current audio frame from the Voter buffer
     uint8_t ulaw8[BLOCK_SIZE_8K];
