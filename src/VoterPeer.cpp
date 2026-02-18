@@ -270,22 +270,24 @@ void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
 
     _audioAvailableThisTick = false;
 
-    if (_framePtrs.isEmpty())
-        return;
+    if (!_framePtrs.isEmpty()) {
 
-    // A loop to clean up expired frames
-    while (!_framePtrs.isEmpty())
-        if (_frames[_framePtrs.readPtr()].isExpired(
-            _generalPurposeMode, _playCursorS, _playCursorNs)) 
+        // Clean up all expired frames
+        while (!_framePtrs.isEmpty() &&
+            _frames[_framePtrs.readPtr()].isExpired(
+                _generalPurposeMode, _playCursorS, _playCursorNs)) {
             _framePtrs.pop();
+        }
 
-    // Are we ready to play the next available frame?
-    _audioAvailableThisTick = !_framePtrs.isEmpty() &&
-        _frames[_framePtrs.readPtr()].isCurrent(
-            _generalPurposeMode, _playCursorS, _playCursorNs);
+        // Is the next frame playable now? (If not, the only other 
+        // possibility is that it is waiting to be played in the future.)
+        _audioAvailableThisTick = !_framePtrs.isEmpty() &&
+            _frames[_framePtrs.readPtr()].isCurrent(
+                _generalPurposeMode, _playCursorS, _playCursorNs);
+    }
 
     // Is the spurt timed out?
-    if (_clock->isPastWindow(_lastAudioMs, SPURT_TIMEOUT_MS)) {
+    if (_inSpurt && _clock->isPastWindow(_lastAudioMs, SPURT_TIMEOUT_MS)) {
         _inSpurt = false;
         _spurtStartMs = 0;
         _log->info("End of TS for VOTER %s", _localPassword.c_str());
