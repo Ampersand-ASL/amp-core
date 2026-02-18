@@ -28,6 +28,74 @@ namespace kc1fsz {
 class Log;
 class Clock;
 
+/**
+ * A generic class for managing the pointers in a circular queue.
+ * (I'm tired of writing this over an over again.)
+ */
+class CircularQueuePointers {
+public:
+    
+    CircularQueuePointers(unsigned size)
+    :   _size(size) {        
+        reset();
+    }
+
+    void reset() {
+        _readPtr = 0; _writePtr = 0; _fault = false;
+    }
+
+    bool isEmpty() const {
+        return _readPtr == _writePtr;
+    }
+
+    bool isFull() const {
+        return _writePtr == _next(_readPtr);
+    }
+
+    bool isFault() const { return _fault; }
+
+    unsigned writePtr() const { return _writePtr; }
+
+    unsigned writePtrThenPush() const { 
+        unsigned t = _writePtr; 
+        push(); 
+        return t;
+    }
+
+    unsigned readPtr() const { return _readPtr; }
+
+    void push() { 
+        if (isFull())
+            _fault = true;
+        else 
+            _writePtr = _next(_writePtr);
+    }
+
+    void pop() {
+        if (isEmpty())
+            _fault = true;
+        else 
+            _readPtr = _next(_readPtr);
+    }
+
+private:
+
+    /**
+     * Increments the value, wrapping if needed
+     */
+    unsigned _next(unsigned i) {
+        i++;
+        if (i == _size)
+            i = 0;
+        return i;
+    }
+
+    const unsigned _size;
+    unsigned _readPtr = 0;
+    unsigned _writePtr = 0;
+    bool _fault = false;
+};
+
     namespace amp {
 
 /**
@@ -175,8 +243,6 @@ private:
         uint8_t rssi;
     };
 
-    friend class AudioFrame;
-
     const bool _isClient;
     Clock* _clock = 0;
     Log* _log = 0;
@@ -184,11 +250,10 @@ private:
     bool _masterTimingSource = false;
     bool _generalPurposeMode = false;
 
-    static const unsigned FRAME_COUNT = 4;
+    static const unsigned FRAME_COUNT = 8;
     AudioFrame _frames[FRAME_COUNT];
-    // Pointers used to manage circular buffer
-    unsigned _frameWrPtr = 0;
-    unsigned _frameRdPtr = 0;
+    // Pointers used to manage circular buffer.
+    CircularQueuePointers _framePtrs;
 
     void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
     void _populateAuth(uint8_t* resp) const;
@@ -215,6 +280,7 @@ private:
 
     uint32_t _playCursorS = 0;
     uint32_t _playCursorNs = 0;
+    bool _audioAvailableThisTick = false;
     // The controls how far behind the playout should lag the initial
     // network arrival in order to provide enough time for the 
     // inbound packets to "fill in" before being used.
