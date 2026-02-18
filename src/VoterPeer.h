@@ -49,7 +49,7 @@ public:
     }
 
     bool isFull() const {
-        return _writePtr == _next(_readPtr);
+        return _next(_writePtr) == _readPtr;
     }
 
     bool isFault() const { return _fault; }
@@ -217,6 +217,12 @@ public:
      * time interval.
      */
     void getAudioFrame(uint64_t ms, uint8_t* frame, unsigned frameLen);
+
+    /**
+     * Should be called after the RSSI/audio frame for the current tick 
+     * has been used.
+     */
+    void popAudioFrame();
 
     /**
      * Called by the conference to transmit a frame of audio to the

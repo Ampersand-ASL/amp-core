@@ -200,7 +200,9 @@ void LineVoter::audioRateTick(uint32_t ms) {
         msg.setSource(_lineId, CALL_ID_FIXED);
         msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
-    }
+
+        _client0.popAudioFrame();
+    } 
 }
 
 void LineVoter::oneSecTick() {    

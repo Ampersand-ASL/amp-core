@@ -312,6 +312,11 @@ void VoterPeer::getAudioFrame(uint64_t ms, uint8_t* frame, unsigned frameLen) {
         memset(frame, 0, 160);
 }
 
+void VoterPeer::popAudioFrame() {
+    if (!_framePtrs.isEmpty())
+        _framePtrs.pop();
+}
+
 string VoterPeer::makeChallenge() {
     char ch[16];
     // Limit the randomness to a few  digits
