@@ -14,6 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <cstring>
+
 #include "kc1fsz-tools/Common.h"
 
 #include "VoterUtil.h"
@@ -110,7 +112,10 @@ uint8_t VoterUtil::getType1RSSI(const uint8_t* packet) {
 
 int VoterUtil::getType1Audio(const uint8_t* packet,
     uint8_t* audio, unsigned audioCapacity) {
-    return -1;
+	if (audioCapacity < 160)
+		return -1;
+	memcpy(audio, packet + 25, 160);
+    return 0;
 }
 
 void VoterUtil::setHeaderPayloadType(uint8_t* packet, uint16_t t) {
