@@ -187,18 +187,20 @@ void LineVoter::audioRateTick(uint32_t ms) {
 
     _client0.audioRateTick(ms);
 
-    if (_client0.getRSSI(ms) == 0)
-        return;
+    // #### TODO: VOTER LOGIC!
 
-    // Extract the current audio frame from the Voter buffer
-    uint8_t ulaw8[BLOCK_SIZE_8K];
-    _client0.getAudioFrame(ms, ulaw8, BLOCK_SIZE_8K);
+    if (_client0.isAudioAvailable()) {
 
-    // Make a message and transmit to the Bridge
-    MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
-    msg.setSource(_lineId, CALL_ID_FIXED);
-    msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
-    _bus.consume(msg);
+        // Extract the current audio frame from the Voter buffer
+        uint8_t ulaw8[BLOCK_SIZE_8K];
+        _client0.getAudioFrame(ms, ulaw8, BLOCK_SIZE_8K);
+
+        // Make a message and transmit to the Bridge
+        MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
+        msg.setSource(_lineId, CALL_ID_FIXED);
+        msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
+        _bus.consume(msg);
+    }
 }
 
 void LineVoter::oneSecTick() {    

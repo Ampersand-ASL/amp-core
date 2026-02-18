@@ -25,9 +25,13 @@
 #include "VoterUtil.h"
 #include "VoterPeer.h"
 
+#define FRAME_SIZE (160)
+
 // How long we can go without hearing from the other side before
 // giving up and resetting.
 #define TIMEOUT_INTERVAL_MS (30 * 1000)
+// Period of no audio packets before declaring the spurt to be over
+#define SPURT_TIMEOUT_MS (80)
 
 using namespace std;
 
@@ -35,17 +39,15 @@ namespace kc1fsz {
 
     namespace amp {
 
-    /* From docs:       
-       When the client starts operating, it starts periodically sending VOTER packets 
-       to the host containing a payload value of 0, the client's challenge string and 
-       an authentication response (digest) of 0 (to indicate that it has not as of yet 
-       gotten a valid response from the host). When such a packet is received by the host, 
-       it responds with a packet containing a payload value of 0, the host's challenge string, 
-       an authentication response (digest) based upon the calculated CRC-32 value of the 
-       challenge string it received from the client and the host's password, and option flags.    
-    */
-
-
+/* From docs:       
+   When the client starts operating, it starts periodically sending VOTER packets 
+   to the host containing a payload value of 0, the client's challenge string and 
+   an authentication response (digest) of 0 (to indicate that it has not as of yet 
+   gotten a valid response from the host). When such a packet is received by the host, 
+   it responds with a packet containing a payload value of 0, the host's challenge string, 
+   an authentication response (digest) based upon the calculated CRC-32 value of the 
+   challenge string it received from the client and the host's password, and option flags.    
+*/
 VoterPeer::VoterPeer(bool isClient)
 :   _isClient(isClient),
     _framePtrs(FRAME_COUNT) {
@@ -62,12 +64,12 @@ void VoterPeer::init(Clock* clock, Log* log) {
 
 void VoterPeer::reset() {
     _masterTimingSource = false;
-    _generalPurposeMode = false;
+    _generalPurposeMode = true;
     _badPackets = 0;
     for (AudioFrame& f : _frames)
         f.rssi = 0;
     _inSpurt = false;
-    _spurtStartUs = 0;
+    _spurtStartMs = 0;
     _audioSeq = 1;
     _playCursorS = 0;
     _playCursorNs = 0;
@@ -103,6 +105,7 @@ int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet,
     snprintf(buf, sizeof(buf), "%s%s", remoteChallenge, localPassword);
     uint32_t crc = VoterUtil::crc32(buf);
     memset(resp, 0, 24);
+    // #### TODO DEAL WITH FLAGS
     VoterUtil::setHeaderPayloadType(resp, 0);
     VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
     VoterUtil::setHeaderAuthResponse(resp, crc);
@@ -110,12 +113,10 @@ int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet,
 }
 
 bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
-    if (!isValidPacket(packet, packetLen)) {
+    if (!isValidPacket(packet, packetLen))
         return false;
-    }
-    if (VoterUtil::getHeaderAuthResponse(packet) == 0) {
+    if (VoterUtil::getHeaderAuthResponse(packet) == 0)
         return false;
-    }
     // ### TODO SPEED THIS UP
     char buf[64];
     snprintf(buf, sizeof(buf),"%s%s", _localChallenge.c_str(), _remotePassword.c_str());
@@ -154,9 +155,12 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
     // Look for the transition into trust
     if (!_peerTrusted) {
+
+         _peerTrusted = true;
+
         _log->info("%s now trusts its peer %s", _localPassword.c_str(),
             _remotePassword.c_str());
-        _peerTrusted = true;
+
         // Grab the remote challenge since we'll need it for any responses.
         char remoteChallenge[10];
         if (VoterUtil::getHeaderAuthChallenge(packet, 
@@ -166,6 +170,7 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
             return;
         }
         _remoteChallenge = remoteChallenge;
+
         // Grab the peer address
         memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
 
@@ -184,6 +189,9 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen) {
     // Audio packet
     if (VoterUtil::getHeaderPayloadType(packet) == 1) {
+
+        _lastAudioMs = _clock->timeMs();
+
         // Capture in the circular frame buffer, if possible
         if (!_framePtrs.isFull()) {
 
@@ -192,15 +200,16 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
             _frames[ptr].packetS = VoterUtil::getHeaderTimeS(packet);
             _frames[ptr].packetNs = VoterUtil::getHeaderTimeNs(packet);
             _frames[ptr].rssi = VoterUtil::getType1RSSI(packet);
-            VoterUtil::getType1Audio(packet, _frames[ptr].content, 160);
+            VoterUtil::getType1Audio(packet, _frames[ptr].content, FRAME_SIZE);
 
             // Look for the leading edge of a spurt and use it to synchronize playout
             if (!_inSpurt) {
                 _inSpurt = true;
-                _spurtStartUs = _clock->timeUs();
+                _spurtStartMs = _clock->timeMs();
+
                 _playCursorS = 0;
                 _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMargin;
-                _log->info("Start of TS for %s", _localPassword.c_str());
+                _log->info("Start of TS for VOTER %s", _localPassword.c_str());
             }
         }
     } 
@@ -227,9 +236,9 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
 
 void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen) {
 
-    assert(frameLen == 160);
+    assert(frameLen == FRAME_SIZE);
 
-    uint8_t resp[24 + 1 + 160];
+    uint8_t resp[24 + 1 + FRAME_SIZE];
     _populateAuth(resp);
     VoterUtil::setHeaderPayloadType(resp, 1);
     uint32_t nowS = _clock->timeUs() / 1000000;
@@ -237,13 +246,14 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
     VoterUtil::setHeaderTimeNs(resp, _audioSeq);
     // #### TODO: FUNCTIONS FOR THIS
     resp[24] = rssi;
-    memcpy(resp + 25, frame, 160);
+    memcpy(resp + 25, frame, FRAME_SIZE);
     _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
 
     _audioSeq++;
 }
 
 void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
+
     // The play cursor moves forward no matter what
     if (_generalPurposeMode) 
         _playCursorNs++;
@@ -256,50 +266,48 @@ void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
         }
     }
 
-    // Figure out if we have audio on this tick
+    // Figure out if we have audio available on this tick
+
     _audioAvailableThisTick = false;
+
     if (_framePtrs.isEmpty())
         return;
+
     // A loop to clean up expired frames
+    while (!_framePtrs.isEmpty())
+        if (_frames[_framePtrs.readPtr()].isExpired(
+            _generalPurposeMode, _playCursorS, _playCursorNs)) 
+            _framePtrs.pop();
 
+    // Are we ready to play the next available frame?
+    _audioAvailableThisTick = !_framePtrs.isEmpty() &&
+        _frames[_framePtrs.readPtr()].isCurrent(
+            _generalPurposeMode, _playCursorS, _playCursorNs);
 
+    // Is the spurt timed out?
+    if (_clock->isPastWindow(_lastAudioMs, SPURT_TIMEOUT_MS)) {
+        _inSpurt = false;
+        _spurtStartMs = 0;
+        _log->info("End of TS for VOTER %s", _localPassword.c_str());
+    }
+}
 
-
+bool VoterPeer::isAudioAvailable() const { 
+    return _audioAvailableThisTick; 
 }
 
 uint8_t VoterPeer::getRSSI(uint64_t ms) {
-    _flushExpiredFrames();
-    if (_frames[_frameRdPtr].packetNs == _playCursorNs)
-        return _frames[_frameRdPtr].rssi;
+    if (isAudioAvailable())
+        return _frames[_framePtrs.readPtr()].rssi;
     else 
         return 0;
 }
 
 void VoterPeer::getAudioFrame(uint64_t ms, uint8_t* frame, unsigned frameLen) {    
-    _flushExpiredFrames();
-    if (_frames[_frameRdPtr].packetNs == _playCursorNs)
-        memcpy(frame, _frames[_frameRdPtr].content, 160);
+    if (isAudioAvailable())
+        memcpy(frame, _frames[_framePtrs.readPtr()].content, FRAME_SIZE);
     else 
         memset(frame, 0, 160);
-}
-
-void VoterPeer::_flushExpiredFrames() {
-    while (true) {
-        // Is the current packet empty or in the future? If so, 
-        // nothing to flush.
-        if (_frames[_frameRdPtr].packetNs == 0 ||
-            _frames[_frameRdPtr].packetNs >= _playCursorNs)
-            break;
-        // Are we on the verge of underflow? If so, nothing to flush
-        if (_frameRdPtr + 1 % FRAME_COUNT == _frameWrPtr)
-            break;
-        // Make sure the frame we are flushing doesn't get mistaken for 
-        // audio later.
-        _frames[_frameRdPtr].rssi = 0;
-        // Flush and manage wrap
-        if (++_frameRdPtr == FRAME_COUNT)
-            _frameRdPtr = 0;
-    }
 }
 
 string VoterPeer::makeChallenge() {
@@ -308,7 +316,6 @@ string VoterPeer::makeChallenge() {
     snprintf(ch, sizeof(ch), "h%d", (rand() % 1000));
     return string(ch);
 }
-
 
 void VoterPeer::oneSecTick() {    
     // Check to see if an authentication packet should be sent out

@@ -56,7 +56,7 @@ public:
 
     unsigned writePtr() const { return _writePtr; }
 
-    unsigned writePtrThenPush() const { 
+    unsigned writePtrThenPush() { 
         unsigned t = _writePtr; 
         push(); 
         return t;
@@ -83,7 +83,7 @@ private:
     /**
      * Increments the value, wrapping if needed
      */
-    unsigned _next(unsigned i) {
+    unsigned _next(unsigned i) const {
         i++;
         if (i == _size)
             i = 0;
@@ -102,6 +102,9 @@ private:
  * An instance of this class represents either the server or client side of
  * a voter link. The protocol is reasonably symmetric so we are going to avoid
  * creating separate classes for each side.
+ *
+ * IMPORTANT NOTE: This is a class that should be re-usable on a microcontroller
+ * so please avoid any constructs that aren't portable.
  */
 class VoterPeer : public Runnable2 {
 public:
@@ -198,6 +201,12 @@ public:
     // obtain the audio contribution for this client.
 
     /**
+     * Should be called after audioRateTick().
+     * @returns True if this peer has audio to contribute in this tick.
+     */
+    bool isAudioAvailable() const;
+
+    /**
      * @returns Zero if this client has no audio to contribute in
      * the specified time interval.
      */
@@ -235,7 +244,36 @@ public:
 
 private:
 
+    /** 
+     * Each frame of audio arriving from a VOTER client get stored in one 
+     * of these frames. The frames are organized into a circular buffer.
+     */
     struct AudioFrame {
+
+        /**
+        * @param gpMode True for "general-purpose" mode, that changes the semantics
+        * of the nanosecond field.
+        * @returns True if the frame is expired relative to the current time.
+        */
+        bool isExpired(bool gpMode, uint32_t currentS, uint32_t currentNs) const {
+            if (gpMode)
+                return packetNs < currentNs;
+            else 
+                return packetS < currentS || 
+                    (packetS == currentS && packetNs < currentNs);
+        }
+
+        /**
+        * @param gpMode True for "general-purpose" mode, that changes the semantics
+        * of the nanosecond field.
+        */
+        bool isCurrent(bool gpMode, uint32_t currentS, uint32_t currentNs) const {
+            if (gpMode)
+                return packetNs == currentNs;
+            else 
+                return packetS == currentS && packetNs == currentNs;
+        }
+
         uint64_t arrivalUs;
         uint32_t packetS;
         uint32_t packetNs;
@@ -248,7 +286,7 @@ private:
     Log* _log = 0;
 
     bool _masterTimingSource = false;
-    bool _generalPurposeMode = false;
+    bool _generalPurposeMode = true;
 
     static const unsigned FRAME_COUNT = 8;
     AudioFrame _frames[FRAME_COUNT];
@@ -257,7 +295,6 @@ private:
 
     void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
     void _populateAuth(uint8_t* resp) const;
-    void _flushExpiredFrames();
 
     sockaddr_storage _peerAddr;
     unsigned _badPackets = 0;
@@ -266,17 +303,20 @@ private:
 
     // Last time we heard from the peer
     uint64_t _lastRxMs = 0;
+    // Used to track last audio arrival, used for detecting the 
+    // end of a spurt
+    uint64_t _lastAudioMs = 0;
+    bool _inSpurt = false;
+    // This is the actual time the spurt started
+    uint64_t _spurtStartMs = 0;
 
+    // #### TODO: CHANGE TO STRING BUFFERS FOR MICROCONTROLLER COMPATIBILITY
     std::string _localPassword;
     std::string _remotePassword;
     std::string _localChallenge;
     std::string _remoteChallenge;
 
     uint32_t _audioSeq = 0;
-
-    bool _inSpurt = false;
-    // This is the actual time the spurt started
-    uint64_t _spurtStartUs = 0;
 
     uint32_t _playCursorS = 0;
     uint32_t _playCursorNs = 0;
