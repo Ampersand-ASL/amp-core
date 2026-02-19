@@ -16,15 +16,27 @@
  */
 #pragma once
 
-#include "Message.h"
+#include <functional>
 
 namespace kc1fsz {
 
-class MessageConsumer {
+class Log;
+class Clock;
+class Runnable;
+class Runnable2;
+
+class PicoEventLoop {
 public:
 
-    virtual void consume(const Message& msg) = 0;
+    /**
+     * @param cb (Optional) Called on every cycle. If false is
+     * returned then the loop exits.
+     */
+    static void run(Log& log, Clock& lock, 
+        Runnable** tasks, unsigned tasksLen,
+        Runnable2** tasks2, unsigned tasks2Len,
+        std::function<bool(Log& log, Clock& clock)> cb = nullptr,
+        bool trace = false);    
 };
 
 }
-

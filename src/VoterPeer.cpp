@@ -15,10 +15,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <iostream>
-#include <string>
 #include <cstring>
 #include <cassert>
 
+#include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/NetUtils.h"
 
@@ -51,6 +51,10 @@ namespace kc1fsz {
 VoterPeer::VoterPeer(bool isClient)
 :   _isClient(isClient),
     _framePtrs(FRAME_COUNT) {
+    _localPassword[0] = 0;
+    _localChallenge[0] = 0;
+    _remotePassword[0] = 0;
+    _remoteChallenge[0] = 0;
     reset();
 }
 
@@ -75,12 +79,28 @@ void VoterPeer::reset() {
     _playCursorNs = 0;
     _lastRxMs = 0;
     _peerTrusted = false;
-    _remoteChallenge.clear();
+    _remoteChallenge[0] = 0;
     _framePtrs.reset();
     _audioAvailableThisTick = false;
     // Only clear out the peer address if we are a server
     if (!_isClient)
         memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+}
+
+void VoterPeer::setLocalChallenge(const char* p) { 
+    strcpyLimited(_localChallenge, p, sizeof(_localChallenge));
+}
+
+void VoterPeer::setLocalPassword(const char* p) { 
+    strcpyLimited(_localPassword, p, sizeof(_localPassword));
+}
+
+void VoterPeer::setRemoteChallenge(const char* p) { 
+    strcpyLimited(_remoteChallenge, p, sizeof(_remoteChallenge));
+}
+
+void VoterPeer::setRemotePassword(const char* p) { 
+    strcpyLimited(_remotePassword, p, sizeof(_remotePassword));
 }
 
 void VoterPeer::setPeerAddr(const sockaddr_storage& addr) {
@@ -119,7 +139,7 @@ bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
         return false;
     // ### TODO SPEED THIS UP
     char buf[64];
-    snprintf(buf, sizeof(buf),"%s%s", _localChallenge.c_str(), _remotePassword.c_str());
+    snprintf(buf, sizeof(buf),"%s%s", _localChallenge, _remotePassword);
     return VoterUtil::crc32(buf) == VoterUtil::getHeaderAuthResponse(packet);
 }
 
@@ -158,8 +178,8 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
          _peerTrusted = true;
 
-        _log->info("%s now trusts its peer %s", _localPassword.c_str(),
-            _remotePassword.c_str());
+        _log->info("%s now trusts its peer %s", _localPassword,
+            _remotePassword);
 
         // Grab the remote challenge since we'll need it for any responses.
         char remoteChallenge[10];
@@ -169,7 +189,7 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
             _badPackets++;
             return;
         }
-        _remoteChallenge = remoteChallenge;
+        strcpyLimited(_remoteChallenge, remoteChallenge, sizeof(remoteChallenge));
 
         // Grab the peer address
         memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
@@ -209,7 +229,7 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
 
                 _playCursorS = 0;
                 _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMargin;
-                _log->info("Start of TS for VOTER %s", _localPassword.c_str());
+                _log->info("Start of TS for VOTER %s", _localPassword);
             }
         }
     } 
@@ -290,7 +310,7 @@ void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
     if (_inSpurt && _clock->isPastWindow(_lastAudioMs, SPURT_TIMEOUT_MS)) {
         _inSpurt = false;
         _spurtStartMs = 0;
-        _log->info("End of TS for VOTER %s", _localPassword.c_str());
+        _log->info("End of TS for VOTER %s", _localPassword);
     }
 }
 
@@ -327,12 +347,12 @@ string VoterPeer::makeChallenge() {
 void VoterPeer::oneSecTick() {    
     // Check to see if an authentication packet should be sent out
     if (_peerAddr.ss_family != 0 && !_peerTrusted && 
-        !_localChallenge.empty() && !_localPassword.empty()) {
+        _localChallenge[0] && _localPassword[0]) {
         uint8_t resp[24];
         VoterUtil::setHeaderPayloadType(resp, 0);
-        VoterUtil::setHeaderAuthChallenge(resp, _localChallenge.c_str());
+        VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
         VoterUtil::setHeaderAuthResponse(resp, 0);
-        _log->info("%s initiating handshake", _localPassword.c_str());
+        _log->info("%s initiating handshake", _localPassword);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 }
@@ -350,7 +370,7 @@ void VoterPeer::tenSecTick() {
 
     // Check for timeout
     if (_peerTrusted && _clock->isPastWindow(_lastRxMs, TIMEOUT_INTERVAL_MS)) {
-        _log->info("Timing out connection with %s", _remotePassword.c_str());
+        _log->info("Timing out connection with %s", _remotePassword);
         reset();        
     }
 }
@@ -362,9 +382,9 @@ void VoterPeer::_populateAuth(uint8_t* resp) const {
     // in the Voter documentation and is confirmed around line 3359 of chan_voter
     // https://github.com/AllStarLink/app_rpt/blob/master/channels/chan_voter.c#L3359
     // #### TODO: SPEED UP
-    snprintf(buf, sizeof(buf), "%s%s", _remoteChallenge.c_str(), _localPassword.c_str());
+    snprintf(buf, sizeof(buf), "%s%s", _remoteChallenge, _localPassword);
     VoterUtil::setHeaderAuthResponse(resp, VoterUtil::crc32(buf));
-    VoterUtil::setHeaderAuthChallenge(resp, _localChallenge.c_str());
+    VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
 }
 
 }

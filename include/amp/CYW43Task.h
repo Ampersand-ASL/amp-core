@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ * Copyright (C) 2027, Bruce MacKinnon KC1FSZ, All Rights Reserved
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,15 +16,23 @@
  */
 #pragma once
 
-#include "Message.h"
+#include "pico/cyw43_arch.h"
+
+#include "Runnable2.h"
 
 namespace kc1fsz {
+    namespace amp {
 
-class MessageConsumer {
+class CYW43Task : public Runnable2 {
 public:
-
-    virtual void consume(const Message& msg) = 0;
+    virtual bool run2() { 
+        // Ff you are using pico_cyw43_arch_poll, then you must poll periodically from 
+        // your main loop (not from a timer) to check for Wi-Fi driver or lwIP work that 
+        // needs to be done.
+        cyw43_arch_poll();
+        return false; 
+    }
 };
 
+    }
 }
-

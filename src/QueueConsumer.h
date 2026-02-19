@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ * Copyright (C) 2026, Bruce MacKinnon KC1FSZ
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,14 +16,28 @@
  */
 #pragma once
 
+#include "kc1fsz-tools/threadsafequeue2.h"
+
 #include "Message.h"
 
 namespace kc1fsz {
 
-class MessageConsumer {
-public:
+/**
+ * A consumer that just pushes the message on a queue.
+ */
+class QueueConsumer : public MessageConsumer  {
+public: 
 
-    virtual void consume(const Message& msg) = 0;
+    QueueConsumer(threadsafequeue2<MessageCarrier>& q) : _q(q) { }
+
+    void consume(const Message& msg) { 
+        // Here we take a copy of the message onto the queue
+        _q.push(msg); 
+    }
+
+private:
+
+    threadsafequeue2<MessageCarrier>& _q;
 };
 
 }

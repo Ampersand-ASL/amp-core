@@ -150,26 +150,26 @@ public:
      * be a random string (<=9 chars + null) that stays constant
      * through the life of the session.
      */
-    void setLocalChallenge(const char* p) { _localChallenge = p; }
+    void setLocalChallenge(const char* p);
 
     /**
      * @param p The the local side's password. For a server-side 
      * peer this is the server's password.
      */
-    void setLocalPassword(const char* p) { _localPassword = p; }
+    void setLocalPassword(const char* p);
 
     /**
      * @param p The the remote side's challenge string. Probably
      * only needed for unit testing since this will normally
      * be exchanged during the handshake
      */
-    void setRemoteChallenge(const char* p) { _remoteChallenge = p; }
+    void setRemoteChallenge(const char* p);
 
     /**
      * @param p The remote sides's password. For a server-side 
      * peer this is the client's password.
      */
-    void setRemotePassword(const char* p) { _remotePassword = p; }
+    void setRemotePassword(const char* p);
 
     /**
      * Used when the address of the peer is known in advance, like
@@ -316,11 +316,10 @@ private:
     // This is the actual time the spurt started
     uint64_t _spurtStartMs = 0;
 
-    // #### TODO: CHANGE TO STRING BUFFERS FOR MICROCONTROLLER COMPATIBILITY
-    std::string _localPassword;
-    std::string _remotePassword;
-    std::string _localChallenge;
-    std::string _remoteChallenge;
+    char _localPassword[10];
+    char _remotePassword[10];
+    char _localChallenge[16];
+    char _remoteChallenge[16];
 
     uint32_t _audioSeq = 0;
 
