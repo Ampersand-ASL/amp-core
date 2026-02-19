@@ -227,7 +227,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                         <br/>
                         <br/>
                         <!-- Right/bottom - Level Meters -->
-                        <table class="no-border-table led-table">
+                        <table aria-hidden="true" class="no-border-table led-table">
                             <tr class="usb-rx-meter">
                                 <td>USB RX</td>
                                 <td><div class="led ledgr"></div></td>
@@ -268,48 +268,6 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                                 <td><div class="led ledrd"></div></td>
                                 <td><div class="led ledrd"></div></td>
                             </tr>
-                            <!--
-                            <tr class="net-rx-meter">
-                                <td>NET RX</td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledyl"></div></td>
-                                <td><div class="led ledyl"></div></td>
-                                <td><div class="led ledyl"></div></td>
-                                <td><div class="led ledrd"></div></td>
-                                <td><div class="led ledrd"></div></td>
-                                <td><div class="led ledrd"></div></td>
-                            </tr>
-                            <tr class="net-tx-meter">
-                                <td>NET TX</td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledgr"></div></td>
-                                <td><div class="led ledyl"></div></td>
-                                <td><div class="led ledyl"></div></td>
-                                <td><div class="led ledyl"></div></td>
-                                <td><div class="led ledrd"></div></td>
-                                <td><div class="led ledrd"></div></td>
-                                <td><div class="led ledrd"></div></td>
-                            </tr>
-                            -->
                             <tr class="legend">
                                 <td></td>
                                 <td>-50</td>
@@ -438,10 +396,13 @@ async function controls_update() {
         const response = await fetch('controls');
         if (response.ok) {
             const data = await response.json();
+            var el = document.getElementById("ptt-button");
             if (data["ptt"]) {
-                document.getElementById("ptt-button").classList.add("selected")
+                el.value = "Transmitting"
+                el.classList.add("selected")
             } else {
-                document.getElementById("ptt-button").classList.remove("selected")
+                el.value = "PTT"
+                el.classList.remove("selected")
             }
         }
     } catch (error) {
