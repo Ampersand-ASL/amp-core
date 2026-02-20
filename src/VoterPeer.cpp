@@ -196,7 +196,7 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
         // Send one more type 0 packet in case it is needed to establish
         // trust in the other direction.
-        uint8_t resp[24];
+        uint8_t resp[24] = { 0 };
         VoterUtil::setHeaderPayloadType(resp, 0);
         _populateAuth(resp);
         // #### TODO - LOOK AT HEADER!
@@ -237,7 +237,7 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     else if (VoterUtil::getHeaderPayloadType(packet) == 5) {
         if (_isClient) {
             // Make a pong
-            uint8_t resp[224];
+            uint8_t resp[224] = { 0 };
             _populateAuth(resp);
             // #### TODO: LOOK AT FLAGS
             VoterUtil::setHeaderPayloadType(resp, 5);
@@ -258,7 +258,7 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
 
     assert(frameLen == FRAME_SIZE);
 
-    uint8_t resp[24 + 1 + FRAME_SIZE];
+    uint8_t resp[24 + 1 + FRAME_SIZE] = { 0 };
     _populateAuth(resp);
     VoterUtil::setHeaderPayloadType(resp, 1);
     uint32_t nowS = _clock->timeUs() / 1000000;
@@ -348,7 +348,7 @@ void VoterPeer::oneSecTick() {
     // Check to see if an authentication packet should be sent out
     if (_peerAddr.ss_family != 0 && !_peerTrusted && 
         _localChallenge[0] && _localPassword[0]) {
-        uint8_t resp[24];
+        uint8_t resp[24] = { 0 };
         VoterUtil::setHeaderPayloadType(resp, 0);
         VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
         VoterUtil::setHeaderAuthResponse(resp, 0);
@@ -358,7 +358,7 @@ void VoterPeer::oneSecTick() {
 
     // Generate a ping (only the server does this)
     if (++_oneTickCounter % 2 == 0 && _peerTrusted && !_isClient) {
-        uint8_t resp[224];
+        uint8_t resp[224] = { 0 };
         memset(resp + 24, 0xba, 200);
         _populateAuth(resp);
         VoterUtil::setHeaderPayloadType(resp, 5);
