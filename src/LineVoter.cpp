@@ -274,22 +274,12 @@ void LineVoter::_processReceivedPacket(
     else {
         _log.info("Packet doesn't belong to active client");
         // Make a response to send back to the potential new client
-        uint8_t resp[24];
-        memset(resp, 0, 24);
+        uint8_t resp[24] = { 0 };
         // If a zero auth response is received then send back the initial 
         // challenge response.
-        if (amp::VoterUtil::getHeaderAuthResponse(packet) == 0) {
-            int rc = amp::VoterPeer::makeInitialChallengeResponse(packet,
-                _serverChallenge.c_str(), _serverPassword.c_str(), resp);
-            assert(rc == 24);
-        } 
-        // If a non-zero auth response is received then it must be wrong,
-        // send back a zero to resset.
-        else {
-            amp::VoterUtil::setHeaderPayloadType(resp, 0);
-            amp::VoterUtil::setHeaderAuthChallenge(resp, _serverChallenge.c_str());
-            amp::VoterUtil::setHeaderAuthResponse(resp, 0);
-        }
+        int rc = amp::VoterPeer::makeInitialChallengeResponse(packet,
+            _serverChallenge.c_str(), _serverPassword.c_str(), resp);
+        assert(rc == 24);
         _sendPacketToPeer(resp, 24, peerAddr);
     }
 }

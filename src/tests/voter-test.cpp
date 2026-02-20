@@ -23,7 +23,12 @@ static void voterTest0() {
 
     // Validate CRC code
     uint32_t r1 = VoterUtil::crc32("IzzyHenry");
+    printf("CRC32: %08X\n", r1);
     assert(r1 == 3749699513);
+
+    //r1 = VoterUtil::crc32("h383w6ek5");
+    r1 = VoterUtil::crc32("h383w6ek5");
+    printf("CRC32: %08X\n", r1);
 }
 
 /*
