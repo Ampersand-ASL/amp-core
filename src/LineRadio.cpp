@@ -47,7 +47,7 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
 
     _resampler.setRates(48000, 8000);
 
-    _injectToneOmega = 2.0f * 3.1415926f * 108.0f / 48000.0f;
+    _injectToneOmega = 2.0f * 3.1415926f * 400.0f / 48000.0f;
 }
 
 void LineRadio::resetStatistics() {
@@ -364,16 +364,10 @@ void LineRadio::_setCosStatus(bool cosActive) {
         _log.info("COS active");
         _cosActive = true;    
 
-        // #### TEMP
-        _injectToneActive = true;
-
     } else if (!cosActive && _cosActive) {
 
         _log.info("COS inactive");
         _cosActive = false;
-
-        // #### TEMP
-        _injectToneActive = false;
 
         // Generate an UNKEY signal on the negative transition
         _sendSignal(Message::SignalType::RADIO_UNKEY, 0, 0);

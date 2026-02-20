@@ -2374,7 +2374,7 @@ void LineIAX2::consume(const Message& msg) {
                         pack_uint16_be(0xffff & elapsed, miniFrame + 2);
                         memcpy(miniFrame + 4, msg.body(), msg.size());
                         line->_sendFrameToPeer(miniFrame, msg.size() + 4, 
-                            (const sockaddr&)call.peerAddr);              
+                            (const sockaddr&)call.peerAddr);
                     }
 
                     call.lastTxVoiceFrameMs = line->_clock.timeUs() / 1000;
