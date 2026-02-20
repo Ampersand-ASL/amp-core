@@ -27,7 +27,8 @@ static void voterTest0() {
     assert(r1 == 3749699513);
 
     //r1 = VoterUtil::crc32("h383w6ek5");
-    r1 = VoterUtil::crc32("h383w6ek5");
+    //r1 = VoterUtil::crc32("h383w6ek5");
+    r1 = VoterUtil::crc32("103501604parrot0");
     printf("CRC32: %08X\n", r1);
 }
 
