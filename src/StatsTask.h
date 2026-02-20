@@ -40,6 +40,12 @@ public:
      */
     void configure(const char* statsServerUrl, const char* nodeNumber);
 
+    /**
+     * @param nodeList A comma-separated string of the nodes that this node
+     * is directly connected to.
+     */
+    void setNodeList(const char* nodeList) { _nodeList = nodeList; }
+
     // ----- Runnable -----------------------------------------------------------
 
     void tenSecTick();

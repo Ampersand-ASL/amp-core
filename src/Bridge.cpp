@@ -505,13 +505,47 @@ void Bridge::oneSecTick() {
 }
 
 void Bridge::tenSecTick() {
+
+    // #### TODO: REVIEW getConnectedNodes() and eliminate some redundancy
+
+    std::vector<std::string> connectList;
+
     _visitActiveCalls(
-        [](BridgeCall& call) { 
+        [&connectList](BridgeCall& call) { 
+
             // Pass the tick down
             call.tenSecTick();
+
+            // Assemble a list of nodes that we are directly connected to.
+            if (!call.isPermanent())
+                connectList.push_back(call.getRemoteNodeNumber());
+
             return true;
         }
     );
+
+    if (!connectList.empty()) {
+
+        string linkReport;
+
+        for (std::string& s : connectList) {
+            if (!linkReport.empty()) {
+                linkReport += ",";
+            }
+            linkReport += "T";
+            linkReport += s;
+        }
+
+        // Make a message that will be picked up by something that can forward it 
+        // on to the stats server.
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::LINK_REPORT,
+            // Include the null termination
+            linkReport.length() + 1, (const uint8_t*)linkReport.c_str(), 
+            0, 0);
+        msg.setSource(_lineId, Message::UNKNOWN_CALL_ID);
+        msg.setDest(_statsLineId, Message::UNKNOWN_CALL_ID);
+        _bus.consume(msg);
+    }
 }
 
 void Bridge::_visitActiveCalls(std::function<bool(BridgeCall&)> cb) {

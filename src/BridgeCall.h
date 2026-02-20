@@ -95,6 +95,8 @@ public:
 
     bool isNormal() const { return _mode == Mode::NORMAL; }
 
+    bool isPermanent() const { return _permanent; }
+
     /**
      * @returns true if this call has had input audio in the past few
      * seconds.

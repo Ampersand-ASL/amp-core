@@ -52,9 +52,8 @@ void StatsTask::tenSecTick() {
 
 void StatsTask::_doStats() {  
     
-    // Todo: Get uptime working
-    char msg[1024];
-    snprintf(msg, 1024, 
+    char msg[2048];
+    snprintf(msg, sizeof(msg), 
         "%s?node=%s&time=%ld&seqno=%u&nodes=%s&apprptvers=%s&apprptuptime=%ld&totalkerchunks=0&totalkeyups=0&totaltxtime=0&timeouts=0&totalexecdcommands=0&keyed=0&keytime=0",
         _url.c_str(),
         _nodeNumber.c_str(),
