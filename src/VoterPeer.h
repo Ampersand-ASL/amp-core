@@ -330,6 +330,8 @@ private:
     // network arrival in order to provide enough time for the 
     // inbound packets to "fill in" before being used.
     uint32_t _initialMargin = 2;
+
+    unsigned _oneTickCounter = 0;
 };
 
 }

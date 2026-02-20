@@ -355,19 +355,18 @@ void VoterPeer::oneSecTick() {
         _log->info("%s initiating handshake", _localPassword);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
-}
-
-void VoterPeer::tenSecTick() {
 
     // Generate a ping (only the server does this)
-    if (_peerTrusted && !_isClient) {
+    if (++_oneTickCounter % 2 == 0 && _peerTrusted && !_isClient) {
         uint8_t resp[224];
         memset(resp + 24, 0xba, 200);
         _populateAuth(resp);
         VoterUtil::setHeaderPayloadType(resp, 5);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
     }
+}
 
+void VoterPeer::tenSecTick() {
     // Check for timeout
     if (_peerTrusted && _clock->isPastWindow(_lastRxMs, TIMEOUT_INTERVAL_MS)) {
         _log->info("Timing out connection with %s", _remotePassword);
