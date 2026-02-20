@@ -34,6 +34,7 @@ public:
      * @returns The 32-bit CRC for given null-terminated string.
      */
     static uint32_t crc32(const char* msg);
+    static uint32_t crc32(const char* msg, unsigned len);
 
     // General header stuff
 

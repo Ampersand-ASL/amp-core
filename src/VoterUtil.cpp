@@ -78,6 +78,13 @@ uint32_t VoterUtil::crc32(const char* msg) {
 	return ~result;
 }
 
+uint32_t VoterUtil::crc32(const char* msg, unsigned len) {
+	uint32_t result = 0xFFFFFFFF;
+	for (unsigned i = 0; i < len; i++)
+		result = crc32Table[(result ^ *msg++) & 0xff] ^ ((uint32_t)result >> 8);
+	return ~result;
+}
+
 uint16_t VoterUtil::getHeaderPayloadType(const uint8_t* packet) {
 	return unpack_uint16_be(packet + 22);
 }
