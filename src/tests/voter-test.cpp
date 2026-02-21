@@ -26,12 +26,9 @@ static void voterTest0() {
     printf("CRC32: %08X\n", r1);
     assert(r1 == 3749699513);
 
-    char test[20] = { 'h', '3', '8', '3', 0, 0xff, 0xff, 0xff, 0xe0, 0x8d, 
-        'w', '6', 'e', 'k', '5', 0, 0, 0, 0, 0 };
-    //r1 = VoterUtil::crc32("h383w6ek5");
-    //r1 = VoterUtil::crc32("h383w6ek5");
-    //r1 = VoterUtil::crc32("h383w6ek5");
-    r1 = VoterUtil::crc32(test, 20);
+    //char test[20] = { 'h', '3', '8', '3', 0, 0xff, 0xff, 0xff, 0xe0, 0x8d, 
+    //    'w', '6', 'e', 'k', '5', 0, 0, 0, 0, 0 };
+    r1 = VoterUtil::crc32("h383w6ek5");
     printf("CRC32: %08X\n", r1);
 }
 

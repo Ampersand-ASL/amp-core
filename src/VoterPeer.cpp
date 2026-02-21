@@ -198,7 +198,7 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
         // trust in the other direction.
         uint8_t resp[24] = { 0 };
         VoterUtil::setHeaderPayloadType(resp, 0);
-        _populateAuth(resp);
+        _populateHeader(resp);
         // #### TODO - LOOK AT HEADER!
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
@@ -238,7 +238,7 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
         if (_isClient) {
             // Make a pong
             uint8_t resp[224] = { 0 };
-            _populateAuth(resp);
+            _populateHeader(resp);
             // #### TODO: LOOK AT FLAGS
             VoterUtil::setHeaderPayloadType(resp, 5);
             // From Docs:
@@ -259,7 +259,7 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
     assert(frameLen == FRAME_SIZE);
 
     uint8_t resp[24 + 1 + FRAME_SIZE] = { 0 };
-    _populateAuth(resp);
+    _populateHeader(resp);
     VoterUtil::setHeaderPayloadType(resp, 1);
     uint32_t nowS = _clock->timeUs() / 1000000;
     VoterUtil::setHeaderTimeS(resp, nowS);
@@ -338,10 +338,11 @@ void VoterPeer::popAudioFrame() {
 }
 
 string VoterPeer::makeChallenge() {
-    char ch[16];
+    //char ch[16];
     // Limit the randomness to a few  digits
-    snprintf(ch, sizeof(ch), "h%d", (rand() % 1000));
-    return string(ch);
+    //snprintf(ch, sizeof(ch), "h%d", (rand() % 1000));
+    //return string(ch);
+    return string("383111111");
 }
 
 void VoterPeer::oneSecTick() {    
@@ -360,7 +361,7 @@ void VoterPeer::oneSecTick() {
     if (++_oneTickCounter % 2 == 0 && _peerTrusted && !_isClient) {
         uint8_t resp[224] = { 0 };
         memset(resp + 24, 0xba, 200);
-        _populateAuth(resp);
+        _populateHeader(resp);
         VoterUtil::setHeaderPayloadType(resp, 5);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
     }
@@ -374,7 +375,8 @@ void VoterPeer::tenSecTick() {
     }
 }
 
-void VoterPeer::_populateAuth(uint8_t* resp) const {
+void VoterPeer::_populateHeader(uint8_t* resp) const {
+    VoterUtil::setHeaderTimeS(resp, (uint32_t)time(0));
     char buf[64];
     // When computing authentication response we concatenate the most recent challenge 
     // received from the client with the host's our password. This order is described

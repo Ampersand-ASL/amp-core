@@ -300,7 +300,7 @@ private:
     CircularQueuePointers _framePtrs;
 
     void _consumePacketTrusted(const uint8_t* packet, unsigned packetLen);
-    void _populateAuth(uint8_t* resp) const;
+    void _populateHeader(uint8_t* resp) const;
 
     sockaddr_storage _peerAddr;
     unsigned _badPackets = 0;
