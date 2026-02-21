@@ -349,11 +349,10 @@ void VoterPeer::popAudioFrame() {
 }
 
 string VoterPeer::makeChallenge() {
-    //char ch[16];
-    // Limit the randomness to a few  digits
-    //snprintf(ch, sizeof(ch), "h%d", (rand() % 1000));
-    //return string(ch);
-    return string("383111111");
+    char ch[10];
+    long randomNum = rand();
+    snprintf(ch, sizeof(ch), "%09lu", randomNum);
+    return string(ch);
 }
 
 void VoterPeer::oneSecTick() {    
