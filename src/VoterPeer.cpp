@@ -26,6 +26,8 @@
 #include "VoterPeer.h"
 
 #define FRAME_SIZE (160)
+#define HEADER_SIZE (24)
+#define PING_PAYLOAD_SIZE (164)
 
 // How long we can go without hearing from the other side before
 // giving up and resetting.
@@ -124,12 +126,14 @@ int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet,
     char buf[64];
     snprintf(buf, sizeof(buf), "%s%s", remoteChallenge, localPassword);
     uint32_t crc = VoterUtil::crc32(buf);
-    memset(resp, 0, 24);
+    memset(resp, 0, HEADER_SIZE);
     // #### TODO DEAL WITH FLAGS
     VoterUtil::setHeaderPayloadType(resp, 0);
     VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
     VoterUtil::setHeaderAuthResponse(resp, crc);
-    return 24;
+    // ##### SWITCH TO CLOCK TO MAKE THIS CONTROLLER-FRIENDLY
+    VoterUtil::setHeaderTimeS(resp, time(0));
+    return HEADER_SIZE;
 }
 
 bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
@@ -144,10 +148,8 @@ bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
 }
 
 bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
-    if ((packetLen < 24) ||
-        (VoterUtil::getHeaderPayloadType(packet) == 0 && packetLen != 24) ||
-        (VoterUtil::getHeaderPayloadType(packet) == 1 && packetLen != 185) ||
-        (VoterUtil::getHeaderPayloadType(packet) == 5 && packetLen != 224)) {
+    if ((packetLen < HEADER_SIZE) ||
+        (VoterUtil::getHeaderPayloadType(packet) == 1 && packetLen < HEADER_SIZE + 1 + FRAME_SIZE)) {
         return false;
     }
     if (VoterUtil::getHeaderPayloadType(packet) != 0 &&
@@ -196,10 +198,8 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
         // Send one more type 0 packet in case it is needed to establish
         // trust in the other direction.
-        uint8_t resp[24] = { 0 };
-        VoterUtil::setHeaderPayloadType(resp, 0);
-        _populateHeader(resp);
-        // #### TODO - LOOK AT HEADER!
+        uint8_t resp[HEADER_SIZE] = { 0 };
+        _populateHeader(0, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 
@@ -236,20 +236,32 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     // Ping packet
     else if (VoterUtil::getHeaderPayloadType(packet) == 5) {
         if (_isClient) {
+            // The pinger gets to decide how long the payload is, as long as
+            // it doesn't exceed the maximum that we are allowed to send back.
+            const unsigned pingPayloadLen = min(packetLen - HEADER_SIZE,
+                (unsigned)PING_PAYLOAD_SIZE);
+
             // Make a pong
-            uint8_t resp[224] = { 0 };
-            _populateHeader(resp);
+            uint8_t resp[HEADER_SIZE + PING_PAYLOAD_SIZE] = { 0 };
+            _populateHeader(5, resp);
             // #### TODO: LOOK AT FLAGS
-            VoterUtil::setHeaderPayloadType(resp, 5);
-            // From Docs:
-            // Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
+
+            // IMPORTANT NOTE: After review of the VOTER source code, I think there
+            // is a mistake in the VOTER protocol documentation. The original docs read:
+            // 
+            // **Payload type 5 - "PING" (Connectivity Test)**
+            // "Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
             // quality. When a client receives this packet, it is intended to be transmitted 
             // (with the payload information intact) immediately back to the host from which 
             // it came. The actual contents of the payload are not specifically defined for 
             // the purposes of this protocol, and is entirely determined by the implementation 
-            // of the applicable function in the host.
-            memcpy(resp + 24, packet + 24, 200);
-            _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+            // of the applicable function in the host.""
+            //
+            // However, the structure allocated to read the packet only has room for 164 bytes
+            // of payload. When sending more than 164 you start to overwrite other memory.
+
+            memcpy(resp + HEADER_SIZE, packet + HEADER_SIZE, pingPayloadLen);
+            _sendCb((const sockaddr&)_peerAddr, resp, HEADER_SIZE + pingPayloadLen);   
         }
     }
 }
@@ -258,15 +270,14 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
 
     assert(frameLen == FRAME_SIZE);
 
-    uint8_t resp[24 + 1 + FRAME_SIZE] = { 0 };
-    _populateHeader(resp);
-    VoterUtil::setHeaderPayloadType(resp, 1);
+    uint8_t resp[HEADER_SIZE + 1 + FRAME_SIZE] = { 0 };
+    _populateHeader(1, resp);
     uint32_t nowS = _clock->timeUs() / 1000000;
     VoterUtil::setHeaderTimeS(resp, nowS);
     VoterUtil::setHeaderTimeNs(resp, _audioSeq);
     // #### TODO: FUNCTIONS FOR THIS
-    resp[24] = rssi;
-    memcpy(resp + 25, frame, FRAME_SIZE);
+    resp[HEADER_SIZE] = rssi;
+    memcpy(resp + HEADER_SIZE + 1, frame, FRAME_SIZE);
     _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
 
     _audioSeq++;
@@ -349,20 +360,35 @@ void VoterPeer::oneSecTick() {
     // Check to see if an authentication packet should be sent out
     if (_peerAddr.ss_family != 0 && !_peerTrusted && 
         _localChallenge[0] && _localPassword[0]) {
-        uint8_t resp[24] = { 0 };
+        uint8_t resp[HEADER_SIZE] = { 0 };
         VoterUtil::setHeaderPayloadType(resp, 0);
         VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
         VoterUtil::setHeaderAuthResponse(resp, 0);
+        // #### TODO: REPLACE time(0) WITH CLOCK
+        VoterUtil::setHeaderTimeS(resp, time(0));
         _log->info("%s initiating handshake", _localPassword);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 
     // Generate a ping (only the server does this)
     if (++_oneTickCounter % 2 == 0 && _peerTrusted && !_isClient) {
-        uint8_t resp[224] = { 0 };
-        memset(resp + 24, 0xba, 200);
-        _populateHeader(resp);
-        VoterUtil::setHeaderPayloadType(resp, 5);
+        // IMPORTANT NOTE: After review of the VOTER source code, I think there
+        // is a mistake in the VOTER protocol documentation. The original docs read:
+        // 
+        // **Payload type 5 - "PING" (Connectivity Test)**
+        // "Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
+        // quality. When a client receives this packet, it is intended to be transmitted 
+        // (with the payload information intact) immediately back to the host from which 
+        // it came. The actual contents of the payload are not specifically defined for 
+        // the purposes of this protocol, and is entirely determined by the implementation 
+        // of the applicable function in the host.""
+        //
+        // However, the structure allocated to read the packet only has room for 164 bytes
+        // of payload. When sending more than 164 you start to overwrite other memory
+        // in the device.
+        uint8_t resp[HEADER_SIZE + PING_PAYLOAD_SIZE] = { 0 };
+        // #### TODO: Put a sequence number and send time into the payload.
+        _populateHeader(5, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
     }
 }
@@ -375,7 +401,8 @@ void VoterPeer::tenSecTick() {
     }
 }
 
-void VoterPeer::_populateHeader(uint8_t* resp) const {
+void VoterPeer::_populateHeader(uint16_t type, uint8_t* resp) const {
+    VoterUtil::setHeaderPayloadType(resp, type);
     VoterUtil::setHeaderTimeS(resp, (uint32_t)time(0));
     char buf[64];
     // When computing authentication response we concatenate the most recent challenge 
