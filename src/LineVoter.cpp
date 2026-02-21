@@ -176,7 +176,13 @@ void LineVoter::setClientPasswords(const char* ps) {
     _client0.setRemotePassword(ps);
 }
 
-void LineVoter::consume(const Message& m) {   
+void LineVoter::consume(const Message& msg) {   
+    if (msg.isVoice()) {
+        assert(msg.getFormat() == CODECType::IAX2_CODEC_G711_ULAW);
+        assert(msg.size() == BLOCK_SIZE_8K);
+        if (_client0.isPeerTrusted())
+            _client0.sendAudio(0, msg.body(), msg.size());
+    }
 }
 
 bool LineVoter::run2() {   
