@@ -35,13 +35,13 @@ class Clock;
 class CircularQueuePointers {
 public:
     
-    CircularQueuePointers(unsigned size)
-    :   _size(size) {        
+    CircularQueuePointers(unsigned capacity)
+    :   _capacity(capacity) {        
         reset();
     }
 
     void reset() {
-        _readPtr = 0; _writePtr = 0; _fault = false;
+        _readPtr = 0; _writePtr = 0; _fault = false; _depth = 0;
     }
 
     bool isEmpty() const {
@@ -50,6 +50,13 @@ public:
 
     bool isFull() const {
         return _next(_writePtr) == _readPtr;
+    }
+
+    /**
+     * @return The current number of items on the queue
+     */
+    unsigned getDepth() const {
+        return _depth;
     }
 
     bool isFault() const { return _fault; }
@@ -64,18 +71,28 @@ public:
 
     unsigned readPtr() const { return _readPtr; }
 
+    unsigned readPtrThenPop() { 
+        unsigned t = _readPtr; 
+        pop(); 
+        return t;
+    }
+
     void push() { 
         if (isFull())
             _fault = true;
-        else 
+        else {
             _writePtr = _next(_writePtr);
+            _depth++;
+        }
     }
 
     void pop() {
         if (isEmpty())
             _fault = true;
-        else 
+        else {
             _readPtr = _next(_readPtr);
+            _depth--;
+        }
     }
 
 private:
@@ -85,15 +102,16 @@ private:
      */
     unsigned _next(unsigned i) const {
         i++;
-        if (i == _size)
+        if (i == _capacity)
             i = 0;
         return i;
     }
 
-    const unsigned _size;
+    const unsigned _capacity;
     unsigned _readPtr = 0;
     unsigned _writePtr = 0;
     bool _fault = false;
+    unsigned _depth = 0;
 };
 
     namespace amp {
@@ -234,7 +252,7 @@ public:
 
     static bool isInitialChallenge(const uint8_t* packet, unsigned packetLen);
 
-    static int makeInitialChallengeResponse(const uint8_t* inPacket, 
+    static int makeInitialChallengeResponse(Clock* clock, const uint8_t* inPacket, 
         const char* localChallenge, const char* localPassword, uint8_t* resp);
 
     /**

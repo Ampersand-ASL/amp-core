@@ -116,7 +116,7 @@ bool VoterPeer::isInitialChallenge(const uint8_t* packet, unsigned packetLen) {
         VoterUtil::getHeaderAuthResponse(packet) == 0;
 }
 
-int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet, 
+int VoterPeer::makeInitialChallengeResponse(Clock* clock, const uint8_t* packet, 
     const char* localChallenge, const char* localPassword, uint8_t* resp) {
     // Grab the remote challenge since we'll need it for any responses.
     char remoteChallenge[10];
@@ -131,8 +131,7 @@ int VoterPeer::makeInitialChallengeResponse(const uint8_t* packet,
     VoterUtil::setHeaderPayloadType(resp, 0);
     VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
     VoterUtil::setHeaderAuthResponse(resp, crc);
-    // ##### SWITCH TO CLOCK TO MAKE THIS CONTROLLER-FRIENDLY
-    VoterUtil::setHeaderTimeS(resp, time(0));
+    VoterUtil::setHeaderTimeS(resp, clock->timeMs() / 1000);
     return HEADER_SIZE;
 }
 
@@ -364,8 +363,7 @@ void VoterPeer::oneSecTick() {
         VoterUtil::setHeaderPayloadType(resp, 0);
         VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
         VoterUtil::setHeaderAuthResponse(resp, 0);
-        // #### TODO: REPLACE time(0) WITH CLOCK
-        VoterUtil::setHeaderTimeS(resp, time(0));
+        VoterUtil::setHeaderTimeS(resp, _clock->timeMs() / 1000);
         _log->info("%s initiating handshake", _localPassword);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
@@ -403,7 +401,7 @@ void VoterPeer::tenSecTick() {
 
 void VoterPeer::_populateHeader(uint16_t type, uint8_t* resp) const {
     VoterUtil::setHeaderPayloadType(resp, type);
-    VoterUtil::setHeaderTimeS(resp, (uint32_t)time(0));
+    VoterUtil::setHeaderTimeS(resp, _clock->timeMs() / 1000);
     char buf[64];
     // When computing authentication response we concatenate the most recent challenge 
     // received from the client with the host's our password. This order is described
