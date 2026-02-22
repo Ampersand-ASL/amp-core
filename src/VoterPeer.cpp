@@ -179,8 +179,11 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
          _peerTrusted = true;
 
-        _log->info("%s now trusts its peer %s", _localPassword,
-            _remotePassword);
+        char addr[64];
+        formatIPAddrAndPort(peerAddr, addr, sizeof(addr));
+
+        _log->info("%s now trusts its peer %s (%s)", _localPassword,
+            _remotePassword, addr);
 
         // Grab the remote challenge since we'll need it for any responses.
         char remoteChallenge[10];
@@ -232,7 +235,6 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                 else {
                     _playCursorS = VoterUtil::getHeaderTimeS(packet);
                     uint32_t ns = VoterUtil::getHeaderTimeNs(packet);
-                    _log->info("First packet %u %u", _playCursorS, ns);
                     if (ns < _initialMarginGPS) {
                         _playCursorS -= 1;
                         ns = _initialMarginGPS - ns;                        
@@ -241,12 +243,12 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                     else {
                         _playCursorNs = ns - _initialMarginGPS;
                     }
-                    _log->info("Cursor %u %u", _playCursorS, _playCursorNs);
                 }
                 _log->info("Start of TS for VOTER %s", _localPassword);
             }
         }
         else {
+            // #### TODO: OVERFLOW COUNTER
             _log->info("Buffer full");
         }
     } 
