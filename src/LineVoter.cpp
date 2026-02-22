@@ -279,7 +279,7 @@ void LineVoter::_processReceivedPacket(
         _client0.consumePacket(peerAddr, packet, packetLen);
     } 
     else {
-        _log.info("Packet from %s, not trusted yet", addr);
+        _log.info("VOTER packet from %s, not trusted yet", addr);
         // Make a response to send back to the potential new client
         uint8_t resp[24] = { 0 };
         // If a zero auth response is received then send back the initial 
