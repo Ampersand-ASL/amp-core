@@ -238,6 +238,9 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                         ns = _initialMarginGPS - ns;                        
                         _playCursorNs = 1000000000 - ns;
                     }
+                    else {
+                        _playCursorNs = ns - _initialMarginGPS;
+                    }
                     _log->info("Cursor %u %u", _playCursorS, _playCursorNs);
                 }
                 _log->info("Start of TS for VOTER %s", _localPassword);
