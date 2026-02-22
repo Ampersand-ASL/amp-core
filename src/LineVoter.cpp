@@ -283,7 +283,7 @@ void LineVoter::_processReceivedPacket(
         uint8_t resp[24] = { 0 };
         // If a zero auth response is received then send back the initial 
         // challenge response.
-        int rc = amp::VoterPeer::makeInitialChallengeResponse(packet,
+        int rc = amp::VoterPeer::makeInitialChallengeResponse(&_clock, packet,
             _serverChallenge.c_str(), _serverPassword.c_str(), resp);
         assert(rc == 24);
         _sendPacketToPeer(resp, 24, peerAddr);

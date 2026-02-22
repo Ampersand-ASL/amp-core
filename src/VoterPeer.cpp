@@ -231,6 +231,9 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                 _log->info("Start of TS for VOTER %s", _localPassword);
             }
         }
+        else {
+            _log->info("Buffer full");
+        }
     } 
     // Ping packet
     else if (VoterUtil::getHeaderPayloadType(packet) == 5) {
