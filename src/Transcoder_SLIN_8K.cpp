@@ -39,7 +39,7 @@ bool Transcoder_SLIN_8K::decode(const uint8_t* source, unsigned sourceLen,
         p += 2;
     }
 
-    memcpy(destPCM, pcm_1, BLOCK_SIZE_8K * 2);
+    memcpy(destPCM, pcm_1, sizeof(pcm_1));
 
     return true;
 }
