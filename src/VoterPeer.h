@@ -310,7 +310,7 @@ private:
     Log* _log = 0;
 
     bool _masterTimingSource = false;
-    bool _generalPurposeMode = true;
+    bool _generalPurposeMode = false;
 
     static const unsigned FRAME_COUNT = 8;
     AudioFrame _frames[FRAME_COUNT];
@@ -344,10 +344,14 @@ private:
     uint32_t _playCursorS = 0;
     uint32_t _playCursorNs = 0;
     bool _audioAvailableThisTick = false;
+
     // The controls how far behind the playout should lag the initial
     // network arrival in order to provide enough time for the 
     // inbound packets to "fill in" before being used.
-    uint32_t _initialMargin = 2;
+    // In general purpose mode this is a packet sequence
+    uint32_t _initialMarginGP = 2;
+    // In GPS mode is this is in nanoseconds
+    uint32_t _initialMarginGPS = 40000000;
 
     unsigned _oneTickCounter = 0;
 };

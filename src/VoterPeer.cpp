@@ -70,7 +70,7 @@ void VoterPeer::init(Clock* clock, Log* log) {
 
 void VoterPeer::reset() {
     _masterTimingSource = false;
-    _generalPurposeMode = true;
+    _generalPurposeMode = false;
     _badPackets = 0;
     for (AudioFrame& f : _frames)
         f.rssi = 0;
@@ -225,9 +225,21 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
             if (!_inSpurt) {
                 _inSpurt = true;
                 _spurtStartMs = _clock->timeMs();
-
-                _playCursorS = 0;
-                _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMargin;
+                if (_generalPurposeMode) {
+                    _playCursorS = 0;
+                    _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMarginGP;
+                }
+                else {
+                    _playCursorS = VoterUtil::getHeaderTimeS(packet);
+                    uint32_t ns = VoterUtil::getHeaderTimeNs(packet);
+                    _log->info("First packet %u %u", _playCursorS, ns);
+                    if (ns < _initialMarginGPS) {
+                        _playCursorS -= 1;
+                        ns = _initialMarginGPS - ns;                        
+                        _playCursorNs = 1000000000 - ns;
+                    }
+                    _log->info("Cursor %u %u", _playCursorS, _playCursorNs);
+                }
                 _log->info("Start of TS for VOTER %s", _localPassword);
             }
         }
