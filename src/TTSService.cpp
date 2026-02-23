@@ -61,10 +61,77 @@ static MessageCarrier makeTTSAudioMsg(const Message& req,
     uint8_t buf[BLOCK_SIZE_48K * sizeof(int16_t)];
     trans.encode(pcm48, BLOCK_SIZE_48K, buf, BLOCK_SIZE_48K * sizeof(int16_t));
 
-    MessageCarrier res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 0, 0);
+    MessageCarrier res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 
+        0, 0);
     res.setSource(req.getDestBusId(), req.getDestCallId());
     res.setDest(req.getSourceBusId(), req.getSourceCallId());
     return res;
+}
+
+int loadAudioFile(const Message& req, const char* fullPath, 
+    threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
+    
+    ifstream aud(fullPath, std::ios::binary);
+    if (!aud.is_open()) {
+        return -1;
+    }
+
+    int16_t pcm8k[BLOCK_SIZE_8K];
+    unsigned pcmPtr = 0;
+    // Stero 16-bit
+    char buffer[4];
+    amp::Resampler resampler;
+    resampler.setRates(8000, 48000);
+    Transcoder_SLIN_48K trans;
+
+    while (aud.read(buffer, 4)) {
+        // Only use one of the stero channels
+        pcm8k[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
+        if (pcmPtr == BLOCK_SIZE_8K) {
+            // Convert 8K to 48K
+            int16_t pcm48k[BLOCK_SIZE_48K];
+            resampler.resample(pcm8k, BLOCK_SIZE_8K, pcm48k, BLOCK_SIZE_48K);
+            // Transcode to SLIN 48K
+            // #### TODO: CHANGE TO PCM 48K
+            uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
+            trans.encode(pcm48k, BLOCK_SIZE_48K, 
+                slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+            // Queue a message
+            MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
+                BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
+                0, 0);
+            res.setSource(req.getDestBusId(), req.getDestCallId());
+            res.setDest(req.getSourceBusId(), req.getSourceCallId());
+            ttsQueueRes->push(res);
+            pcmPtr = 0;
+        }
+    }
+
+    // Clean up last frame
+    if (pcmPtr < BLOCK_SIZE_8K) {
+        // Fill with silence
+        for (unsigned i = 0; i < BLOCK_SIZE_8K - pcmPtr; i++)
+            pcm8k[pcmPtr++] = 0;
+        int16_t pcm48k[BLOCK_SIZE_48K];
+        resampler.resample(pcm8k, BLOCK_SIZE_8K, pcm48k, BLOCK_SIZE_48K);
+
+        // Transcode to SLIN 48K
+        // #### TODO: CHANGE TO PCM 48K
+        uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
+        trans.encode(pcm48k, BLOCK_SIZE_48K, 
+            slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+        // Queue a message
+        MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
+            BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
+            0, 0);
+        res.setSource(req.getDestBusId(), req.getDestCallId());
+        res.setDest(req.getSourceBusId(), req.getSourceCallId());
+        ttsQueueRes->push(res);
+
+        pcmPtr = 0;
+    }
+
+    return 0;
 }
 
 // ------ Text To Speach Thread ----------------------------------------------
@@ -149,6 +216,26 @@ void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
                         pcm16[i] = 0;
                     ttsQueueRes->push(makeTTSAudioMsg(req, pcm16, BLOCK_SIZE_16K, ttsResampler));
                 }
+
+                // Send a TTS_END signal so the call will know that this TTS process is finished.
+                MessageEmpty res(Message::Type::TTS_END, 0, 0, 0);
+                res.setSource(req.getDestBusId(), req.getDestCallId());
+                res.setDest(req.getSourceBusId(), req.getSourceCallId());
+                ttsQueueRes->push(res);
+
+                log.info("TTS complete");
+            }
+            else if (req.getType() == Message::Type::TTS_FILE_REQ) {
+
+                // Make a null-terminated buffer with a maximum size
+                char ttsReq[128];
+                int size = min(req.size(), (unsigned)127);
+                memcpy(ttsReq, req.body(), size);
+                ttsReq[size] = 0;
+
+                log.info("TTS file request: %s", ttsReq);
+
+                loadAudioFile(req, ttsReq, ttsQueueRes);
 
                 // Send a TTS_END signal so the call will know that this TTS process is finished.
                 MessageEmpty res(Message::Type::TTS_END, 0, 0, 0);

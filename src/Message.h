@@ -38,6 +38,8 @@ public:
         SIGNAL,
         // A text-to-speech request
         TTS_REQ,
+        // A request to play audio from a file
+        TTS_FILE_REQ,
         // Text-to-speech audio
         TTS_AUDIO,
         // A text-to-speech response end

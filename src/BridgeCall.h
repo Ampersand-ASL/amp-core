@@ -140,6 +140,11 @@ public:
     void requestTTS(const char* prompt);
 
     /**
+     * Requests an audio file to be played
+     */
+    void requestPlayFile(const char* fullFileName);
+
+    /**
      * This extracts the call's contribution (if any) to the audio frame for the 
      * designated tick interval.
      * 
@@ -268,7 +273,7 @@ private:
     int _tx1Db = 0;
 
     void _processTTSAudio(const Message& msg);
-
+    void _requestTTS(Message::Type type, const char* arg);
     void _signalTalker();
 
     // ----- Normal Mode Related ----------------------------------------------
