@@ -310,6 +310,7 @@ target_include_directories(config-test PRIVATE json/include)
 add_executable(signal-1
   src/demos/signal-1.cpp
   src/SignalIn.cpp
+  src/SignalOut.cpp
   src/EventLoop.cpp
   src/Message.cpp
   kc1fsz-tools-cpp/src/Common.cpp
