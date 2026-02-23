@@ -56,6 +56,9 @@
 // Needs to be limited to prevent overload of TTS.
 #define MAX_TELEMETRY_NODE_COUNT (4)
 
+#define PROGRAM_PRE_INTERVAL_MS 500
+#define PROGRAM_POST_INTERVAL_MS 500
+
 using namespace std;
 
 namespace kc1fsz {
@@ -214,6 +217,8 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 
     if (initialMode == Mode::PARROT)
         _enterParrotMode();
+    else if (initialMode == Mode::PROGRAM)
+        _enterProgramMode();
     else 
         _mode = initialMode;
 }
@@ -393,6 +398,8 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
         _toneAudioRateTick(tickMs);
     } else if (_mode == Mode::PARROT) {
         _parrotAudioRateTick(tickMs);
+    } else if (_mode == Mode::PROGRAM) {
+        _programAudioRateTick(tickMs);
     }
 }
 
@@ -435,7 +442,12 @@ void BridgeCall::_processTTSAudio(const Message& frame) {
         _loadAudioMessage(frame, _playQueue);
 
     if (_mode == Mode::PARROT) 
+        // #### TODO: CHANGE THIS TO A SPECIFIC METHOD FOR TTS_END
         _processParrotTTSAudio(frame);
+    else if (_mode == Mode::PROGRAM) {
+        if (frame.getType() == Message::Type::TTS_END)
+            _processProgramTTS_END();
+    }
 }
 
 void BridgeCall::_processDtmfCommand(const string& cmd) {
@@ -1090,6 +1102,95 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
     } else {
         *avgPower = 10.0 * log10(peakAvgSquare / (32767.0f * 32767.0f));
     }
+}
+
+// ====== PROGRAM MODE ======================================================
+
+void BridgeCall::_enterProgramMode() {
+    _mode = Mode::PROGRAM;
+    _programState = ProgramState::PROGRAM_INIT;
+    _programStateStartMs = _clock->time();
+    _programStepPtr = 0;
+
+    // #### TEMPORARY 
+    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Hello" });
+    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = 1000 });
+    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Good bye" });
+}
+
+void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
+    if (_programState == ProgramState::PROGRAM_INIT) {
+        _programSetState(ProgramState::PROGRAM_PRE);
+    }
+    else if (_programState == ProgramState::PROGRAM_PRE) {
+        // Is the pre-play pause finished?
+        if (_clock->isPastWindow(_programStateStartMs, PROGRAM_PRE_INTERVAL_MS)) {
+
+            _log->info("Starting program step %u", _programStepPtr);
+
+            ProgramStep& step = _programSteps[_programStepPtr];
+
+            if (step.type == ProgramStep::StepType::FILE) {
+            }
+            else if (step.type == ProgramStep::StepType::TTS) {
+                _log->info("Program step TTS %s", step.arg0.c_str());
+                // Queue up the TTS request for this step
+                requestTTS(step.arg0.c_str());
+                _programSetState(ProgramState::PROGRAM_TTS);
+            }
+            else if (step.type == ProgramStep::StepType::PAUSE) {
+                _log->info("Program step pause %u", step.intervalMs);
+                _programPauseIntervalMs = step.intervalMs;
+                _programSetState(ProgramState::PROGRAM_PAUSED);
+            }
+        }
+    }
+    else if (_programState == ProgramState::PROGRAM_PLAY) {
+        // Is the last TTS request finished playing?
+        if (_playQueue.empty()) 
+            _programSetState(ProgramState::PROGRAM_POST);
+    }
+    else if (_programState == ProgramState::PROGRAM_PAUSED) {
+        // Is pause finished playing?
+        if (_clock->isPastWindow(_programStateStartMs, _programPauseIntervalMs))
+            _programSetState(ProgramState::PROGRAM_POST);
+    }
+    else if (_programState == ProgramState::PROGRAM_POST) {
+        // Is the post-play pause finished?
+        if (_clock->isPastWindow(_programStateStartMs, PROGRAM_POST_INTERVAL_MS)) {
+            // Any more steps?  
+            if (++_programStepPtr == _programSteps.size()) {
+                _programSetState(ProgramState::PROGRAM_DONE);
+            }
+            // If there are more steps then move back to the PRE state
+            else 
+                _programSetState(ProgramState::PROGRAM_PRE);
+        }
+    }
+    else if (_programState == ProgramState::PROGRAM_DONE) {
+
+        _log->info("Program done");
+
+        // ###
+        // Request to have the call killed on the IAX side
+        MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+            0, tickMs * 1000);
+        msg.setSource(LINE_ID, CALL_ID);
+        msg.setDest(_lineId, _callId);
+        _bridgeOut.consume(msg);
+
+        reset();
+    }
+}
+
+void BridgeCall::_programSetState(ProgramState state) {
+    _programState = state;
+    _programStateStartMs = _clock->timeMs();
+}
+
+void BridgeCall::_processProgramTTS_END() {
+    if (_programState == ProgramState::PROGRAM_TTS)
+        _programSetState(ProgramState::PROGRAM_PLAY);
 }
 
     }

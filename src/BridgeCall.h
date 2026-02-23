@@ -67,7 +67,8 @@ public:
     enum Mode {
         NORMAL,
         PARROT,
-        TONE
+        TONE,
+        PROGRAM
     };
 
     BridgeCall();
@@ -355,6 +356,36 @@ private:
     static constexpr const char* PARROT_TALKER_ID = "ASL Parrot";
     // The talker ID is captured at the end of the recording period
     std::string _recordedTalkerId;
+
+    // ----- Program Mode Related ---------------------------------------------
+
+    enum ProgramState {
+        PROGRAM_NONE,
+        PROGRAM_INIT,
+        PROGRAM_PRE,
+        PROGRAM_TTS,
+        PROGRAM_PLAY,
+        PROGRAM_PAUSED,
+        PROGRAM_POST,
+        PROGRAM_DONE
+    };
+
+    struct ProgramStep {
+        enum StepType { FILE, TTS, PAUSE } type;
+        std::string arg0;
+        unsigned intervalMs;
+    };
+
+    ProgramState _programState = ProgramState::PROGRAM_NONE;
+    uint64_t _programStateStartMs = 0;
+    std::vector<ProgramStep> _programSteps;
+    unsigned _programStepPtr = 0;
+    uint64_t _programPauseIntervalMs = 0;
+
+    void _programSetState(ProgramState state);
+    void _enterProgramMode();
+    void _programAudioRateTick(uint32_t tickMs);
+    void _processProgramTTS_END();
 };
 
     }
