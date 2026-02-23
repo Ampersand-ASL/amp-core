@@ -272,7 +272,7 @@ void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
                 log.info("TTS file request: %s", ttsReq);
 
                 // Some pre-noise to allow everyone to key up
-                loadComfortNoise(req, 250, ttsQueueRes);
+                loadComfortNoise(req, 1000, ttsQueueRes);
                 // The actual file
                 loadAudioFile(req, ttsReq, ttsQueueRes);
 
