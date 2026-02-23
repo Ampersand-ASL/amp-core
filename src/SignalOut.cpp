@@ -34,9 +34,9 @@ using namespace std;
 namespace kc1fsz {
     namespace amp {
 
-SignalOut::SignalOut(Log& log, Clock& clock, MessageConsumer& bus, unsigned radioLineId,
+SignalOut::SignalOut(Log& log, Clock& clock, MessageConsumer& bus, 
     Message::SignalType sigTypeOn, Message::SignalType sigTypeOff) 
-:   _log(log), _clock(clock), _bus(bus), _radioLineId(radioLineId), _sigTypeOn(sigTypeOn),
+:   _log(log), _clock(clock), _bus(bus),  _sigTypeOn(sigTypeOn),
     _sigTypeOff(sigTypeOff) {
 }
 
@@ -68,6 +68,7 @@ void SignalOut::close() {
 
 void SignalOut::consume(const Message& msg) {
     if (msg.isSignal(_sigTypeOn)) {
+        // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
         // #### TODO: GENERALIZE
         char msg[5] = { 0 };
         // GPIO3
@@ -80,6 +81,7 @@ void SignalOut::consume(const Message& msg) {
             _log.info("Signal out PTT on");
     }
     else if (msg.isSignal(_sigTypeOff)) {
+        // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
         // #### TODO: GENERALIZE
         char msg[5] = { 0 };
         // GPIO3

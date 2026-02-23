@@ -32,7 +32,7 @@ class MessageConsumer;
 class SignalOut : public Runnable2, public MessageConsumer {
 public:
 
-    SignalOut(Log& log, Clock& clock, MessageConsumer& bus, unsigned radioLineId,
+    SignalOut(Log& log, Clock& clock, MessageConsumer& bus, 
          Message::SignalType sigTypeOn, Message::SignalType sigTypeOff);
 
     int openHid(const char* hidName);
@@ -48,7 +48,6 @@ private:
     Log& _log;
     Clock& _clock;
     MessageConsumer& _bus;
-    unsigned _radioLineId;
     Message::SignalType _sigTypeOn;
     Message::SignalType _sigTypeOff;
     

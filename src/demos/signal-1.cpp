@@ -27,7 +27,7 @@ int main(int argc, const char** argv) {
         Message::SignalType::COS_ON, Message::SignalType::COS_OFF);
     sin.openHid("/dev/hidraw0");
 
-    amp::SignalOut sout(log, clock, bus, 2, 
+    amp::SignalOut sout(log, clock, bus, 
         Message::SignalType::PTT_ON, Message::SignalType::PTT_OFF);
     bus.addRoute(&sout, 31);
     int rc = sout.openHid("/dev/hidraw0");
