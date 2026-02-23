@@ -68,6 +68,37 @@ static MessageCarrier makeTTSAudioMsg(const Message& req,
     return res;
 }
 
+int loadComfortNoise(const Message& req, unsigned ms,
+    threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
+
+    float omega = 10.0f * 2.0f * 3.1415926f / 48000.0f
+    float phi = 0;
+    float amp = 0.01;
+
+    for (unsigned i = 0; < ms / 20; i++) {
+
+        int16_t pcm48k[BLOCK_SIZE_48K];
+        // For now we are using a low tone
+        for (unsigned j = 0; j < BLOCK_SIZE_48K; j++) {
+            pcm48k[j] = amp * 32767.0f * std::cos(phi);
+            phi += omega;
+        }
+
+        // Transcode to SLIN 48K
+        // #### TODO: CHANGE TO PCM 48K
+        uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
+        trans.encode(pcm48k, BLOCK_SIZE_48K, 
+            slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+        // Queue a message
+        MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
+            BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
+            0, 0);
+        res.setSource(req.getDestBusId(), req.getDestCallId());
+        res.setDest(req.getSourceBusId(), req.getSourceCallId());
+        ttsQueueRes->push(res);
+    }
+}
+
 int loadAudioFile(const Message& req, const char* fullPath, 
     threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
     
@@ -134,7 +165,7 @@ int loadAudioFile(const Message& req, const char* fullPath,
     return 0;
 }
 
-// ------ Text To Speach Thread ----------------------------------------------
+// ------ Text To Speech Thread ----------------------------------------------
 
 void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
     threadsafequeue2<MessageCarrier>* ttsQueueRes, std::atomic<bool>* runFlag) {
@@ -235,6 +266,9 @@ void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
 
                 log.info("TTS file request: %s", ttsReq);
 
+                // Some pre-noise to allow everyone to key up
+                loadComfortNoise(req, 250, ttsQueueRes);
+                // The actual file
                 loadAudioFile(req, ttsReq, ttsQueueRes);
 
                 // Send a TTS_END signal so the call will know that this TTS process is finished.
