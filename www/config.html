@@ -85,16 +85,19 @@
                         <option value="usb">USB</option>
                         <option value="usbinvert">USB Inverted (Active Low)</option>
                     </select>
+
                     <label for="aslCtcssFrom">CTCSS From:</label>
                     <select id="aslCtcssFrom" name="aslCtcssFrom" disabled>
                         <option value="none">None</option>
                         <option value="usb">USB</option>
                         <option value="usbinvert">USB Inverted (Active Low)</option>
                     </select>
-                    <label for="aslInvertPtt">Invert PTT:</label>
-                    <select id="aslInvertPtt" name="aslInvertPtt" disabled>
-                        <option value="no">No (Active Low)</option>
-                        <option value="yes">Yes (Active High)</option>
+
+                    <label for="aslPttTo">PTT To:</label>
+                    <select id="aslPttTo" name="aslPttTo">
+                        <option value="none">None</option>
+                        <option value="usb">USB</option>
+                        <option value="usbinvert">USB Inverted (Active Low)</option>
                     </select>
 
                     <label for="aslTxMixASet">Transmit Mixer A:</label>
@@ -230,7 +233,7 @@ async function configLoad() {
         loadUi("aslAudioDevice", data, document)
         loadUi("aslCosFrom", data, document)
         loadUi("aslCtcssFrom", data, document)
-        loadUi("aslInvertPtt", data, document)
+        loadUi("aslPttTo", data, document)
         loadUi("aslTxMixASet", data, document)
         loadUi("aslTxMixBSet", data, document)
         loadUi("aslRxMixerSet", data, document)
@@ -271,7 +274,7 @@ function configStore() {
     storeUi("aslAudioDevice", formObject, fullConfig)
     storeUi("aslCosFrom", formObject, fullConfig)
     storeUi("aslCtcssFrom", formObject, fullConfig)
-    storeUi("aslInvertPtt", formObject, fullConfig)
+    storeUi("aslPttTo", formObject, fullConfig)
     storeUi("aslTxMixASet", formObject, fullConfig)
     storeUi("aslTxMixBSet", formObject, fullConfig)
     storeUi("aslRxMixerSet", formObject, fullConfig)

@@ -77,8 +77,6 @@ void SignalOut::consume(const Message& msg) {
         int rc = write(_hidFd, msg, 5);
         if (rc != 5)
             _log.info("Signal out write error %d %d", rc, errno);
-        else
-            _log.info("Signal out PTT on");
     }
     else if (msg.isSignal(_sigTypeOff)) {
         // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
@@ -90,8 +88,6 @@ void SignalOut::consume(const Message& msg) {
         int rc = write(_hidFd, msg, 5);
         if (rc != 5)
             _log.info("Signal out write error %d %d", rc, errno);
-        else
-            _log.info("Signal out PTT off");
     }
 }
     }

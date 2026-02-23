@@ -32,7 +32,8 @@ namespace kc1fsz {
 
 LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
-    unsigned destBusId, unsigned destCallId) 
+    unsigned destBusId, unsigned destCallId, 
+    unsigned signalDestLineId) 
 :   _log(log),
     _clock(clock),
     _captureConsumer(captureConsumer),
@@ -40,6 +41,7 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _callId(callId),
     _destBusId(destBusId), 
     _destCallId(destCallId),
+    _signalDestLineId(signalDestLineId),
     _startTimeMs(_clock.time()),
     _dtmfDetector(clock, BLOCK_SIZE_8K / 2),
     _tonePhi(0),
@@ -66,39 +68,50 @@ void LineRadio::resetStatistics() {
  */
 void LineRadio::consume(const Message& msg) {
 
+    // This is a hardware signal coming in from the outside
+    if (msg.isSignal(Message::SignalType::COS_ON)) {
+        _setCosStatus(true);
+    } 
+    // This is a hardware signal coming in from the outside
+    else if (msg.isSignal(Message::SignalType::COS_OFF)) {
+        _setCosStatus(false);
+    }
     // NOTE: Tone generation will override. 
     // TODO: MIX INBOUND AUDIO WITH TONE?
-    if (!_toneActive && msg.getType() == Message::Type::AUDIO) {
+    else if (msg.getType() == Message::Type::AUDIO) {
 
-        // Detect transitions from silence to playing
-        if (!_playing)
-            _playStart();
+        if (!_toneActive) {
 
-        assert(msg.size() == BLOCK_SIZE_48K * 2);
+            // Detect transitions from silence to playing
+            if (!_playing)
+                _playStart();
 
-        int16_t pcm48k_2[BLOCK_SIZE_48K];
+            assert(msg.size() == BLOCK_SIZE_48K * 2);
 
-        // #### TODO: LOOKING INTO REMOVING THIS CASE
-        if (msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K) {
-            // Convert the SLIN_48K LE into 16-bit PCM audio
-            Transcoder_SLIN_48K transcoder;
-            transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+            int16_t pcm48k_2[BLOCK_SIZE_48K];
+
+            // #### TODO: LOOKING INTO REMOVING THIS CASE
+            if (msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K) {
+                // Convert the SLIN_48K LE into 16-bit PCM audio
+                Transcoder_SLIN_48K transcoder;
+                transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
+            }
+            else if (msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K) {
+                // In this case no conversion is needed
+                memcpy(pcm48k_2, msg.body(), BLOCK_SIZE_48K * 2);
+            }
+            else assert(false);
+
+            // Here is where statistical analysis and/or local recording can take 
+            // place for diagnostic purposes.
+            _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+
+            // Call down to do the actual play on the hardware
+            _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+
+            _lastPlayedFrameMs = _clock.time();
+            _playing = true;
         }
-        else if (msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K) {
-            // In this case no conversion is needed
-            memcpy(pcm48k_2, msg.body(), BLOCK_SIZE_48K * 2);
-        }
-        else assert(false);
-
-        // Here is where statistical analysis and/or local recording can take 
-        // place for diagnostic purposes.
-        _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
-
-        // Call down to do the actual play on the hardware
-        _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
-
-        _lastPlayedFrameMs = _clock.time();
-        _playing = true;
     }
 }
 
@@ -169,10 +182,15 @@ void LineRadio::oneSecTick() {
 }
 
 void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len) {
-    MessageWrapper msg(Message::Type::SIGNAL, type, 
-        len, (const uint8_t*)body, 0, _clock.time());
+    _sendSignal(type, body, len, _destBusId, _destCallId);
+}
+
+void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len,
+    unsigned destLineId, unsigned destCallId) {
+    MessageWrapper msg(Message::Type::SIGNAL, type, len, (const uint8_t*)body, 
+        0, _clock.time());
     msg.setSource(_busId, _callId);
-    msg.setDest(_destBusId, _destCallId);
+    msg.setDest(destLineId, destCallId);
     _captureConsumer.consume(msg);
 }
 
@@ -340,6 +358,11 @@ void LineRadio::_captureEnd() {
 }
 
 void LineRadio::_playStart() {
+
+    // Generate a PTT ON signal
+    _sendSignal(Message::SignalType::PTT_ON, 0, 0, _signalDestLineId, 
+        Message::UNKNOWN_CALL_ID);
+
     if (_record) {
         _playRecordCounter++;
         _log.info("Started audio playing %u-%u", _startTimeMs, _playRecordCounter);
@@ -351,6 +374,11 @@ void LineRadio::_playStart() {
 }
 
 void LineRadio::_playEnd() {
+
+    // Generate a PTT OFF signal
+    _sendSignal(Message::SignalType::PTT_OFF, 0, 0, _signalDestLineId, 
+        Message::UNKNOWN_CALL_ID);
+
     if (_record) {
         _log.info("Ended audio playing");
         _playFile.close();

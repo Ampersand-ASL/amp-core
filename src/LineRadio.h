@@ -59,7 +59,8 @@ public:
     }
 
     LineRadio(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
-        unsigned destBusId, unsigned destCallId);
+        unsigned audioDestLineId, unsigned audioDestCallId, 
+        unsigned signalDestLineId);
 
     void resetStatistics();
 
@@ -108,6 +109,8 @@ public:
 protected:
 
     void _sendSignal(Message::SignalType type, void* body, unsigned len);
+    void _sendSignal(Message::SignalType type, void* body, unsigned len,
+        unsigned destLineId, unsigned destCallId);
 
     /**
      * This function is called to do the actual playing of the 48K PCM.
@@ -139,6 +142,7 @@ protected:
     MessageConsumer& _captureConsumer;
     const unsigned _busId, _callId;
     const unsigned _destBusId, _destCallId;
+    const unsigned _signalDestLineId;
     const uint32_t _startTimeMs;
 
     // Primarily used for setting the talker ID
