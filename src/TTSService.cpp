@@ -19,6 +19,7 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <cmath>
 
 #include <piper.h>
 
@@ -71,13 +72,15 @@ static MessageCarrier makeTTSAudioMsg(const Message& req,
 int loadComfortNoise(const Message& req, unsigned ms,
     threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
 
-    float omega = 10.0f * 2.0f * 3.1415926f / 48000.0f
+    float omega = 10.0f * 2.0f * 3.1415926f / 48000.0f;
     float phi = 0;
     float amp = 0.01;
+    Transcoder_SLIN_48K trans;
 
-    for (unsigned i = 0; < ms / 20; i++) {
+    for (unsigned i = 0; i < ms / 20; i++) {
 
         int16_t pcm48k[BLOCK_SIZE_48K];
+
         // For now we are using a low tone
         for (unsigned j = 0; j < BLOCK_SIZE_48K; j++) {
             pcm48k[j] = amp * 32767.0f * std::cos(phi);
@@ -97,6 +100,8 @@ int loadComfortNoise(const Message& req, unsigned ms,
         res.setDest(req.getSourceBusId(), req.getSourceCallId());
         ttsQueueRes->push(res);
     }
+
+    return 0;
 }
 
 int loadAudioFile(const Message& req, const char* fullPath, 
