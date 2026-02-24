@@ -1133,6 +1133,7 @@ void BridgeCall::_enterProgramMode() {
     const unsigned gap = 5000;
 
     // #### TEMPORARY DEMO
+    _programSteps.clear();
     _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Stand by for amateur radio newsline." });
     _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = 15000 });
 
@@ -1178,7 +1179,6 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
         _programSetState(ProgramState::PROGRAM_PRE);
     }
     else if (_programState == ProgramState::PROGRAM_PRE) {
-
         // Any more steps?  
         if (_programStepPtr == _programSteps.size()) {
             _programSetState(ProgramState::PROGRAM_DONE);
