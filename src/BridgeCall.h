@@ -137,12 +137,14 @@ public:
     /**
      * Requests a text-to-speech announcement to be sent to the call.
      */
-    void requestTTS(const char* prompt);
+    void requestTTS(const char* prompt, unsigned preSilenceMs = 0, 
+        unsigned postSilenceMs = 0);
 
     /**
      * Requests an audio file to be played
      */
-    void requestPlayFile(const char* fullFileName);
+    void requestPlayFile(const char* fullFileName, unsigned preSilenceMs = 0, 
+        unsigned postSilenceMs = 0);
 
     /**
      * This extracts the call's contribution (if any) to the audio frame for the 
@@ -273,7 +275,8 @@ private:
     int _tx1Db = 0;
 
     void _processTTSAudio(const Message& msg);
-    void _requestTTS(Message::Type type, const char* arg);
+    void _requestTTS(Message::Type type, const char* arg, unsigned preSilenceMs, 
+        unsigned postSilenceMs);
     void _signalTalker();
 
     // ----- Normal Mode Related ----------------------------------------------
@@ -371,7 +374,6 @@ private:
         PROGRAM_TTS,
         PROGRAM_PLAY,
         PROGRAM_PAUSED,
-        PROGRAM_POST,
         PROGRAM_DONE
     };
 

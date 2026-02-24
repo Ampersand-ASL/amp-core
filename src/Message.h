@@ -249,5 +249,10 @@ struct PayloadCallFailed {
     char message[64];
 };
 
+struct PayloadTTS {
+    char req[128];
+    unsigned preSilenceMs = 0;
+    unsigned postSilenceMs = 0;
+};
 
 }

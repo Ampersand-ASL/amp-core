@@ -958,16 +958,23 @@ void BridgeCall::_processParrotTTSAudio(const Message& frame) {
     }
 }
 
-void BridgeCall::requestTTS(const char* prompt) {
-    _requestTTS(Message::Type::TTS_REQ, prompt);
+void BridgeCall::requestTTS(const char* prompt, 
+    unsigned preSilenceMs, unsigned postSilenceMs) {
+    _requestTTS(Message::Type::TTS_REQ, prompt, preSilenceMs, postSilenceMs);
 }
 
-void BridgeCall::requestPlayFile(const char* fullFileName) {
-    _requestTTS(Message::Type::TTS_FILE_REQ, fullFileName);
+void BridgeCall::requestPlayFile(const char* fullFileName, 
+    unsigned preSilenceMs, unsigned postSilenceMs) {
+    _requestTTS(Message::Type::TTS_FILE_REQ, fullFileName, preSilenceMs, postSilenceMs);
 }
 
-void BridgeCall::_requestTTS(Message::Type type, const char* arg) {
-    MessageWrapper req(type, 0, strlen(arg), (const uint8_t*)arg, 0, 0);
+void BridgeCall::_requestTTS(Message::Type type, const char* arg, 
+    unsigned preSilenceMs, unsigned postSilenceMs) {
+    PayloadTTS payload;
+    strcpyLimited(payload.req, arg, sizeof(payload.req));
+    payload.preSilenceMs = preSilenceMs;
+    payload.postSilenceMs = postSilenceMs;
+    MessageWrapper req(type, 0, sizeof(payload), (const uint8_t*)&payload, 0, 0);
     req.setSource(_bridgeLineId, _bridgeCallId);
     req.setDest(_ttsLineId, Message::BROADCAST);
     _sink->consume(req);
@@ -1171,9 +1178,12 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
         _programSetState(ProgramState::PROGRAM_PRE);
     }
     else if (_programState == ProgramState::PROGRAM_PRE) {
-        // Is the pre-play pause finished?
-        if (_clock->isPastWindow(_programStateStartMs, PROGRAM_PRE_INTERVAL_MS)) {
 
+        // Any more steps?  
+        if (_programStepPtr == _programSteps.size()) {
+            _programSetState(ProgramState::PROGRAM_DONE);
+        }
+        else {
             _log->info("Starting program step %u", _programStepPtr);
 
             ProgramStep& step = _programSteps[_programStepPtr];
@@ -1181,13 +1191,13 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
             if (step.type == ProgramStep::StepType::FILE) {
                 _log->info("Program step TTS file %s", step.arg0.c_str());
                 // Queue up the TTS request for this step
-                requestPlayFile(step.arg0.c_str());
+                requestPlayFile(step.arg0.c_str(), 1000, 0);
                 _programSetState(ProgramState::PROGRAM_TTS);
             }
             else if (step.type == ProgramStep::StepType::TTS) {
                 _log->info("Program step TTS %s", step.arg0.c_str());
                 // Queue up the TTS request for this step
-                requestTTS(step.arg0.c_str());
+                requestTTS(step.arg0.c_str(), 1000, 0);
                 _programSetState(ProgramState::PROGRAM_TTS);
             }
             else if (step.type == ProgramStep::StepType::PAUSE) {
@@ -1195,29 +1205,20 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
                 _programPauseIntervalMs = step.intervalMs;
                 _programSetState(ProgramState::PROGRAM_PAUSED);
             }
+
+            // Advance program counter
+            _programStepPtr++;
         }
     }
     else if (_programState == ProgramState::PROGRAM_PLAY) {
         // Is the last TTS request finished playing?
         if (_playQueue.empty()) 
-            _programSetState(ProgramState::PROGRAM_POST);
+            _programSetState(ProgramState::PROGRAM_PRE);
     }
     else if (_programState == ProgramState::PROGRAM_PAUSED) {
         // Is pause finished playing?
         if (_clock->isPastWindow(_programStateStartMs, _programPauseIntervalMs))
-            _programSetState(ProgramState::PROGRAM_POST);
-    }
-    else if (_programState == ProgramState::PROGRAM_POST) {
-        // Is the post-play pause finished?
-        if (_clock->isPastWindow(_programStateStartMs, PROGRAM_POST_INTERVAL_MS)) {
-            // Any more steps?  
-            if (++_programStepPtr == _programSteps.size()) {
-                _programSetState(ProgramState::PROGRAM_DONE);
-            }
-            // If there are more steps then move back to the PRE state
-            else 
-                _programSetState(ProgramState::PROGRAM_PRE);
-        }
+            _programSetState(ProgramState::PROGRAM_PRE);
     }
     else if (_programState == ProgramState::PROGRAM_DONE) {
 
