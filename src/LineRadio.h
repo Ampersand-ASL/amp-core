@@ -169,8 +169,6 @@ protected:
     uint32_t _captureSilenceIntervalMs = 20 * 4;
 
     bool _record = false;
-    std::fstream _playFile;
-    std::fstream _captureFile;
     unsigned _playRecordCounter = 0;
     unsigned _captureRecordCounter = 0;
 

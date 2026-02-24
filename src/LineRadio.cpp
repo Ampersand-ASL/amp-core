@@ -321,8 +321,6 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
 
 void LineRadio::_analyzePlayedAudio(const int16_t* frame, unsigned frameLen) {   
     for (unsigned i = 0; i < frameLen; i++) {
-        if (_record)
-            _playFile << frame[i] << endl;
         int16_t sample = abs(frame[i]);
         if (sample > _clipThreshold) {
             _playClipCount++;
@@ -340,19 +338,10 @@ void LineRadio::_captureStart() {
     if (_record) {
         _captureRecordCounter++;
         _log.info("Started audio capturing %u-%u", _startTimeMs, _captureRecordCounter);
-        char fname[32];
-        snprintf(fname, 32, "capture-%u-%06u.txt", _startTimeMs, _captureRecordCounter);
-        _captureFile.open(fname, std::ios_base::out);
     }
 }
 
 void LineRadio::_captureEnd() {
-
-    if (_record) {
-        _log.info("Ended audio capturing");
-        _captureFile.close();
-    }
-
     // Send the unkey message 
     _sendSignal(Message::SignalType::RADIO_UNKEY, 0, 0);
 }
@@ -366,9 +355,6 @@ void LineRadio::_playStart() {
     if (_record) {
         _playRecordCounter++;
         _log.info("Started audio playing %u-%u", _startTimeMs, _playRecordCounter);
-        char fname[32];
-        snprintf(fname, 32, "play-%u-%06u.txt", _startTimeMs, _playRecordCounter);
-        _playFile.open(fname, std::ios_base::out);
     }
     _tsFrameCount = 0;
 }
@@ -378,11 +364,6 @@ void LineRadio::_playEnd() {
     // Generate a PTT OFF signal
     _sendSignal(Message::SignalType::PTT_OFF, 0, 0, _signalDestLineId, 
         Message::UNKNOWN_CALL_ID);
-
-    if (_record) {
-        _log.info("Ended audio playing");
-        _playFile.close();
-    }
 }
 
 void LineRadio::_setCosStatus(bool cosActive) {   

@@ -368,7 +368,6 @@ private:
     // ----- Program Mode Related ---------------------------------------------
 
     enum ProgramState {
-        PROGRAM_NONE,
         PROGRAM_INIT,
         PROGRAM_PRE,
         PROGRAM_TTS,
@@ -378,12 +377,28 @@ private:
     };
 
     struct ProgramStep {
-        enum StepType { FILE, TTS, PAUSE } type;
+        enum StepType { 
+            /** 
+             * Plays a file
+             */
+            FILE, 
+            /** 
+             * Speaks a phrase (TTS)
+             */
+            TTS, 
+            /** 
+             * Pauses (silent, unkeyed)
+             */
+            PAUSE 
+        } type;
+        // When type=FILE this contains the name of the file.
+        // When type=TTS this contains the text to speak.
         std::string arg0;
+        // Only relevant for type=PAUSE
         unsigned intervalMs;
     };
 
-    ProgramState _programState = ProgramState::PROGRAM_NONE;
+    ProgramState _programState = ProgramState::PROGRAM_INIT;
     uint64_t _programStateStartMs = 0;
     std::vector<ProgramStep> _programSteps;
     unsigned _programStepPtr = 0;
