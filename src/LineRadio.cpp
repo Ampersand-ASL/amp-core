@@ -265,11 +265,6 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
         _capturePcmValueSum += sample;
         _capturePcmValueCount++;
     }
-
-    if (_record) {
-        for (unsigned i = 0; i < frameLen; i++)
-                _captureFile << frame[i] << endl;
-    }
 }
 
 void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,

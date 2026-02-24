@@ -124,6 +124,27 @@ void ConfigPoller::_populateDefaults(json& j) {
     if (!j.contains("aslPttTo")) {
         j["aslPttTo"] = "usb";
     }
+    if (!j.contains("sa818port")) {
+        j["sa818port"] = "";
+    }
+    if (!j.contains("sa818bw")) {
+        j["sa818bw"] = "wide";
+    }
+    if (!j.contains("sa818txf")) {
+        j["sa818txf"] = "";
+    }
+    if (!j.contains("sa818txpl")) {
+        j["sa818txpl"] = "";
+    }
+    if (!j.contains("sa818rxf")) {
+        j["sa818rxf"] = "";
+    }
+    if (!j.contains("sa818rxpl")) {
+        j["sa818rxpl"] = "";
+    }
+    if (!j.contains("sa818sq")) {
+        j["sa818sq"] = "4";
+    }
 }
 
     }

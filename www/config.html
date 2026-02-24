@@ -117,6 +117,36 @@
                     <label for="kfdelay">Kerchunk Filter Delay (ms):</label>
                     <input type="number" id="kfdelay" name="kfdelay"/>
                 </div>
+                <div class="form2">
+                    <div>SA818 Settings (SHARI):</div><div></div>
+                    <label for="sa818port">Command Port:</label>
+                    <input id="sa818port" name="sa818port"/>
+                    <label for="sa818bw">Bandwidth:</label>
+                    <select id="sa818bw" name="sa818bw">
+                        <option value="wide">Wide</option>
+                        <option value="narrow">Narrow</option>
+                    </select>
+                    <label for="sa818txf">Transmit Frequency:</label>
+                    <input type="number" step="0.001" id="sa818txf" name="sa818txf"/>
+                    <label for="sa818txpl">Transmit Tone:</label>
+                    <input type="number" id="sa818txpl" name="sa818txpl"/>
+                    <label for="sa818rxf">Receive Frequency:</label>
+                    <input type="number" step="0.001" id="sa818rxf" name="sa818rxf"/>
+                    <label for="sa818rxpl">Receive Tone:</label>
+                    <input type="number" id="sa818rxpl" name="sa818rxpl"/>
+                    <label for="sa818sq">Squelch Level:</label>
+                    <select id="sa818sq" name="sa818sq">
+                        <option value="0">Open</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                    </select>
+                </div>
                 <span></span>
                 <input type="submit" value="Save" class="green-button save-button"/>
             </form>
@@ -243,6 +273,16 @@ async function configLoad() {
         loadUi("kfnodes", data, document);
         loadUi("kfdelay", data, document);
 
+        // ------ SA8181 Section -----------------------------------------------------
+
+        loadUi("sa818port", data, document);
+        loadUi("sa818bw", data, document);
+        loadUi("sa818txf", data, document);
+        loadUi("sa818txpl", data, document);
+        loadUi("sa818rxf", data, document);
+        loadUi("sa818rxpl", data, document);
+        loadUi("sa818sq", data, document);
+
     } catch (error) {
         console.error('Error fetching configuration data:', error.message);
     }
@@ -283,6 +323,16 @@ function configStore() {
 
     storeUi("kfnodes", formObject, fullConfig);
     storeUi("kfdelay", formObject, fullConfig);
+
+    // ------ SA8181 Section -----------------------------------------------------
+
+    storeUi("sa818port", formObject, fullConfig);
+    storeUi("sa818bw", formObject, fullConfig);
+    storeUi("sa818txf", formObject, fullConfig);
+    storeUi("sa818txpl", formObject, fullConfig);
+    storeUi("sa818rxf", formObject, fullConfig);
+    storeUi("sa818rxpl", formObject, fullConfig);
+    storeUi("sa818sq", formObject, fullConfig);
 
     // Push back to the server
     fetch('/config-save', {
