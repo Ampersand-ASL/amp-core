@@ -134,16 +134,19 @@ void ConfigPoller::_populateDefaults(json& j) {
         j["sa818txf"] = "";
     }
     if (!j.contains("sa818txpl")) {
-        j["sa818txpl"] = "";
+        j["sa818txpl"] = "0000";
     }
     if (!j.contains("sa818rxf")) {
         j["sa818rxf"] = "";
     }
     if (!j.contains("sa818rxpl")) {
-        j["sa818rxpl"] = "";
+        j["sa818rxpl"] = "0000";
     }
     if (!j.contains("sa818sq")) {
         j["sa818sq"] = "4";
+    }
+    if (!j.contains("sa818vol")) {
+        j["sa818vol"] = "8";
     }
 }
 

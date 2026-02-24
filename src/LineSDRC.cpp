@@ -17,9 +17,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include <termios.h>
-#include <linux/serial.h>
-#include <sys/ioctl.h>
+//#include <termios.h>
+//#include <linux/serial.h>
+//#include <sys/ioctl.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -43,9 +43,10 @@
 #include "MessageConsumer.h"
 #include "Message.h"
 
+#include "SerialUtil.h"
 #include "LineSDRC.h"
 
-#define NETWORK_BAUD (B460800)
+#define NETWORK_BAUD (460800)
 
 using namespace std;
 
@@ -70,49 +71,16 @@ int LineSDRC::open(const char* serialDevice) {
 
     _fd = ::open(serialDevice, O_RDWR | O_NONBLOCK | O_NOCTTY);
 
-    // Create new termios struct, we call it 'tty' for convention
-    // No need for "= {0}" at the end as we'll immediately write the existing
-    // config to this struct
-    struct termios tty;
-
-    // Read in existing settings, and handle any error
-    // NOTE: This is important! POSIX states that the struct passed to tcsetattr()
-    // must have been initialized with a call to tcgetattr() overwise behaviour
-    // is undefined
-    if (tcgetattr(_fd, &tty) != 0) {
-        _log.error("Error %i from tcgetattr\n", errno);
-    }
-    cout << "Speed " << (int)cfgetospeed(&tty) << endl;
-    cout << "? " << NETWORK_BAUD << endl;
-
-    tty.c_cflag &= ~PARENB;
-    tty.c_cflag &= ~CSTOPB;
-    tty.c_cflag &= ~CSIZE; 
-    tty.c_cflag |= CS8;
-    tty.c_cflag &= ~CRTSCTS; 
-    tty.c_cflag |= CREAD | CLOCAL;
-    tty.c_lflag &= ~ICANON;
-    tty.c_lflag &= ~ECHO; // Disable echo
-    tty.c_lflag &= ~ECHOE; // Disable erasure
-    tty.c_lflag &= ~ECHONL; // Disable new-line echo
-    tty.c_lflag &= ~ISIG; // Disable interpretation of INTR, QUIT and SUSP
-
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY); // Turn off s/w flow ctrl
-    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL); // Disable any special handling of received bytes
-
-    tty.c_oflag &= ~OPOST; // Prevent special interpretation of output bytes (e.g. newline chars)
-    tty.c_oflag &= ~ONLCR; // Prevent conversion of newline to carriage return/line feed
-
-    tty.c_cc[VTIME] = 0;
-    tty.c_cc[VMIN] = 0;
-    
-    // Specifying a custom baud rate when using GNU C
-    if (cfsetispeed(&tty, NETWORK_BAUD) != 0)
+    int rc = SerialUtil::configurePort(_fd, NETWORK_BAUD);
+    if (rc == -1 || rc == -3 || rc == -4) {
         _log.error("Invalid baud %d", NETWORK_BAUD);
-    if (cfsetospeed(&tty, NETWORK_BAUD) != 0)
-        _log.error("Invalid baud %d", NETWORK_BAUD);    
-    if (tcsetattr(_fd, TCSANOW, &tty) != 0) {
-        _log.error("Error %i from tcsetattr\n", errno);
+        ::close(_fd);
+        return -1;
+    }
+    else if (rc != 0) {
+        _log.error("Unable to open SDRC network port %d", rc);
+        ::close(_fd);
+        return -2;
     }
 
     // Generate the same kind of call start message that would

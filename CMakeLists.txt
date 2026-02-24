@@ -664,3 +664,15 @@ add_executable(codec-assignment-test
 target_include_directories(codec-assignment-test PRIVATE src)
 target_include_directories(codec-assignment-test PRIVATE include)
 target_include_directories(codec-assignment-test PRIVATE kc1fsz-tools-cpp/include)
+
+# ----- sa818-config
+
+add_executable(sa818-config
+  src/demos/sa818-config.cpp
+  src/SerialUtil.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(sa818-config PRIVATE src)
+target_include_directories(sa818-config PRIVATE include)
+target_include_directories(sa818-config PRIVATE kc1fsz-tools-cpp/include)
