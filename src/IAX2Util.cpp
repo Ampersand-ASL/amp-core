@@ -131,11 +131,11 @@ int compareSeqWrap(uint8_t a, uint8_t b) {
  */
 
 uint32_t getSupportedCodecs() { 
-//    return CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_8K | 
-//        CODECType::IAX2_CODEC_SLIN_16K | CODECType::IAX2_CODEC_G726_AAL2;
-    // #### TODO: NEED TO FIGURE OUT SLIN8
-    return CODECType::IAX2_CODEC_G711_ULAW | 
+    return CODECType::IAX2_CODEC_G711_ULAW | CODECType::IAX2_CODEC_SLIN_8K | 
         CODECType::IAX2_CODEC_SLIN_16K | CODECType::IAX2_CODEC_G726_AAL2;
+    // #### TODO: NEED TO FIGURE OUT SLIN8
+//    return CODECType::IAX2_CODEC_G711_ULAW | 
+//        CODECType::IAX2_CODEC_SLIN_16K | CODECType::IAX2_CODEC_G726_AAL2;
 }
 
 bool isCodecSupported(CODECType type) {

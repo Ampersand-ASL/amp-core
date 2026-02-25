@@ -35,7 +35,8 @@ bool Transcoder_SLIN_8K::decode(const uint8_t* source, unsigned sourceLen,
     int16_t pcm_1[BLOCK_SIZE_8K];
     const uint8_t* p = source;
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++) {
-        pcm_1[i] = unpack_int16_le(p);
+        //pcm_1[i] = unpack_int16_le(p);
+        pcm_1[i] = unpack_int16_be(p);
         p += 2;
     }
 
@@ -50,7 +51,8 @@ bool Transcoder_SLIN_8K::encode(const int16_t* source, unsigned sourceLen,
     assert(destLen == BLOCK_SIZE_8K * 2);
     uint8_t* p = dest;
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++) {
-        pack_int16_le(source[i], p);
+//        pack_int16_le(source[i], p);
+        pack_int16_be(source[i], p);
         p += 2;
     }
     return true;
