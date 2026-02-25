@@ -38,6 +38,7 @@ extern "C" {
 
 #ifndef _WIN32
 #include "sound-map.h"
+#include "serial-map.h"
 #include "LineUsb.h"
 #endif
 
@@ -310,12 +311,16 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         ofstream cf(ui->_configFileName);
         cf << jBody.dump(4) << endl;
     });
-    svr.Get("/config-select-options", [](const httplib::Request& req, httplib::Response &res) {
+
+    // This is the end-point that supplies choices for the dynamic select/option
+    // menus.
+    svr.Get("/config-select-options", 
+        [](const httplib::Request& req, httplib::Response &res) {
 
         auto a = json::array();
+        const string menuName = req.get_param_value("name");      
 
-        string menuName = req.get_param_value("name");      
-        
+        // The menus that show a list of allowable dB values for USB mixers.
         if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet" || menuName == "aslRxMixerSet") {
             string arg = req.get_param_value("arg");      
 #ifndef _WIN32            
@@ -363,6 +368,8 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             }
 #endif            
         }
+
+        // The menu that shows the list of USB sound devices
         else if (menuName == "aslAudioDevice") {
 
 #ifndef _WIN32            
@@ -400,7 +407,31 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                     }
                 }
             );
-#endif            
+#endif  
+        }          
+        // The menu that shows the list of USB serial devices
+        else if (menuName == "sa818port") {
+#ifndef _WIN32            
+            json o;
+            o["value"] = "";
+            o["desc"] = "None";
+            a.push_back(o);
+            // Traverse the USB serial devices
+            visitUSBSerialDevices(
+                [&a](const char* dev, unsigned busId, unsigned portId) {
+                    // Make the value
+                    char value[32];
+                    snprintf(value, sizeof(value), "usb bus:%u,port:%u", busId, portId);
+                    // Make the description
+                    char desc[64];
+                    snprintf(desc, sizeof(desc), "%s (bus %u, port %u)", dev, busId, portId);
+                    json o;
+                    o["value"] = value;
+                    o["desc"] = desc;
+                    a.push_back(o);
+                }
+            );
+#endif
         }
 
         res.set_content(a.dump(), "application/json");

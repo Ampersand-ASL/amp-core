@@ -120,11 +120,12 @@
                 <div class="form2">
                     <div>SA818 Settings (SHARI):</div><div></div>
                     <label for="sa818port">Command Port:</label>
-                    <input id="sa818port" name="sa818port"/>
+                    <select id="sa818port" name="sa818port">
+                    </select>
                     <label for="sa818bw">Bandwidth:</label>
                     <select id="sa818bw" name="sa818bw">
-                        <option value="wide">Wide (25kHz)</option>
-                        <option value="narrow">Narrow (12.5kHz)</option>
+                        <option value="1">Wide (25kHz)</option>
+                        <option value="0">Narrow (12.5kHz)</option>
                     </select>
                     <label for="sa818txf">Transmit Frequency:</label>
                     <input type="number" step="0.0001" id="sa818txf" name="sa818txf"/>
@@ -453,6 +454,7 @@ document.addEventListener('DOMContentLoaded', async() => {
 
     // Important that these steps are serialized
     await loadSelectOptions("config-form", "aslAudioDevice");
+    await loadSelectOptions("config-form", "sa818port");
     await configLoad();
     // This depends on which option was chosen on the sound device
     await fixMixerRanges();
