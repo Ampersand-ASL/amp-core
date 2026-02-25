@@ -105,11 +105,6 @@ WebUi::WebUi(Log& log, Clock& clock, unsigned listenPort,
     _configFileName(configFileName),
     _version(version),
     _traceLog(traceLog) {
-
-    // Make a random cookie that will be used to eliminate extra authentications
-    char cookie[16];
-    snprintf(cookie, sizeof(cookie), "auth=%08X", rand());
-    _authCookie = cookie; 
 }
 
 void WebUi::consume(const Message& msg) {   
@@ -308,6 +303,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         ui->_log.info("Saving configuration");
         json jBody = json::parse(body);
         jBody["lastUpdateMs"] = ui->_clock.timeUs() / 1000;
+        jBody["version"] = ui->_version;
         ofstream cf(ui->_configFileName);
         cf << jBody.dump(4) << endl;
     });
