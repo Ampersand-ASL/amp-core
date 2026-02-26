@@ -373,8 +373,13 @@ private:
         PROGRAM_TTS,
         PROGRAM_PLAY,
         PROGRAM_PAUSED,
+        PROGRAM_ERROR,
+        PROGRAM_ERROR_TTS,
+        PROGRAM_ERROR_PLAY,
         PROGRAM_DONE
     };
+
+public:
 
     struct ProgramStep {
         enum StepType { 
@@ -397,6 +402,8 @@ private:
         // Only relevant for type=PAUSE
         unsigned intervalMs;
     };
+
+private:
 
     ProgramState _programState = ProgramState::PROGRAM_INIT;
     uint64_t _programStateStartMs = 0;

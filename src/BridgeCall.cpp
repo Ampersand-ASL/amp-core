@@ -29,6 +29,7 @@
 #include "BridgeCall.h"
 #include "Poker.h"
 #include "Bridge.h"
+#include "ProgramUtils.h"
 
 // The duration of silence after which the parrot decides the 
 // recording should be ended.
@@ -1125,13 +1126,22 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
 // ====== PROGRAM MODE ======================================================
 
 void BridgeCall::_enterProgramMode() {
+
     _mode = Mode::PROGRAM;
-    _programState = ProgramState::PROGRAM_INIT;
-    _programStateStartMs = _clock->time();
-    _programStepPtr = 0;
 
+    _programSteps.clear();
+
+    int loadRc = amp::ProgramUtils::loadProgramStandard(getenv("AMP_PROGRAM_ROOT"), 
+        1500, 500, _programSteps);
+    if (loadRc != 0) {
+        _programSetState(ProgramState::PROGRAM_ERROR);
+    } else {
+        _programStepPtr = 0;
+        _programSetState(ProgramState::PROGRAM_INIT);
+    }
+
+    /*
     const unsigned gap = 5000;
-
     // #### TEMPORARY DEMO
     _programSteps.clear();
     _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Stand by for amateur radio newsline." });
@@ -1172,6 +1182,7 @@ void BridgeCall::_enterProgramMode() {
     _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part9.sln" });
 
     _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "This concludes this weeks edition of amateur radio newsline. This node will now disconnect." });
+    */
 }
 
 void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
@@ -1215,6 +1226,11 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
         if (_playQueue.empty()) 
             _programSetState(ProgramState::PROGRAM_PRE);
     }
+    else if (_programState == ProgramState::PROGRAM_ERROR_PLAY) {
+        // Is the last TTS request finished playing?
+        if (_playQueue.empty()) 
+            _programSetState(ProgramState::PROGRAM_DONE);
+    }
     else if (_programState == ProgramState::PROGRAM_PAUSED) {
         // Is pause finished playing?
         if (_clock->isPastWindow(_programStateStartMs, _programPauseIntervalMs))
@@ -1234,6 +1250,11 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
 
         reset();
     }
+    else if (_programState == ProgramState::PROGRAM_ERROR) {
+        requestTTS("This program is invalid.", 1000, 0);
+        _programSetState(ProgramState::PROGRAM_ERROR_TTS);
+    }
+
 }
 
 void BridgeCall::_programSetState(ProgramState state) {
@@ -1244,6 +1265,8 @@ void BridgeCall::_programSetState(ProgramState state) {
 void BridgeCall::_processProgramTTS_END() {
     if (_programState == ProgramState::PROGRAM_TTS)
         _programSetState(ProgramState::PROGRAM_PLAY);
+    else if (_programState == ProgramState::PROGRAM_ERROR_TTS)
+        _programSetState(ProgramState::PROGRAM_ERROR_PLAY);
 }
     }
 }
