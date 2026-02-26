@@ -35,12 +35,17 @@ queue<string> getSegments(const char* programRoot) {
     // Probe for files until we can't find one
     for (unsigned i = 0; i < 64; i++) {
         char fn[128];
-        snprintf(fn, sizeof(fn), "%s/segments/seg%u.sln", programRoot, i);
+        snprintf(fn, sizeof(fn), "%s/segments/seg%u.s48", programRoot, i);
         if (fs::exists(fn)) {
             result.push(string(fn));
             continue;
         }
         snprintf(fn, sizeof(fn), "%s/segments/seg%u.s16", programRoot, i);
+        if (fs::exists(fn)) {
+            result.push(string(fn));
+            continue;
+        }
+        snprintf(fn, sizeof(fn), "%s/segments/seg%u.sln", programRoot, i);
         if (fs::exists(fn)) {
             result.push(string(fn));
             continue;

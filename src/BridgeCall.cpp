@@ -443,14 +443,14 @@ void BridgeCall::_processTTSAudio(const Message& frame) {
 
     // Anything that comes back from TTS goes to the play queue without
     // regard for state/mode.
-    if (frame.getType() == Message::Type::TTS_AUDIO)
+    if (frame.getType() == Message::Type::TTS_AUDIO) {
         _loadAudioMessage(frame, _playQueue);
-
-    if (_mode == Mode::PARROT) 
-        // #### TODO: CHANGE THIS TO A SPECIFIC METHOD FOR TTS_END
-        _processParrotTTSAudio(frame);
-    else if (_mode == Mode::PROGRAM) {
-        if (frame.getType() == Message::Type::TTS_END)
+    } 
+    // Special handling for the END signal
+    else if (frame.getType() == Message::Type::TTS_END) {
+        if (_mode == Mode::PARROT) 
+            _processParrotTTS_END(frame);
+        else if (_mode == Mode::PROGRAM) 
             _processProgramTTS_END();
     }
 }
@@ -923,39 +923,36 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 }
 
 // These are the places where we are waiting for the TTS to complete
-void BridgeCall::_processParrotTTSAudio(const Message& frame) {
+void BridgeCall::_processParrotTTS_END(const Message& frame) {
     if (_parrotState == ParrotState::TTS_GREETING_0 ||
         _parrotState == ParrotState::TTS_GREETING_1 ||
         _parrotState == ParrotState::TTS_GOODBYE) {
-        if (frame.getType() == Message::Type::TTS_END) {
+
             if (_parrotState == ParrotState::TTS_GREETING_0)
-                _parrotState = ParrotState::PLAYING_GREETING_0;
-            else if (_parrotState == ParrotState::TTS_GREETING_1)
-                _parrotState = ParrotState::PLAYING_GREETING_1;
-            else if (_parrotState == ParrotState::TTS_GOODBYE)
-                _parrotState = ParrotState::PLAYING_GOODBYE;
-            _parrotStateStartMs = _clock->time();
-        }        
+            _parrotState = ParrotState::PLAYING_GREETING_0;
+        else if (_parrotState == ParrotState::TTS_GREETING_1)
+            _parrotState = ParrotState::PLAYING_GREETING_1;
+        else if (_parrotState == ParrotState::TTS_GOODBYE)
+            _parrotState = ParrotState::PLAYING_GOODBYE;
+        _parrotStateStartMs = _clock->time();
     }
     else if (_parrotState == ParrotState::TTS_AFTER_RECORD) {
-        if (frame.getType() == Message::Type::TTS_END) {
 
-            _loadSilence(25, _playQueue);
+        _loadSilence(25, _playQueue);
 
-            // Move the recording to the end of the playback queue
-            while (!_captureQueue.empty()) {
-                _playQueue.push(_captureQueue.front());
-                _captureQueue.pop();
-            }
+        // Move the recording to the end of the playback queue
+        while (!_captureQueue.empty()) {
+            _playQueue.push(_captureQueue.front());
+            _captureQueue.pop();
+        }
 
-            // Assert the talker (echo)
-            setOutputTalkerId(_recordedTalkerId.c_str());
+        // Assert the talker (echo)
+        setOutputTalkerId(_recordedTalkerId.c_str());
 
-            _parrotState = ParrotState::PLAYING_AFTER_RECORD;
-            _parrotStateStartMs = _clock->time();
+        _parrotState = ParrotState::PLAYING_AFTER_RECORD;
+        _parrotStateStartMs = _clock->time();
 
-            _log->info("Playback start");
-        }        
+        _log->info("Playback start");
     }
 }
 
@@ -984,8 +981,9 @@ void BridgeCall::_requestTTS(Message::Type type, const char* arg,
 void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const {    
 
     assert(msg.getType() == Message::Type::TTS_AUDIO);
+    assert(msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K);
     assert(msg.size() == BLOCK_SIZE_48K * sizeof(int16_t));
-
+    /*
     int16_t pcm48k[BLOCK_SIZE_48K];
     const uint8_t* buffer = msg.body();
     for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
@@ -993,6 +991,8 @@ void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& q
         buffer += 2;
     }
     queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
+    */
+    queue.push(PCM16Frame((const int16_t*)msg.body(), BLOCK_SIZE_48K));
 }
 
 void BridgeCall::_loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const {    

@@ -58,12 +58,14 @@ static MessageCarrier makeTTSAudioMsg(const Message& req,
     // smooth transitions between consecutive frames.
     ttsResampler.resample(pcm16, BLOCK_SIZE_16K, pcm48, BLOCK_SIZE_48K);
 
+    /*
     Transcoder_SLIN_48K trans;
     uint8_t buf[BLOCK_SIZE_48K * sizeof(int16_t)];
     trans.encode(pcm48, BLOCK_SIZE_48K, buf, BLOCK_SIZE_48K * sizeof(int16_t));
+    */
 
-    MessageCarrier res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 
-        0, 0);
+    MessageCarrier res(Message::Type::TTS_AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+        BLOCK_SIZE_48K * sizeof(int16_t), (const uint8_t*)pcm48, 0, 0);
     res.setSource(req.getDestBusId(), req.getDestCallId());
     res.setDest(req.getSourceBusId(), req.getSourceCallId());
     return res;
@@ -75,7 +77,7 @@ static void queueComfortNoise(const Message& req, unsigned ms,
     float omega = 10.0f * 2.0f * 3.1415926f / 48000.0f;
     float phi = 0;
     float amp = 0.01;
-    Transcoder_SLIN_48K trans;
+    //Transcoder_SLIN_48K trans;
 
     for (unsigned i = 0; i < ms / 20; i++) {
 
@@ -87,15 +89,16 @@ static void queueComfortNoise(const Message& req, unsigned ms,
             phi += omega;
         }
 
+        /*
         // Transcode to SLIN 48K
         // #### TODO: CHANGE TO PCM 48K
         uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
         trans.encode(pcm48k, BLOCK_SIZE_48K, 
             slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+        */
         // Queue a message
-        MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
-            BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
-            0, 0);
+        MessageCarrier res(Message::Type::TTS_AUDIO, CODECType::IAX2_CODEC_PCM_48K,  
+            BLOCK_SIZE_48K * sizeof(int16_t), (const uint8_t*)pcm48k, 0, 0);
         res.setSource(req.getDestBusId(), req.getDestCallId());
         res.setDest(req.getSourceBusId(), req.getSourceCallId());
         ttsQueueRes->push(res);
@@ -118,14 +121,16 @@ static void upsampleAndPublsh(const Message& req,
     // Resample
     int16_t pcm48k[BLOCK_SIZE_48K];
     resampler.resample(pcmLow, pcmLowSize, pcm48k, BLOCK_SIZE_48K);
+    /*
     // Transcode to SLIN 48K
     // #### TODO: CHANGE TO PCM 48K
     uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
     trans.encode(pcm48k, BLOCK_SIZE_48K, 
         slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+    */
     // Queue a message
-    MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
-        BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
+    MessageCarrier res(Message::Type::TTS_AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+        BLOCK_SIZE_48K * sizeof(int16_t), (const uint8_t*)pcm48k, 
         0, 0);
     res.setSource(req.getDestBusId(), req.getDestCallId());
     res.setDest(req.getSourceBusId(), req.getSourceCallId());
@@ -146,14 +151,18 @@ static int queueAudioFile(const Message& req, const char* fileName,
         rate = 16000;
         blockSize = BLOCK_SIZE_16K;
     } 
+    else if (fullPath.ends_with(".s48")) {
+        rate = 48000;
+        blockSize = BLOCK_SIZE_48K;
+    } 
     else return -2;
 
     ifstream aud(fullPath, std::ios::binary);
     if (!aud.is_open())
         return -1;
 
-    // Make space for 8K or 16K
-    int16_t pcmLow[BLOCK_SIZE_8K * 2];
+    // Make space for 48K at most
+    int16_t pcmLow[BLOCK_SIZE_48K];
     unsigned pcmPtr = 0;
 
     // Stero 16-bit
