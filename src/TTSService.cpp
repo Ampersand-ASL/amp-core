@@ -102,67 +102,82 @@ static void queueComfortNoise(const Message& req, unsigned ms,
     }
 }
 
-static int queueAudioFile(const Message& req, const char* fullPath, 
+// #### TODO: CAN CONSOLIDATE WITH SOME OF THE CODE ABOVE
+
+// A utility function that does some repetitive things:
+// 1. Resamples the PCM to 48K
+// 2. Transcodes to SLIN 48K
+// 3. Makes a Message
+// 4. Publishes the Message
+static void upsampleAndPublsh(const Message& req, 
+    int16_t* pcmLow, unsigned pcmLowSize,
+    Transcoder_SLIN_48K& trans,
+    Resampler& resampler, 
+    threadsafequeue2<MessageCarrier>* ttsQueueRes) {
+
+    // Resample
+    int16_t pcm48k[BLOCK_SIZE_48K];
+    resampler.resample(pcmLow, pcmLowSize, pcm48k, BLOCK_SIZE_48K);
+    // Transcode to SLIN 48K
+    // #### TODO: CHANGE TO PCM 48K
+    uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
+    trans.encode(pcm48k, BLOCK_SIZE_48K, 
+        slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+    // Queue a message
+    MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
+        BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
+        0, 0);
+    res.setSource(req.getDestBusId(), req.getDestCallId());
+    res.setDest(req.getSourceBusId(), req.getSourceCallId());
+    ttsQueueRes->push(res);
+}
+
+static int queueAudioFile(const Message& req, const char* fileName, 
     threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
     
-    ifstream aud(fullPath, std::ios::binary);
-    if (!aud.is_open()) {
-        return -1;
-    }
+    string fullPath(fileName);
+    unsigned rate, blockSize;
 
-    int16_t pcm8k[BLOCK_SIZE_8K];
+    if (fullPath.ends_with(".sln")) {
+        rate = 8000;
+        blockSize = BLOCK_SIZE_8K;
+    } 
+    else if (fullPath.ends_with(".s16")) {
+        rate = 16000;
+        blockSize = BLOCK_SIZE_16K;
+    } 
+    else return -2;
+
+    ifstream aud(fullPath, std::ios::binary);
+    if (!aud.is_open())
+        return -1;
+
+    // Make space for 8K or 16K
+    int16_t pcmLow[BLOCK_SIZE_8K * 2];
     unsigned pcmPtr = 0;
+
     // Stero 16-bit
     char buffer[4];
     amp::Resampler resampler;
-    resampler.setRates(8000, 48000);
+    resampler.setRates(rate, 48000);
     Transcoder_SLIN_48K trans;
 
+    // We are reading 4 bytes at a time: 4 bytes per PCM sample and two 
+    // stereo channels.
     while (aud.read(buffer, 4)) {
         // Only use one of the stero channels
-        pcm8k[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
-        if (pcmPtr == BLOCK_SIZE_8K) {
-            // Convert 8K to 48K
-            int16_t pcm48k[BLOCK_SIZE_48K];
-            resampler.resample(pcm8k, BLOCK_SIZE_8K, pcm48k, BLOCK_SIZE_48K);
-            // Transcode to SLIN 48K
-            // #### TODO: CHANGE TO PCM 48K
-            uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
-            trans.encode(pcm48k, BLOCK_SIZE_48K, 
-                slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
-            // Queue a message
-            MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
-                BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
-                0, 0);
-            res.setSource(req.getDestBusId(), req.getDestCallId());
-            res.setDest(req.getSourceBusId(), req.getSourceCallId());
-            ttsQueueRes->push(res);
+        pcmLow[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
+        if (pcmPtr == blockSize) {
+            upsampleAndPublsh(req, pcmLow, blockSize, trans, resampler, ttsQueueRes);
             pcmPtr = 0;
         }
     }
 
-    // Clean up last frame
-    if (pcmPtr < BLOCK_SIZE_8K) {
-        // Fill with silence
-        for (unsigned i = 0; i < BLOCK_SIZE_8K - pcmPtr; i++)
-            pcm8k[pcmPtr++] = 0;
-        int16_t pcm48k[BLOCK_SIZE_48K];
-        resampler.resample(pcm8k, BLOCK_SIZE_8K, pcm48k, BLOCK_SIZE_48K);
-
-        // Transcode to SLIN 48K
-        // #### TODO: CHANGE TO PCM 48K
-        uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
-        trans.encode(pcm48k, BLOCK_SIZE_48K, 
-            slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
-        // Queue a message
-        MessageCarrier res(Message::Type::TTS_AUDIO, 0, 
-            BLOCK_SIZE_48K * sizeof(int16_t), slin48k, 
-            0, 0);
-        res.setSource(req.getDestBusId(), req.getDestCallId());
-        res.setDest(req.getSourceBusId(), req.getSourceCallId());
-        ttsQueueRes->push(res);
-
-        pcmPtr = 0;
+    // Clean up last frame with silence
+    if (pcmPtr < blockSize) {
+        for (unsigned i = 0; i < blockSize - pcmPtr; i++)
+            pcmLow[pcmPtr++] = 0;
+        upsampleAndPublsh(req, pcmLow, blockSize, trans, resampler, ttsQueueRes);
     }
 
     return 0;

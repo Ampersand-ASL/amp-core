@@ -31,7 +31,6 @@ add_executable(main-local-parrot
   src/LineUsb.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
-  src/Transcoder_SLIN.cpp
   src/Transcoder_SLIN_16K.cpp
   src/BridgeIn.cpp
   src/BridgeOut.cpp
@@ -273,7 +272,6 @@ add_executable(bridge-test
   src/BridgeOut.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
-  src/Transcoder_SLIN.cpp
   src/Transcoder_SLIN_16K.cpp
   src/IAX2Util.cpp
   src/Resampler.cpp
@@ -676,3 +674,19 @@ add_executable(sa818-config
 target_include_directories(sa818-config PRIVATE src)
 target_include_directories(sa818-config PRIVATE include)
 target_include_directories(sa818-config PRIVATE kc1fsz-tools-cpp/include)
+
+# ----- program-test-1
+
+add_executable(program-test-1
+  src/tests/program-test-1.cpp
+  src/ProgramUtils.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(program-test-1 PRIVATE src)
+target_include_directories(program-test-1 PRIVATE include)
+target_include_directories(program-test-1 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(program-test-1 PRIVATE json/include)
+target_include_directories(program-test-1 PRIVATE itu-g711-codec/src)
+target_include_directories(program-test-1 PRIVATE cmsis-dsp-mock/include)
+target_include_directories(program-test-1 PRIVATE g726-codec/src)

@@ -1132,57 +1132,14 @@ void BridgeCall::_enterProgramMode() {
     _programSteps.clear();
 
     int loadRc = amp::ProgramUtils::loadProgramStandard(getenv("AMP_PROGRAM_ROOT"), 
-        1500, 500, _programSteps);
+        15000, 5000, _programSteps);
     if (loadRc != 0) {
+        _log->error("Failed to load program from %s %d", getenv("AMP_PROGRAM_ROOT"), loadRc);
         _programSetState(ProgramState::PROGRAM_ERROR);
     } else {
         _programStepPtr = 0;
         _programSetState(ProgramState::PROGRAM_INIT);
     }
-
-    /*
-    const unsigned gap = 5000;
-    // #### TEMPORARY DEMO
-    _programSteps.clear();
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Stand by for amateur radio newsline." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = 15000 });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part1.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Newsline will be back in 5 seconds." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part2.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Breaking 5 seconds for time, this is amateur radio newsline." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part3.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "And now, 5 seconds of silent contemplation." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part4.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Amateur radio newsline will be right back." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part5.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Amateur radio newsline will continue after this 5 second break." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part6.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Don't go away, we'll be right back." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part7.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Not done yet, this is amateur radio newsline." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part8.sln" });
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "Breaking 5 seconds for time, this is amateur radio newsline." });
-    _programSteps.push_back({.type = ProgramStep::StepType::PAUSE, .arg0 = "", .intervalMs = gap });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::FILE, .arg0 = "/tmp/news.part9.sln" });
-
-    _programSteps.push_back({.type = ProgramStep::StepType::TTS, .arg0 = "This concludes this weeks edition of amateur radio newsline. This node will now disconnect." });
-    */
 }
 
 void BridgeCall::_programAudioRateTick(uint32_t tickMs) {

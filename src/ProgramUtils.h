@@ -17,6 +17,7 @@
 #pragma once
 
 #include <vector>
+#include <queue>
 
 #include "BridgeCall.h"
 
@@ -27,12 +28,12 @@ namespace kc1fsz {
 /**
  * @returns A vector of the filenames (full path) of the segments.
  */
-std::vector<std::string> getSegments(const char* programRoot);
+std::queue<std::string> getSegments(const char* programRoot);
 
 /**
  * @returns A vector of the filenames (full path) of the segments.
  */
-std::vector<std::string> getBreaks(const char* programRoot);
+std::queue<std::string> getBreaks(const char* programRoot);
 
 /**
  * Creates a standard program using the files located at the program root.
