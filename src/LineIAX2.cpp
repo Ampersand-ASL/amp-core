@@ -896,8 +896,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.localStartMs = _clock.time() - AUDIO_TICK_MS;
             // For Asterisk/Ampersand nodes the message after NEW will have a
             // sequence number of 1. 
-            // 26-Feb-2026 Frank KG9M was testing with an M1KE and saw what appears
-            // to be a different behavior.
             call.expectedInSeqNo = 1;
             call.remoteNumber = callingNumber;
             call.callUser = callingUser;
@@ -1255,24 +1253,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         return;
     }
 
-    // Make sure the sequence number is correct. If so, move the expected 
-    // sequence number forward and generate the ACK.
-    if (frame.getOSeqNo() == call.expectedInSeqNo) {
-        call.incrementExpectedInSeqNo();
-        // Generate an ACK in most cases
-        //
-        // From RFC:
-        // ".. and MUST return the same time-stamp it received.  This
-        // time-stamp allows the originating peer to determine to which message
-        // the ACK is responding.  Receipt of an ACK requires no action."
-        if (frame.isACKRequired())
-            _sendACK(frame.getTimeStamp(), call);
-    }
-    // For Asterisk/Ampersand nodes the next message after the initial NEW will have 
-    // a sequence number of 1. On 26-Feb-2026 Frank KG9M was testing with an M1KE and saw 
-    // what appears to be a different behavior: M1KE sent a 0 after having 
-    // its call accepted. We are making a special case here to try to smooth this out.
-    //
     // From IAX2 RFC Section 8.1.1:
     //
     // OSeqno
@@ -1280,11 +1260,26 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // Upon initialization of a call, its value is 0.  It increases
     // incrementally as Full Frames are sent.  When the counter
     // overflows, it silently resets to 0.
-    //
-    else if (frame.getOSeqNo() == 0 && call.expectedInSeqNo == 1) {
-        // Move back (as if their NEW didn't consume a number)
-        call.expectedInSeqNo = 0;
-        // Acknoweldge
+
+
+    // On 26-Feb-2026 Frank KG9M was testing with an M1KE and saw some strange
+    // behavior with PING messages. The OSeqNo on the inbound PING messages 
+    // appears to be zero, which can confuse the sequence number tracking. So
+    // we make a special case and allow the packet in anyhow
+    if (frame.getOSeqNo() == 0 && 
+        frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_PING)) {
+        // Do nothing, let the message in without a sequence number validation
+    }
+    // Make sure the sequence number is correct. If so, move the expected 
+    // sequence number forward and generate the ACK.
+    else if (frame.getOSeqNo() == call.expectedInSeqNo) {
+        call.incrementExpectedInSeqNo();
+        // Generate an ACK in most cases
+        //
+        // From RFC:
+        // ".. and MUST return the same time-stamp it received.  This
+        // time-stamp allows the originating peer to determine to which message
+        // the ACK is responding.  Receipt of an ACK requires no action."
         if (frame.isACKRequired())
             _sendACK(frame.getTimeStamp(), call);
     }
@@ -1527,12 +1522,13 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     else if (frame.isTypeClass(6, 0x0c)) {
         call.lastLagMs = call.localElapsedMs(_clock) - frame.getTimeStamp();
     }
-    // PING
+    // PING - response with PONG
     else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PING)) {
         IAX2FrameFull respFrame;
         respFrame.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
-            call.outSeqNo, call.expectedInSeqNo, 6, 3);
+            call.outSeqNo, call.expectedInSeqNo, 
+                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PONG);
         _sendFrameToPeer(respFrame, call);
     }
     // PONG
