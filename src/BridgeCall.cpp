@@ -874,7 +874,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
                 prompt += "Level is ";
                 if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(0))
                     prompt += "very high";
-                if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
+                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
                     prompt += "high";
                 else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(2)) 
                     prompt += "good";
