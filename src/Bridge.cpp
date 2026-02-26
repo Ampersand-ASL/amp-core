@@ -458,7 +458,8 @@ void Bridge::audioRateTick(uint32_t tickMs) {
     uint64_t durUs = endUs - startUs;
     if (durUs > _maxTickUs) {
         _maxTickUs = durUs;
-        _log.info("Slowest bridge cycle: %ld us", _maxTickUs);
+        if (_maxTickUs > 5000)
+            _log.info("Slowest bridge cycle: %ld us", _maxTickUs);
     }
 }
 

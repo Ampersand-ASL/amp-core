@@ -1152,24 +1152,22 @@ void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
             _programSetState(ProgramState::PROGRAM_DONE);
         }
         else {
-            _log->info("Starting program step %u", _programStepPtr);
-
             ProgramStep& step = _programSteps[_programStepPtr];
 
             if (step.type == ProgramStep::StepType::FILE) {
-                _log->info("Program step TTS file %s", step.arg0.c_str());
+                _log->info("Program step %u play file %s", _programStepPtr, step.arg0.c_str());
                 // Queue up the TTS request for this step
                 requestPlayFile(step.arg0.c_str(), 1000, 0);
                 _programSetState(ProgramState::PROGRAM_TTS);
             }
             else if (step.type == ProgramStep::StepType::TTS) {
-                _log->info("Program step TTS %s", step.arg0.c_str());
+                _log->info("Program step %u TTS %s", _programStepPtr, step.arg0.c_str());
                 // Queue up the TTS request for this step
                 requestTTS(step.arg0.c_str(), 1000, 0);
                 _programSetState(ProgramState::PROGRAM_TTS);
             }
             else if (step.type == ProgramStep::StepType::PAUSE) {
-                _log->info("Program step pause %u", step.intervalMs);
+                _log->info("Program step %u pause %u", _programStepPtr, step.intervalMs);
                 _programPauseIntervalMs = step.intervalMs;
                 _programSetState(ProgramState::PROGRAM_PAUSED);
             }
