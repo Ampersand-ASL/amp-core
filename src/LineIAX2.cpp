@@ -688,6 +688,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
         if (frame.isNEW()) {
         
+            _log.info("NEW call received from %s", ipStr);
+
             if (_authorizeWithCalltoken) {
 
                 // Create a token relevant to this NEW request
@@ -811,7 +813,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 _sendREJECT(destCallId, peerAddr, "No supported CODECs");
                 return;
             }
-            _log.info("Caller capable CODECs %08X", capableCodecs);
 
             // What CODECs are desired by the caller?
             //
@@ -825,13 +826,14 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             // bitmask according to Section 8.7.  
             uint32_t desiredCodec = 0;
             frame.getIE_uint32(IEType::IAX2_IE_FORMAT, &desiredCodec);
-            _log.info("Caller desired CODEC %08X", desiredCodec);
+
+            _log.info("Caller capable/desired CODEC %08X/%08X", capableCodecs, desiredCodec);
 
             // Get the caller's CODEC preferences (optional). This is represented a 
             // string which gets converted to a list of masks.
             char codecPrefs[8] = { 0 };
             frame.getIE_str(IEType::IAX2_IE_CODEC_PREFS, codecPrefs, 8);
-            _log.info("Caller CODEC preferences [%s]", codecPrefs);
+            //_log.info("Caller CODEC preferences [%s]", codecPrefs);
 
             const unsigned preferredCodecsCapacity = 8;
             uint32_t preferredCodecs[preferredCodecsCapacity];
@@ -892,6 +894,10 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.remoteCallId = frame.getSourceCallId();
             // Leave some space so that the elapsed time never becomes negative
             call.localStartMs = _clock.time() - AUDIO_TICK_MS;
+            // For Asterisk/Ampersand nodes the message after NEW will have a
+            // sequence number of 1. 
+            // 26-Feb-2026 Frank KG9M was testing with an M1KE and saw what appears
+            // to be a different behavior.
             call.expectedInSeqNo = 1;
             call.remoteNumber = callingNumber;
             call.callUser = callingUser;
@@ -1262,6 +1268,26 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         if (frame.isACKRequired())
             _sendACK(frame.getTimeStamp(), call);
     }
+    // For Asterisk/Ampersand nodes the next message after the initial NEW will have 
+    // a sequence number of 1. On 26-Feb-2026 Frank KG9M was testing with an M1KE and saw 
+    // what appears to be a different behavior: M1KE sent a 0 after having 
+    // its call accepted. We are making a special case here to try to smooth this out.
+    //
+    // From IAX2 RFC Section 8.1.1:
+    //
+    // OSeqno
+    // The 8-bit OSeqno field is the outbound stream sequence number.
+    // Upon initialization of a call, its value is 0.  It increases
+    // incrementally as Full Frames are sent.  When the counter
+    // overflows, it silently resets to 0.
+    //
+    else if (frame.getOSeqNo() == 0 && call.expectedInSeqNo == 1) {
+        // Move back (as if their NEW didn't consume a number)
+        call.expectedInSeqNo = 0;
+        // Acknoweldge
+        if (frame.isACKRequired())
+            _sendACK(frame.getTimeStamp(), call);
+    }
     else if (compareSeqWrap(frame.getOSeqNo(), call.expectedInSeqNo) < 0) {
 
         // A re-transmit is a legit reason to have a low sequence number
@@ -1286,6 +1312,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
                 }
             }
         }
+        // This is the case where we have a low sequence that's not a re-transmit.
         else {
             _log.info("Ignoring message already acknowledged (low sequence) %d",
                 (int)frame.getOSeqNo());
