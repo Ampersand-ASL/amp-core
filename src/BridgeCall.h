@@ -310,7 +310,7 @@ private:
     void _enterParrotMode();
     void _processParrotAudio(const Message& msg);
     void _parrotAudioRateTick(uint32_t tickMs);
-    void _processParrotTTSAudio(const Message& msg);
+    void _processParrotTTS_END(const Message& msg);
 
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
