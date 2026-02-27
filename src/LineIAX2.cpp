@@ -676,6 +676,9 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             // TOOD: CHECK SECURITY - MAKE SURE WE ARE LIMITTED
             _log.infoDump(msg, potentiallyDangerousBuf, bufLen);
         }
+        else {
+            _log.info(msg);
+        }
     }
 
     // Determine whether we are associated with an existing call or not
