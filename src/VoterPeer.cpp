@@ -70,7 +70,8 @@ void VoterPeer::init(Clock* clock, Log* log) {
 
 void VoterPeer::reset() {
     _masterTimingSource = false;
-    _generalPurposeMode = false;
+    //_generalPurposeMode = false;
+    _generalPurposeMode = true;
     _badPackets = 0;
     for (AudioFrame& f : _frames)
         f.rssi = 0;
