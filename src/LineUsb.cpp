@@ -107,8 +107,9 @@ sudo udevadmin trigger
 */
 LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
-    unsigned destBusId, unsigned destCallId) 
-:   LineRadio(log, clock, captureConsumer, busId, callId, destBusId, destCallId) {
+    unsigned destBusId, unsigned destCallId, unsigned signalDestLineId) 
+:   LineRadio(log, clock, captureConsumer, busId, callId, destBusId, destCallId,
+        signalDestLineId) {
 }
 
 int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel) {
@@ -316,12 +317,13 @@ void LineUsb::tenSecTick() {
 }
 
 void LineUsb::consume(const Message& frame) {
-    
+    /*
     if (frame.isSignal(Message::SignalType::COS_ON)) {
         _setCosStatus(true);
     } else if (frame.isSignal(Message::SignalType::COS_OFF)) {
         _setCosStatus(false);
     }
+    */
 
     // Then go through the normal consume process
     LineRadio::consume(frame);

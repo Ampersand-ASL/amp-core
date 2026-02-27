@@ -85,16 +85,19 @@
                         <option value="usb">USB</option>
                         <option value="usbinvert">USB Inverted (Active Low)</option>
                     </select>
+
                     <label for="aslCtcssFrom">CTCSS From:</label>
                     <select id="aslCtcssFrom" name="aslCtcssFrom" disabled>
                         <option value="none">None</option>
                         <option value="usb">USB</option>
                         <option value="usbinvert">USB Inverted (Active Low)</option>
                     </select>
-                    <label for="aslInvertPtt">Invert PTT:</label>
-                    <select id="aslInvertPtt" name="aslInvertPtt" disabled>
-                        <option value="no">No (Active Low)</option>
-                        <option value="yes">Yes (Active High)</option>
+
+                    <label for="aslPttTo">PTT To:</label>
+                    <select id="aslPttTo" name="aslPttTo">
+                        <option value="none">None</option>
+                        <option value="usb">USB</option>
+                        <option value="usbinvert">USB Inverted (Active Low)</option>
                     </select>
 
                     <label for="aslTxMixASet">Transmit Mixer A:</label>
@@ -113,6 +116,128 @@
                     <textarea name="kfnodes" id="kfnodes" rows="2"></textarea>
                     <label for="kfdelay">Kerchunk Filter Delay (ms):</label>
                     <input type="number" id="kfdelay" name="kfdelay"/>
+                </div>
+                <div class="form2">
+                    <div>SA818 Settings (SHARI):</div><div></div>
+                    <label for="sa818port">Command Port:</label>
+                    <select id="sa818port" name="sa818port">
+                    </select>
+                    <label for="sa818bw">Bandwidth:</label>
+                    <select id="sa818bw" name="sa818bw">
+                        <option value="1">Wide (25kHz)</option>
+                        <option value="0">Narrow (12.5kHz)</option>
+                    </select>
+                    <label for="sa818txf">Transmit Frequency:</label>
+                    <input type="number" step="0.0001" id="sa818txf" name="sa818txf"/>
+                    <label for="sa818txpl">Transmit Tone:</label>
+                    <select id="sa818txpl" name="sa818txpl">
+                        <option value="0000">None</option>
+                        <option value="0001">67.0</option>
+                        <option value="0002">71.9</option>
+                        <option value="0003">74.4</option>
+                        <option value="0004">77.0</option>
+                        <option value="0005">79.7</option>
+                        <option value="0006">82.5</option>
+                        <option value="0007">85.4</option>
+                        <option value="0008">88.5</option>
+                        <option value="0009">91.5</option>
+                        <option value="0010">94.8</option>
+                        <option value="0011">97.4</option>
+                        <option value="0012">100.0</option>
+                        <option value="0013">103.5</option>
+                        <option value="0014">107.2</option>
+                        <option value="0015">110.9</option>
+                        <option value="0016">114.8</option>
+                        <option value="0017">118.8</option>
+                        <option value="0018">123.0</option>
+                        <option value="0019">127.3</option>
+                        <option value="0020">131.8</option>
+                        <option value="0021">136.5</option>
+                        <option value="0022">141.3</option>
+                        <option value="0023">146.2</option>
+                        <option value="0024">151.4</option>
+                        <option value="0025">156.7</option>
+                        <option value="0026">162.2</option>
+                        <option value="0027">167.9</option>
+                        <option value="0028">173.8</option>
+                        <option value="0029">179.9</option>
+                        <option value="0030">186.2</option>
+                        <option value="0031">192.8</option>
+                        <option value="0032">203.5</option>
+                        <option value="0033">210.7</option>
+                        <option value="0034">218.1</option>
+                        <option value="0035">225.7</option>
+                        <option value="0036">233.6</option>
+                        <option value="0037">241.8</option>
+                        <option value="0038">250.3</option>
+                    </select>
+                    <label for="sa818rxf">Receive Frequency:</label>
+                    <input type="number" step="0.0001" id="sa818rxf" name="sa818rxf"/>
+                    <label for="sa818rxpl">Receive Tone:</label>
+                    <select id="sa818rxpl" name="sa818rxpl">
+                        <option value="0000">None</option>
+                        <option value="0001">67.0</option>
+                        <option value="0002">71.9</option>
+                        <option value="0003">74.4</option>
+                        <option value="0004">77.0</option>
+                        <option value="0005">79.7</option>
+                        <option value="0006">82.5</option>
+                        <option value="0007">85.4</option>
+                        <option value="0008">88.5</option>
+                        <option value="0009">91.5</option>
+                        <option value="0010">94.8</option>
+                        <option value="0011">97.4</option>
+                        <option value="0012">100.0</option>
+                        <option value="0013">103.5</option>
+                        <option value="0014">107.2</option>
+                        <option value="0015">110.9</option>
+                        <option value="0016">114.8</option>
+                        <option value="0017">118.8</option>
+                        <option value="0018">123.0</option>
+                        <option value="0019">127.3</option>
+                        <option value="0020">131.8</option>
+                        <option value="0021">136.5</option>
+                        <option value="0022">141.3</option>
+                        <option value="0023">146.2</option>
+                        <option value="0024">151.4</option>
+                        <option value="0025">156.7</option>
+                        <option value="0026">162.2</option>
+                        <option value="0027">167.9</option>
+                        <option value="0028">173.8</option>
+                        <option value="0029">179.9</option>
+                        <option value="0030">186.2</option>
+                        <option value="0031">192.8</option>
+                        <option value="0032">203.5</option>
+                        <option value="0033">210.7</option>
+                        <option value="0034">218.1</option>
+                        <option value="0035">225.7</option>
+                        <option value="0036">233.6</option>
+                        <option value="0037">241.8</option>
+                        <option value="0038">250.3</option>
+                    </select>
+                    <label for="sa818sq">Squelch Level:</label>
+                    <select id="sa818sq" name="sa818sq">
+                        <option value="0">Open</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                    </select>
+                    <label for="sa818vol">Volume:</label>
+                    <select id="sa818vol" name="sa818vol">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                    </select>
                 </div>
                 <span></span>
                 <input type="submit" value="Save" class="green-button save-button"/>
@@ -230,7 +355,7 @@ async function configLoad() {
         loadUi("aslAudioDevice", data, document)
         loadUi("aslCosFrom", data, document)
         loadUi("aslCtcssFrom", data, document)
-        loadUi("aslInvertPtt", data, document)
+        loadUi("aslPttTo", data, document)
         loadUi("aslTxMixASet", data, document)
         loadUi("aslTxMixBSet", data, document)
         loadUi("aslRxMixerSet", data, document)
@@ -239,6 +364,17 @@ async function configLoad() {
 
         loadUi("kfnodes", data, document);
         loadUi("kfdelay", data, document);
+
+        // ------ SA8181 Section -----------------------------------------------------
+
+        loadUi("sa818port", data, document);
+        loadUi("sa818bw", data, document);
+        loadUi("sa818txf", data, document);
+        loadUi("sa818txpl", data, document);
+        loadUi("sa818rxf", data, document);
+        loadUi("sa818rxpl", data, document);
+        loadUi("sa818sq", data, document);
+        loadUi("sa818vol", data, document);
 
     } catch (error) {
         console.error('Error fetching configuration data:', error.message);
@@ -271,7 +407,7 @@ function configStore() {
     storeUi("aslAudioDevice", formObject, fullConfig)
     storeUi("aslCosFrom", formObject, fullConfig)
     storeUi("aslCtcssFrom", formObject, fullConfig)
-    storeUi("aslInvertPtt", formObject, fullConfig)
+    storeUi("aslPttTo", formObject, fullConfig)
     storeUi("aslTxMixASet", formObject, fullConfig)
     storeUi("aslTxMixBSet", formObject, fullConfig)
     storeUi("aslRxMixerSet", formObject, fullConfig)
@@ -280,6 +416,17 @@ function configStore() {
 
     storeUi("kfnodes", formObject, fullConfig);
     storeUi("kfdelay", formObject, fullConfig);
+
+    // ------ SA8181 Section -----------------------------------------------------
+
+    storeUi("sa818port", formObject, fullConfig);
+    storeUi("sa818bw", formObject, fullConfig);
+    storeUi("sa818txf", formObject, fullConfig);
+    storeUi("sa818txpl", formObject, fullConfig);
+    storeUi("sa818rxf", formObject, fullConfig);
+    storeUi("sa818rxpl", formObject, fullConfig);
+    storeUi("sa818sq", formObject, fullConfig);
+    storeUi("sa818vol", formObject, fullConfig);
 
     // Push back to the server
     fetch('/config-save', {
@@ -307,6 +454,7 @@ document.addEventListener('DOMContentLoaded', async() => {
 
     // Important that these steps are serialized
     await loadSelectOptions("config-form", "aslAudioDevice");
+    await loadSelectOptions("config-form", "sa818port");
     await configLoad();
     // This depends on which option was chosen on the sound device
     await fixMixerRanges();

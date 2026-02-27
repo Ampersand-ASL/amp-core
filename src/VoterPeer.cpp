@@ -70,7 +70,7 @@ void VoterPeer::init(Clock* clock, Log* log) {
 
 void VoterPeer::reset() {
     _masterTimingSource = false;
-    _generalPurposeMode = true;
+    _generalPurposeMode = false;
     _badPackets = 0;
     for (AudioFrame& f : _frames)
         f.rssi = 0;
@@ -179,14 +179,17 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
          _peerTrusted = true;
 
-        _log->info("%s now trusts its peer %s", _localPassword,
-            _remotePassword);
+        char addr[64];
+        formatIPAddrAndPort(peerAddr, addr, sizeof(addr));
+
+        _log->info("VOTER %s now trusts its peer %s (%s)", _localPassword,
+            _remotePassword, addr);
 
         // Grab the remote challenge since we'll need it for any responses.
         char remoteChallenge[10];
         if (VoterUtil::getHeaderAuthChallenge(packet, 
             remoteChallenge, sizeof(remoteChallenge)) != 0) {
-            _log->infoDump("Bad packet ignored", packet, packetLen);
+            _log->infoDump("Bad VOTER packet ignored", packet, packetLen);
             _badPackets++;
             return;
         }
@@ -225,11 +228,28 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
             if (!_inSpurt) {
                 _inSpurt = true;
                 _spurtStartMs = _clock->timeMs();
-
-                _playCursorS = 0;
-                _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMargin;
-                _log->info("Start of TS for VOTER %s", _localPassword);
+                if (_generalPurposeMode) {
+                    _playCursorS = 0;
+                    _playCursorNs = VoterUtil::getHeaderTimeNs(packet) - _initialMarginGP;
+                }
+                else {
+                    _playCursorS = VoterUtil::getHeaderTimeS(packet);
+                    uint32_t ns = VoterUtil::getHeaderTimeNs(packet);
+                    if (ns < _initialMarginGPS) {
+                        _playCursorS -= 1;
+                        ns = _initialMarginGPS - ns;                        
+                        _playCursorNs = 1000000000 - ns;
+                    }
+                    else {
+                        _playCursorNs = ns - _initialMarginGPS;
+                    }
+                }
+                _log->info("VOTER start of TS from %s", _localPassword);
             }
+        }
+        else {
+            // #### TODO: OVERFLOW COUNTER
+            _log->info("VOTER buffer full");
         }
     } 
     // Ping packet
@@ -320,7 +340,7 @@ void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
     if (_inSpurt && _clock->isPastWindow(_lastAudioMs, SPURT_TIMEOUT_MS)) {
         _inSpurt = false;
         _spurtStartMs = 0;
-        _log->info("End of TS for VOTER %s", _localPassword);
+        _log->info("VOTER end of TS for %s", _localPassword);
     }
 }
 
@@ -348,11 +368,11 @@ void VoterPeer::popAudioFrame() {
 }
 
 string VoterPeer::makeChallenge() {
-    //char ch[10];
-    //long randomNum = rand();
-    //snprintf(ch, sizeof(ch), "%09lu", randomNum);
-    //return string(ch);
-    return string("123456789");
+    char ch[10];
+    long randomNum = rand();
+    snprintf(ch, sizeof(ch), "%09lu", randomNum);
+    return string(ch);
+    //return string("123456789");
 }
 
 void VoterPeer::oneSecTick() {    
@@ -364,7 +384,7 @@ void VoterPeer::oneSecTick() {
         VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
         VoterUtil::setHeaderAuthResponse(resp, 0);
         VoterUtil::setHeaderTimeS(resp, _clock->timeMs() / 1000);
-        _log->info("%s initiating handshake", _localPassword);
+        _log->info("VOTER %s initiating handshake", _localPassword);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 
@@ -394,7 +414,7 @@ void VoterPeer::oneSecTick() {
 void VoterPeer::tenSecTick() {
     // Check for timeout
     if (_peerTrusted && _clock->isPastWindow(_lastRxMs, TIMEOUT_INTERVAL_MS)) {
-        _log->info("Timing out connection with %s", _remotePassword);
+        _log->info("VOTER timing out connection with %s", _remotePassword);
         reset();        
     }
 }

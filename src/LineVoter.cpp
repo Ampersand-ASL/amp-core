@@ -264,10 +264,11 @@ bool LineVoter::_processInboundData() {
 void LineVoter::_processReceivedPacket(
     const uint8_t* packet, unsigned packetLen,
     const sockaddr& peerAddr, uint32_t rxStampMs) {
+
+    char addr[64];
+    formatIPAddrAndPort((const sockaddr&)peerAddr, addr, 64);
    
     if (_trace) {
-        char addr[64];
-        formatIPAddrAndPort((const sockaddr&)peerAddr, addr, 64);
         char msg[128];
         snprintf(msg, sizeof(msg), "VOTER packet from %s", addr);
         _log.infoDump(msg, packet, packetLen);
@@ -278,12 +279,12 @@ void LineVoter::_processReceivedPacket(
         _client0.consumePacket(peerAddr, packet, packetLen);
     } 
     else {
-        _log.info("Packet doesn't belong to active client");
+        _log.info("VOTER packet from %s, not trusted yet", addr);
         // Make a response to send back to the potential new client
         uint8_t resp[24] = { 0 };
         // If a zero auth response is received then send back the initial 
         // challenge response.
-        int rc = amp::VoterPeer::makeInitialChallengeResponse(packet,
+        int rc = amp::VoterPeer::makeInitialChallengeResponse(&_clock, packet,
             _serverChallenge.c_str(), _serverPassword.c_str(), resp);
         assert(rc == 24);
         _sendPacketToPeer(resp, 24, peerAddr);

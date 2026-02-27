@@ -38,7 +38,7 @@ class LineUsb : public LineRadio {
 public:
 
     LineUsb(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
-        unsigned destBusId, unsigned destCallId);
+        unsigned audioDestLineId, unsigned audioDestCallId, unsigned signalDestLineId);
 
     /**
      * @param cardNumber The ALSA card number. So the device name is hd:<cardNumber>.

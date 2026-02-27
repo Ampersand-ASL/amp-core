@@ -28,18 +28,21 @@ namespace kc1fsz {
 
 bool Transcoder_SLIN_8K::decode(const uint8_t* source, unsigned sourceLen, 
     int16_t* destPCM, unsigned destLen) {            
+
     // PCM16 (2 bytes)
     assert(sourceLen == BLOCK_SIZE_8K * 2);
     assert(destLen == BLOCK_SIZE_8K);
 
-    int16_t pcm_1[BLOCK_SIZE_8K];
+    int16_t* pcm_1 = destPCM;
     const uint8_t* p = source;
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++) {
-        pcm_1[i] = unpack_int16_le(p);
+        // NOTE: RFC 5456 makes it very clear that this is supposed to be little-
+        // endian.  However, in practice it seems that the Asterisk implementation
+        // is big-endian.
+        *pcm_1 = unpack_int16_be(p);
+        pcm_1++;
         p += 2;
     }
-
-    memcpy(destPCM, pcm_1, BLOCK_SIZE_8K * 2);
 
     return true;
 }
@@ -50,7 +53,10 @@ bool Transcoder_SLIN_8K::encode(const int16_t* source, unsigned sourceLen,
     assert(destLen == BLOCK_SIZE_8K * 2);
     uint8_t* p = dest;
     for (unsigned i = 0; i < BLOCK_SIZE_8K; i++) {
-        pack_int16_le(source[i], p);
+        // NOTE: RFC 5456 makes it very clear that this is supposed to be little-
+        // endian.  However, in practice it seems that the Asterisk implementation
+        // is big-endian.
+        pack_int16_be(source[i], p);
         p += 2;
     }
     return true;

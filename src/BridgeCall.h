@@ -67,7 +67,8 @@ public:
     enum Mode {
         NORMAL,
         PARROT,
-        TONE
+        TONE,
+        PROGRAM
     };
 
     BridgeCall();
@@ -136,7 +137,14 @@ public:
     /**
      * Requests a text-to-speech announcement to be sent to the call.
      */
-    void requestTTS(const char* prompt);
+    void requestTTS(const char* prompt, unsigned preSilenceMs = 0, 
+        unsigned postSilenceMs = 0);
+
+    /**
+     * Requests an audio file to be played
+     */
+    void requestPlayFile(const char* fullFileName, unsigned preSilenceMs = 0, 
+        unsigned postSilenceMs = 0);
 
     /**
      * This extracts the call's contribution (if any) to the audio frame for the 
@@ -267,7 +275,8 @@ private:
     int _tx1Db = 0;
 
     void _processTTSAudio(const Message& msg);
-
+    void _requestTTS(Message::Type type, const char* arg, unsigned preSilenceMs, 
+        unsigned postSilenceMs);
     void _signalTalker();
 
     // ----- Normal Mode Related ----------------------------------------------
@@ -301,7 +310,7 @@ private:
     void _enterParrotMode();
     void _processParrotAudio(const Message& msg);
     void _parrotAudioRateTick(uint32_t tickMs);
-    void _processParrotTTSAudio(const Message& msg);
+    void _processParrotTTS_END(const Message& msg);
 
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
     void _loadAudio(const std::vector<PCM16Frame>& audio, std::queue<PCM16Frame>& queue) const;
@@ -355,6 +364,57 @@ private:
     static constexpr const char* PARROT_TALKER_ID = "ASL Parrot";
     // The talker ID is captured at the end of the recording period
     std::string _recordedTalkerId;
+
+    // ----- Program Mode Related ---------------------------------------------
+
+    enum ProgramState {
+        PROGRAM_INIT,
+        PROGRAM_PRE,
+        PROGRAM_TTS,
+        PROGRAM_PLAY,
+        PROGRAM_PAUSED,
+        PROGRAM_ERROR,
+        PROGRAM_ERROR_TTS,
+        PROGRAM_ERROR_PLAY,
+        PROGRAM_DONE
+    };
+
+public:
+
+    struct ProgramStep {
+        enum StepType { 
+            /** 
+             * Plays a file
+             */
+            FILE, 
+            /** 
+             * Speaks a phrase (TTS)
+             */
+            TTS, 
+            /** 
+             * Pauses (silent, unkeyed)
+             */
+            PAUSE 
+        } type;
+        // When type=FILE this contains the name of the file.
+        // When type=TTS this contains the text to speak.
+        std::string arg0;
+        // Only relevant for type=PAUSE
+        unsigned intervalMs;
+    };
+
+private:
+
+    ProgramState _programState = ProgramState::PROGRAM_INIT;
+    uint64_t _programStateStartMs = 0;
+    std::vector<ProgramStep> _programSteps;
+    unsigned _programStepPtr = 0;
+    uint64_t _programPauseIntervalMs = 0;
+
+    void _programSetState(ProgramState state);
+    void _enterProgramMode();
+    void _programAudioRateTick(uint32_t tickMs);
+    void _processProgramTTS_END();
 };
 
     }

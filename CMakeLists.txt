@@ -31,7 +31,6 @@ add_executable(main-local-parrot
   src/LineUsb.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
-  src/Transcoder_SLIN.cpp
   src/Transcoder_SLIN_16K.cpp
   src/BridgeIn.cpp
   src/BridgeOut.cpp
@@ -273,7 +272,6 @@ add_executable(bridge-test
   src/BridgeOut.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
-  src/Transcoder_SLIN.cpp
   src/Transcoder_SLIN_16K.cpp
   src/IAX2Util.cpp
   src/Resampler.cpp
@@ -310,6 +308,7 @@ target_include_directories(config-test PRIVATE json/include)
 add_executable(signal-1
   src/demos/signal-1.cpp
   src/SignalIn.cpp
+  src/SignalOut.cpp
   src/EventLoop.cpp
   src/Message.cpp
   kc1fsz-tools-cpp/src/Common.cpp
@@ -663,3 +662,31 @@ add_executable(codec-assignment-test
 target_include_directories(codec-assignment-test PRIVATE src)
 target_include_directories(codec-assignment-test PRIVATE include)
 target_include_directories(codec-assignment-test PRIVATE kc1fsz-tools-cpp/include)
+
+# ----- sa818-config
+
+add_executable(sa818-config
+  src/demos/sa818-config.cpp
+  src/SerialUtil.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(sa818-config PRIVATE src)
+target_include_directories(sa818-config PRIVATE include)
+target_include_directories(sa818-config PRIVATE kc1fsz-tools-cpp/include)
+
+# ----- program-test-1
+
+add_executable(program-test-1
+  src/tests/program-test-1.cpp
+  src/ProgramUtils.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(program-test-1 PRIVATE src)
+target_include_directories(program-test-1 PRIVATE include)
+target_include_directories(program-test-1 PRIVATE kc1fsz-tools-cpp/include)
+target_include_directories(program-test-1 PRIVATE json/include)
+target_include_directories(program-test-1 PRIVATE itu-g711-codec/src)
+target_include_directories(program-test-1 PRIVATE cmsis-dsp-mock/include)
+target_include_directories(program-test-1 PRIVATE g726-codec/src)

@@ -16,24 +16,31 @@
  */
 #pragma once
 
-// NOTE: This may be the real ARM library or a mock, depending on the
-// platfom that we are building for.
-#include <arm_math.h>
+#include <vector>
+#include <queue>
 
-#include "Transcoder.h"
+#include "BridgeCall.h"
 
 namespace kc1fsz {
+    namespace amp {
+        namespace ProgramUtils {
 
-class Transcoder_SLIN : public Transcoder {
-public:
+/**
+ * @returns A vector of the filenames (full path) of the segments.
+ */
+std::queue<std::string> getSegments(const char* programRoot);
 
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_PERIOD_MS = 20;
+/**
+ * @returns A vector of the filenames (full path) of the segments.
+ */
+std::queue<std::string> getBreaks(const char* programRoot);
 
-    virtual bool decode(const uint8_t* source, unsigned sourceLen, 
-        int16_t* dest, unsigned destLen);
-    virtual bool encode(const int16_t* source, unsigned sourceLen, 
-        uint8_t* dest, unsigned destLen);
-};
+/**
+ * Creates a standard program using the files located at the program root.
+ */
+int loadProgramStandard(const char* programRoot,
+    unsigned initialGapMs, unsigned gapMs, std::vector<BridgeCall::ProgramStep>& steps);
 
+        }
+    }
 }

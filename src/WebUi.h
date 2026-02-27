@@ -76,7 +76,6 @@ private:
     TraceLog& _traceLog;
 
     std::string _uiPwd;
-    std::string _authCookie;
     
     std::atomic<bool> _ptt;
 

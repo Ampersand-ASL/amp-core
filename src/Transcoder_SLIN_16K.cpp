@@ -28,25 +28,27 @@ namespace kc1fsz {
 
 bool Transcoder_SLIN_16K::decode(const uint8_t* source, unsigned sourceLen, 
     int16_t* destPCM, unsigned destLen) {            
+
     assert(sourceLen == BLOCK_SIZE_16K * 2);
     assert(destLen == BLOCK_SIZE_16K);
 
-    int16_t pcm_1[BLOCK_SIZE_16K];
+    int16_t* pcm_1 = destPCM;
     const uint8_t* p = source;
     for (unsigned i = 0; i < BLOCK_SIZE_16K; i++) {
-        pcm_1[i] = unpack_int16_le(p);
+        *pcm_1 = unpack_int16_le(p);
+        pcm_1++;
         p += 2;
     }
-
-    memcpy(destPCM, pcm_1, BLOCK_SIZE_16K * 2);
 
     return true;
 }
 
 bool Transcoder_SLIN_16K::encode(const int16_t* source, unsigned sourceLen, 
     uint8_t* dest, unsigned destLen) {
+
     assert(sourceLen == BLOCK_SIZE_16K);
     assert(destLen == BLOCK_SIZE_16K * 2);
+    
     uint8_t* p = dest;
     for (unsigned i = 0; i < BLOCK_SIZE_16K; i++) {
         pack_int16_le(source[i], p);

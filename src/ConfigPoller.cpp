@@ -35,7 +35,7 @@ using json = nlohmann::json;
 namespace kc1fsz {
     namespace amp {
 
-const char* ConfigPoller::DEFAULT_CONFIG = "{ \"favorites\": \"2002:ASL Parrot\", \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"-10\", \"aslTxMixBSet\":\"-10\", \"aslRxMixerSet\":\"0\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler.php\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
+const char* ConfigPoller::DEFAULT_CONFIG = "{ \"favorites\": \"2002:ASL Parrot\", \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslPttTo\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"-10\", \"aslTxMixBSet\":\"-10\", \"aslRxMixerSet\":\"0\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler.php\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
 
 ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, 
     std::function<void(const json& cfg)> cb,
@@ -117,6 +117,36 @@ void ConfigPoller::_populateDefaults(json& j) {
         // Correct a mistake
         if (j["aslStatUrl"] == "http://stats.allstarlink.org/uhandler")
             j["aslStatUrl"] = "http://stats.allstarlink.org/uhandler.php";
+    }
+    if (!j.contains("aslCosFrom")) {
+        j["aslCosFrom"] = "usb";
+    }
+    if (!j.contains("aslPttTo")) {
+        j["aslPttTo"] = "usb";
+    }
+    if (!j.contains("sa818port")) {
+        j["sa818port"] = "";
+    }
+    if (!j.contains("sa818bw")) {
+        j["sa818bw"] = "wide";
+    }
+    if (!j.contains("sa818txf")) {
+        j["sa818txf"] = "";
+    }
+    if (!j.contains("sa818txpl")) {
+        j["sa818txpl"] = "0000";
+    }
+    if (!j.contains("sa818rxf")) {
+        j["sa818rxf"] = "";
+    }
+    if (!j.contains("sa818rxpl")) {
+        j["sa818rxpl"] = "0000";
+    }
+    if (!j.contains("sa818sq")) {
+        j["sa818sq"] = "4";
+    }
+    if (!j.contains("sa818vol")) {
+        j["sa818vol"] = "8";
     }
 }
 

@@ -19,6 +19,7 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <cmath>
 
 #include <piper.h>
 
@@ -57,17 +58,150 @@ static MessageCarrier makeTTSAudioMsg(const Message& req,
     // smooth transitions between consecutive frames.
     ttsResampler.resample(pcm16, BLOCK_SIZE_16K, pcm48, BLOCK_SIZE_48K);
 
+    /*
     Transcoder_SLIN_48K trans;
     uint8_t buf[BLOCK_SIZE_48K * sizeof(int16_t)];
     trans.encode(pcm48, BLOCK_SIZE_48K, buf, BLOCK_SIZE_48K * sizeof(int16_t));
+    */
 
-    MessageCarrier res(Message::Type::TTS_AUDIO, 0, BLOCK_SIZE_48K * sizeof(int16_t), buf, 0, 0);
+    MessageCarrier res(Message::Type::TTS_AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+        BLOCK_SIZE_48K * sizeof(int16_t), (const uint8_t*)pcm48, 0, 0);
     res.setSource(req.getDestBusId(), req.getDestCallId());
     res.setDest(req.getSourceBusId(), req.getSourceCallId());
     return res;
 }
 
-// ------ Text To Speach Thread ----------------------------------------------
+static void queueComfortNoise(const Message& req, unsigned ms,
+    threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
+
+    float omega = 10.0f * 2.0f * 3.1415926f / 48000.0f;
+    float phi = 0;
+    float amp = 0.01;
+    //Transcoder_SLIN_48K trans;
+
+    for (unsigned i = 0; i < ms / 20; i++) {
+
+        int16_t pcm48k[BLOCK_SIZE_48K];
+
+        // For now we are using a low tone
+        for (unsigned j = 0; j < BLOCK_SIZE_48K; j++) {
+            pcm48k[j] = amp * 32767.0f * std::cos(phi);
+            phi += omega;
+        }
+
+        /*
+        // Transcode to SLIN 48K
+        // #### TODO: CHANGE TO PCM 48K
+        uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
+        trans.encode(pcm48k, BLOCK_SIZE_48K, 
+            slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+        */
+        // Queue a message
+        MessageCarrier res(Message::Type::TTS_AUDIO, CODECType::IAX2_CODEC_PCM_48K,  
+            BLOCK_SIZE_48K * sizeof(int16_t), (const uint8_t*)pcm48k, 0, 0);
+        res.setSource(req.getDestBusId(), req.getDestCallId());
+        res.setDest(req.getSourceBusId(), req.getSourceCallId());
+        ttsQueueRes->push(res);
+    }
+}
+
+// #### TODO: CAN CONSOLIDATE WITH SOME OF THE CODE ABOVE
+
+// A utility function that does some repetitive things:
+// 1. Resamples the PCM to 48K
+// 2. Transcodes to SLIN 48K
+// 3. Makes a Message
+// 4. Publishes the Message
+static void upsampleAndPublsh(const Message& req, 
+    int16_t* pcmLow, unsigned pcmLowSize,
+    Transcoder_SLIN_48K& trans,
+    Resampler& resampler, 
+    threadsafequeue2<MessageCarrier>* ttsQueueRes) {
+
+    // Resample
+    int16_t pcm48k[BLOCK_SIZE_48K];
+    resampler.resample(pcmLow, pcmLowSize, pcm48k, BLOCK_SIZE_48K);
+    /*
+    // Transcode to SLIN 48K
+    // #### TODO: CHANGE TO PCM 48K
+    uint8_t slin48k[BLOCK_SIZE_48K * sizeof(int16_t)];
+    trans.encode(pcm48k, BLOCK_SIZE_48K, 
+        slin48k, BLOCK_SIZE_48K * sizeof(int16_t));
+    */
+    // Queue a message
+    MessageCarrier res(Message::Type::TTS_AUDIO, CODECType::IAX2_CODEC_PCM_48K, 
+        BLOCK_SIZE_48K * sizeof(int16_t), (const uint8_t*)pcm48k, 
+        0, 0);
+    res.setSource(req.getDestBusId(), req.getDestCallId());
+    res.setDest(req.getSourceBusId(), req.getSourceCallId());
+    ttsQueueRes->push(res);
+}
+
+static int queueAudioFile(const Message& req, const char* fileName, 
+    threadsafequeue2<MessageCarrier>* ttsQueueRes) {    
+    
+    string fullPath(fileName);
+    unsigned rate, blockSize;
+
+    if (fullPath.ends_with(".sln")) {
+        rate = 8000;
+        blockSize = BLOCK_SIZE_8K;
+    } 
+    else if (fullPath.ends_with(".s16")) {
+        rate = 16000;
+        blockSize = BLOCK_SIZE_16K;
+    } 
+    else if (fullPath.ends_with(".s48")) {
+        rate = 48000;
+        blockSize = BLOCK_SIZE_48K;
+    } 
+    else return -2;
+
+    ifstream aud(fullPath, std::ios::binary);
+    if (!aud.is_open())
+        return -1;
+
+    // Make space for 48K at most
+    int16_t pcmLow[BLOCK_SIZE_48K];
+    unsigned pcmPtr = 0;
+
+    // Stero 16-bit
+    char buffer[4];
+    amp::Resampler resampler;
+    resampler.setRates(rate, 48000);
+    Transcoder_SLIN_48K trans;
+
+    // We are reading 4 bytes at a time: 4 bytes per PCM sample and two 
+    // stereo channels.
+    while (aud.read(buffer, 4)) {
+        // Only use one of the stero channels
+        pcmLow[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
+        if (pcmPtr == blockSize) {
+            upsampleAndPublsh(req, pcmLow, blockSize, trans, resampler, ttsQueueRes);
+            pcmPtr = 0;
+        }
+    }
+
+    // Clean up last frame with silence
+    if (pcmPtr < blockSize) {
+        for (unsigned i = 0; i < blockSize - pcmPtr; i++)
+            pcmLow[pcmPtr++] = 0;
+        upsampleAndPublsh(req, pcmLow, blockSize, trans, resampler, ttsQueueRes);
+    }
+
+    return 0;
+}
+
+static void queueTTSEnd(const Message& req, threadsafequeue2<MessageCarrier>* ttsQueueRes) {
+    // Send a TTS_END signal so the call will know that this TTS process is finished.
+    MessageEmpty res(Message::Type::TTS_END, 0, 0, 0);
+    // Swap source/dest
+    res.setSource(req.getDestBusId(), req.getDestCallId());
+    res.setDest(req.getSourceBusId(), req.getSourceCallId());
+    ttsQueueRes->push(res);
+}
+
+// ------ Text To Speech Thread ----------------------------------------------
 
 void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
     threadsafequeue2<MessageCarrier>* ttsQueueRes, std::atomic<bool>* runFlag) {
@@ -112,19 +246,19 @@ void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
         if (ttsQueueReq->try_pop(req, 500)) {
             if (req.getType() == Message::Type::TTS_REQ) {
 
-                // Make a null-terminated buffer with a maximum size
-                char ttsReq[128];
-                int size = min(req.size(), (unsigned)127);
-                memcpy(ttsReq, req.body(), size);
-                ttsReq[size] = 0;
+                assert(req.size() == sizeof(PayloadTTS));
+                const PayloadTTS* payload = (PayloadTTS*)req.body();
 
-                log.info("TTS request: \"%s\"", ttsReq);
+                log.info("TTS request: \"%s\"", payload->req);
 
                 // There is state here so reset at the start of new speech
                 ttsResampler.reset();
 
+                // Some pre-noise 
+                queueComfortNoise(req, payload->preSilenceMs, ttsQueueRes);
+
                 // Here is where the actual speech synthesis happens
-                piper_synthesize_start(synth, ttsReq, &options);
+                piper_synthesize_start(synth, payload->req, &options);
 
                 // Take the results of the synthesis (floats) and put it into 16K LE frames.
                 int16_t pcm16[BLOCK_SIZE_16K];
@@ -150,11 +284,29 @@ void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
                     ttsQueueRes->push(makeTTSAudioMsg(req, pcm16, BLOCK_SIZE_16K, ttsResampler));
                 }
 
+                // Some post-noise 
+                queueComfortNoise(req, payload->postSilenceMs, ttsQueueRes);
+
                 // Send a TTS_END signal so the call will know that this TTS process is finished.
-                MessageEmpty res(Message::Type::TTS_END, 0, 0, 0);
-                res.setSource(req.getDestBusId(), req.getDestCallId());
-                res.setDest(req.getSourceBusId(), req.getSourceCallId());
-                ttsQueueRes->push(res);
+                queueTTSEnd(req, ttsQueueRes);
+
+                log.info("TTS complete");
+            }
+            else if (req.getType() == Message::Type::TTS_FILE_REQ) {
+
+                assert(req.size() == sizeof(PayloadTTS));
+                const PayloadTTS* payload = (PayloadTTS*)req.body();
+
+                log.info("TTS file request: %s", payload->req);
+
+                // Some pre-noise to allow everyone to key up
+                queueComfortNoise(req, payload->preSilenceMs, ttsQueueRes);
+                // Queue the actual audio file
+                queueAudioFile(req, payload->req, ttsQueueRes);
+                // Some post-noise 
+                queueComfortNoise(req, payload->postSilenceMs, ttsQueueRes);
+                // Send a TTS_END signal so the call will know that this TTS process is finished.
+                queueTTSEnd(req, ttsQueueRes);
 
                 log.info("TTS complete");
             }
@@ -165,6 +317,7 @@ void ttsLoop(Log* loga, threadsafequeue2<MessageCarrier>* ttsQueueReq,
 
     log.info("End TTS thread");
 }
+
 
     }
 }

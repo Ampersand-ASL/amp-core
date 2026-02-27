@@ -29,6 +29,7 @@
 #include "BridgeCall.h"
 #include "Poker.h"
 #include "Bridge.h"
+#include "ProgramUtils.h"
 
 // The duration of silence after which the parrot decides the 
 // recording should be ended.
@@ -55,6 +56,9 @@
 // The largest number of nodes that the telemetry will read out.
 // Needs to be limited to prevent overload of TTS.
 #define MAX_TELEMETRY_NODE_COUNT (4)
+
+#define PROGRAM_PRE_INTERVAL_MS 500
+#define PROGRAM_POST_INTERVAL_MS 500
 
 using namespace std;
 
@@ -214,6 +218,8 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
 
     if (initialMode == Mode::PARROT)
         _enterParrotMode();
+    else if (initialMode == Mode::PROGRAM)
+        _enterProgramMode();
     else 
         _mode = initialMode;
 }
@@ -368,6 +374,10 @@ void BridgeCall::consume(const Message& frame) {
                 _log->info("Done");
                 _parrotState = ParrotState::PLAYING_AFTER_RECORD;            
             }
+        } else if (_mode == Mode::PROGRAM) {
+            if (symbol == '6') {
+                _playQueue = std::queue<PCM16Frame>();
+            }
         } else {
             if (symbol == '*') 
                 _dtmfAccumulator.clear();
@@ -393,6 +403,8 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
         _toneAudioRateTick(tickMs);
     } else if (_mode == Mode::PARROT) {
         _parrotAudioRateTick(tickMs);
+    } else if (_mode == Mode::PROGRAM) {
+        _programAudioRateTick(tickMs);
     }
 }
 
@@ -431,11 +443,16 @@ void BridgeCall::_processTTSAudio(const Message& frame) {
 
     // Anything that comes back from TTS goes to the play queue without
     // regard for state/mode.
-    if (frame.getType() == Message::Type::TTS_AUDIO)
+    if (frame.getType() == Message::Type::TTS_AUDIO) {
         _loadAudioMessage(frame, _playQueue);
-
-    if (_mode == Mode::PARROT) 
-        _processParrotTTSAudio(frame);
+    } 
+    // Special handling for the END signal
+    else if (frame.getType() == Message::Type::TTS_END) {
+        if (_mode == Mode::PARROT) 
+            _processParrotTTS_END(frame);
+        else if (_mode == Mode::PROGRAM) 
+            _processProgramTTS_END();
+    }
 }
 
 void BridgeCall::_processDtmfCommand(const string& cmd) {
@@ -858,7 +875,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
                 prompt += "Level is ";
                 if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(0))
                     prompt += "very high";
-                if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
+                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
                     prompt += "high";
                 else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(2)) 
                     prompt += "good";
@@ -906,45 +923,56 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 }
 
 // These are the places where we are waiting for the TTS to complete
-void BridgeCall::_processParrotTTSAudio(const Message& frame) {
+void BridgeCall::_processParrotTTS_END(const Message& frame) {
     if (_parrotState == ParrotState::TTS_GREETING_0 ||
         _parrotState == ParrotState::TTS_GREETING_1 ||
         _parrotState == ParrotState::TTS_GOODBYE) {
-        if (frame.getType() == Message::Type::TTS_END) {
+
             if (_parrotState == ParrotState::TTS_GREETING_0)
-                _parrotState = ParrotState::PLAYING_GREETING_0;
-            else if (_parrotState == ParrotState::TTS_GREETING_1)
-                _parrotState = ParrotState::PLAYING_GREETING_1;
-            else if (_parrotState == ParrotState::TTS_GOODBYE)
-                _parrotState = ParrotState::PLAYING_GOODBYE;
-            _parrotStateStartMs = _clock->time();
-        }        
+            _parrotState = ParrotState::PLAYING_GREETING_0;
+        else if (_parrotState == ParrotState::TTS_GREETING_1)
+            _parrotState = ParrotState::PLAYING_GREETING_1;
+        else if (_parrotState == ParrotState::TTS_GOODBYE)
+            _parrotState = ParrotState::PLAYING_GOODBYE;
+        _parrotStateStartMs = _clock->time();
     }
     else if (_parrotState == ParrotState::TTS_AFTER_RECORD) {
-        if (frame.getType() == Message::Type::TTS_END) {
 
-            _loadSilence(25, _playQueue);
+        _loadSilence(25, _playQueue);
 
-            // Move the recording to the end of the playback queue
-            while (!_captureQueue.empty()) {
-                _playQueue.push(_captureQueue.front());
-                _captureQueue.pop();
-            }
+        // Move the recording to the end of the playback queue
+        while (!_captureQueue.empty()) {
+            _playQueue.push(_captureQueue.front());
+            _captureQueue.pop();
+        }
 
-            // Assert the talker (echo)
-            setOutputTalkerId(_recordedTalkerId.c_str());
+        // Assert the talker (echo)
+        setOutputTalkerId(_recordedTalkerId.c_str());
 
-            _parrotState = ParrotState::PLAYING_AFTER_RECORD;
-            _parrotStateStartMs = _clock->time();
+        _parrotState = ParrotState::PLAYING_AFTER_RECORD;
+        _parrotStateStartMs = _clock->time();
 
-            _log->info("Playback start");
-        }        
+        _log->info("Playback start");
     }
 }
 
-void BridgeCall::requestTTS(const char* prompt) {
-    MessageWrapper req(Message::Type::TTS_REQ, 0, strlen(prompt), (const uint8_t*)prompt, 
-        0, 0);
+void BridgeCall::requestTTS(const char* prompt, 
+    unsigned preSilenceMs, unsigned postSilenceMs) {
+    _requestTTS(Message::Type::TTS_REQ, prompt, preSilenceMs, postSilenceMs);
+}
+
+void BridgeCall::requestPlayFile(const char* fullFileName, 
+    unsigned preSilenceMs, unsigned postSilenceMs) {
+    _requestTTS(Message::Type::TTS_FILE_REQ, fullFileName, preSilenceMs, postSilenceMs);
+}
+
+void BridgeCall::_requestTTS(Message::Type type, const char* arg, 
+    unsigned preSilenceMs, unsigned postSilenceMs) {
+    PayloadTTS payload;
+    strcpyLimited(payload.req, arg, sizeof(payload.req));
+    payload.preSilenceMs = preSilenceMs;
+    payload.postSilenceMs = postSilenceMs;
+    MessageWrapper req(type, 0, sizeof(payload), (const uint8_t*)&payload, 0, 0);
     req.setSource(_bridgeLineId, _bridgeCallId);
     req.setDest(_ttsLineId, Message::BROADCAST);
     _sink->consume(req);
@@ -953,8 +981,9 @@ void BridgeCall::requestTTS(const char* prompt) {
 void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const {    
 
     assert(msg.getType() == Message::Type::TTS_AUDIO);
+    assert(msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K);
     assert(msg.size() == BLOCK_SIZE_48K * sizeof(int16_t));
-
+    /*
     int16_t pcm48k[BLOCK_SIZE_48K];
     const uint8_t* buffer = msg.body();
     for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
@@ -962,6 +991,8 @@ void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& q
         buffer += 2;
     }
     queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
+    */
+    queue.push(PCM16Frame((const int16_t*)msg.body(), BLOCK_SIZE_48K));
 }
 
 void BridgeCall::_loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const {    
@@ -1092,5 +1123,105 @@ void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio,
     }
 }
 
+// ====== PROGRAM MODE ======================================================
+
+void BridgeCall::_enterProgramMode() {
+
+    _mode = Mode::PROGRAM;
+
+    _programSteps.clear();
+
+    int loadRc = amp::ProgramUtils::loadProgramStandard(getenv("AMP_PROGRAM_ROOT"), 
+        15000, 5000, _programSteps);
+    if (loadRc != 0) {
+        _log->error("Failed to load program from %s %d", getenv("AMP_PROGRAM_ROOT"), loadRc);
+        _programSetState(ProgramState::PROGRAM_ERROR);
+    } else {
+        _programStepPtr = 0;
+        _programSetState(ProgramState::PROGRAM_INIT);
+    }
+}
+
+void BridgeCall::_programAudioRateTick(uint32_t tickMs) {
+    if (_programState == ProgramState::PROGRAM_INIT) {
+        _programSetState(ProgramState::PROGRAM_PRE);
+    }
+    else if (_programState == ProgramState::PROGRAM_PRE) {
+        // Any more steps?  
+        if (_programStepPtr == _programSteps.size()) {
+            _programSetState(ProgramState::PROGRAM_DONE);
+        }
+        else {
+            ProgramStep& step = _programSteps[_programStepPtr];
+
+            if (step.type == ProgramStep::StepType::FILE) {
+                _log->info("Program step %u play file %s", _programStepPtr, step.arg0.c_str());
+                // Queue up the TTS request for this step
+                requestPlayFile(step.arg0.c_str(), 1000, 0);
+                _programSetState(ProgramState::PROGRAM_TTS);
+            }
+            else if (step.type == ProgramStep::StepType::TTS) {
+                _log->info("Program step %u TTS %s", _programStepPtr, step.arg0.c_str());
+                // Queue up the TTS request for this step
+                requestTTS(step.arg0.c_str(), 1000, 0);
+                _programSetState(ProgramState::PROGRAM_TTS);
+            }
+            else if (step.type == ProgramStep::StepType::PAUSE) {
+                _log->info("Program step %u pause %u", _programStepPtr, step.intervalMs);
+                _programPauseIntervalMs = step.intervalMs;
+                _programSetState(ProgramState::PROGRAM_PAUSED);
+            }
+
+            // Advance program counter
+            _programStepPtr++;
+        }
+    }
+    else if (_programState == ProgramState::PROGRAM_PLAY) {
+        // Is the last TTS request finished playing?
+        if (_playQueue.empty()) 
+            _programSetState(ProgramState::PROGRAM_PRE);
+    }
+    else if (_programState == ProgramState::PROGRAM_ERROR_PLAY) {
+        // Is the last TTS request finished playing?
+        if (_playQueue.empty()) 
+            _programSetState(ProgramState::PROGRAM_DONE);
+    }
+    else if (_programState == ProgramState::PROGRAM_PAUSED) {
+        // Is pause finished playing?
+        if (_clock->isPastWindow(_programStateStartMs, _programPauseIntervalMs))
+            _programSetState(ProgramState::PROGRAM_PRE);
+    }
+    else if (_programState == ProgramState::PROGRAM_DONE) {
+
+        _log->info("Program done");
+
+        // ###
+        // Request to have the call killed on the IAX side
+        MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+            0, tickMs * 1000);
+        msg.setSource(LINE_ID, CALL_ID);
+        msg.setDest(_lineId, _callId);
+        _bridgeOut.consume(msg);
+
+        reset();
+    }
+    else if (_programState == ProgramState::PROGRAM_ERROR) {
+        requestTTS("This program is invalid.", 1000, 0);
+        _programSetState(ProgramState::PROGRAM_ERROR_TTS);
+    }
+
+}
+
+void BridgeCall::_programSetState(ProgramState state) {
+    _programState = state;
+    _programStateStartMs = _clock->timeMs();
+}
+
+void BridgeCall::_processProgramTTS_END() {
+    if (_programState == ProgramState::PROGRAM_TTS)
+        _programSetState(ProgramState::PROGRAM_PLAY);
+    else if (_programState == ProgramState::PROGRAM_ERROR_TTS)
+        _programSetState(ProgramState::PROGRAM_ERROR_PLAY);
+}
     }
 }
