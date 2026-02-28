@@ -168,6 +168,8 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
     _lastRxMs = _clock->timeMs();
 
+    _log->info("consumePacket()");
+
     // Quietly Ignore a few types
     if (VoterUtil::getHeaderPayloadType(packet) == 3 ||
         VoterUtil::getHeaderPayloadType(packet) == 4) {
@@ -205,6 +207,9 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
         _populateHeader(0, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
+    else {
+        _log->info("Trusted");
+    }
 
     _consumePacketTrusted(packet, packetLen);
 }
@@ -217,13 +222,6 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
 
         // Capture in the circular frame buffer, if possible
         if (!_framePtrs.isFull()) {
-
-            const unsigned ptr = _framePtrs.writePtrThenPush();
-            _frames[ptr].arrivalUs = _clock->timeUs();
-            _frames[ptr].packetS = VoterUtil::getHeaderTimeS(packet);
-            _frames[ptr].packetNs = VoterUtil::getHeaderTimeNs(packet);
-            _frames[ptr].rssi = VoterUtil::getType1RSSI(packet);
-            VoterUtil::getType1Audio(packet, _frames[ptr].content, FRAME_SIZE);
 
             // Look for the leading edge of a spurt and use it to synchronize playout
             if (!_inSpurt) {
@@ -245,8 +243,19 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                         _playCursorNs = ns - _initialMarginGPS;
                     }
                 }
-                _log->info("VOTER start of TS from %s", _localPassword);
+                _log->info("VOTER start of TS from %s %u", _localPassword, _framePtrs.getDepth());
             }
+            else {
+                _log->info("In TS %u %u", _framePtrs.getDepth(), VoterUtil::getHeaderTimeNs(packet));
+            }
+
+            // Save the frame
+            const unsigned ptr = _framePtrs.writePtrThenPush();
+            _frames[ptr].arrivalUs = _clock->timeUs();
+            _frames[ptr].packetS = VoterUtil::getHeaderTimeS(packet);
+            _frames[ptr].packetNs = VoterUtil::getHeaderTimeNs(packet);
+            _frames[ptr].rssi = VoterUtil::getType1RSSI(packet);
+            VoterUtil::getType1Audio(packet, _frames[ptr].content, FRAME_SIZE);
         }
         else {
             // #### TODO: OVERFLOW COUNTER
@@ -377,6 +386,7 @@ string VoterPeer::makeChallenge() {
 }
 
 void VoterPeer::oneSecTick() {    
+
     // Check to see if an authentication packet should be sent out
     if (_peerAddr.ss_family != 0 && !_peerTrusted && 
         _localChallenge[0] && _localPassword[0]) {
@@ -389,26 +399,42 @@ void VoterPeer::oneSecTick() {
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 
-    // Generate a ping (only the server does this)
-    if (++_oneTickCounter % 2 == 0 && _peerTrusted && !_isClient) {
-        // IMPORTANT NOTE: After review of the VOTER source code, I think there
-        // is a mistake in the VOTER protocol documentation. The original docs read:
-        // 
-        // **Payload type 5 - "PING" (Connectivity Test)**
-        // "Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
-        // quality. When a client receives this packet, it is intended to be transmitted 
-        // (with the payload information intact) immediately back to the host from which 
-        // it came. The actual contents of the payload are not specifically defined for 
-        // the purposes of this protocol, and is entirely determined by the implementation 
-        // of the applicable function in the host.""
-        //
-        // However, the structure allocated to read the packet only has room for 164 bytes
-        // of payload. When sending more than 164 you start to overwrite other memory
-        // in the device.
-        uint8_t resp[HEADER_SIZE + PING_PAYLOAD_SIZE] = { 0 };
-        // #### TODO: Put a sequence number and send time into the payload.
-        _populateHeader(5, resp);
-        _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+    if (++_oneTickCounter % 2 == 0 && _peerTrusted) {
+
+        // Generate a ping (only the server does this)
+        if (!_isClient) {
+            // IMPORTANT NOTE: After review of the VOTER source code, I think there
+            // is a mistake in the VOTER protocol documentation. The original docs read:
+            // 
+            // **Payload type 5 - "PING" (Connectivity Test)**
+            // "Octets 24 and up contain 200 bytes of payload for evaluation of connectivity 
+            // quality. When a client receives this packet, it is intended to be transmitted 
+            // (with the payload information intact) immediately back to the host from which 
+            // it came. The actual contents of the payload are not specifically defined for 
+            // the purposes of this protocol, and is entirely determined by the implementation 
+            // of the applicable function in the host.""
+            //
+            // However, the structure allocated to read the packet only has room for 164 bytes
+            // of payload. When sending more than 164 you start to overwrite other memory
+            // in the device.
+            uint8_t resp[HEADER_SIZE + PING_PAYLOAD_SIZE] = { 0 };
+            // #### TODO: Put a sequence number and send time into the payload.
+            _populateHeader(5, resp);
+            _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+        }
+        // Generate GPS
+        else {
+            _log->info("GPS");
+            uint8_t resp[HEADER_SIZE + 26] = { 0 };
+            // Long (9 including null)
+            strcpy((char*)resp + 24, "4231.36N");
+            // Lat (10 including null)
+            strcpy((char*)resp + 33, "07127.45W");
+            // Evel (7 including null)
+            strcpy((char*)resp + 33, "40");
+            _populateHeader(2, resp);
+            _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));   
+        }
     }
 }
 
