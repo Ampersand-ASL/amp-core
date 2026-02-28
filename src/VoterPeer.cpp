@@ -168,8 +168,6 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
     _lastRxMs = _clock->timeMs();
 
-    _log->info("consumePacket()");
-
     // Quietly Ignore a few types
     if (VoterUtil::getHeaderPayloadType(packet) == 3 ||
         VoterUtil::getHeaderPayloadType(packet) == 4) {
@@ -206,9 +204,6 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
         uint8_t resp[HEADER_SIZE] = { 0 };
         _populateHeader(0, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
-    }
-    else {
-        _log->info("Trusted");
     }
 
     _consumePacketTrusted(packet, packetLen);
