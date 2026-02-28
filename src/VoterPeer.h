@@ -312,7 +312,7 @@ private:
     bool _masterTimingSource = false;
     bool _generalPurposeMode = false;
 
-    static const unsigned FRAME_COUNT = 8;
+    static const unsigned FRAME_COUNT = 10;
     AudioFrame _frames[FRAME_COUNT];
     // Pointers used to manage circular buffer.
     CircularQueuePointers _framePtrs;

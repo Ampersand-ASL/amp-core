@@ -242,7 +242,7 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                 _log->info("VOTER start of TS from %s", _localPassword);
             }
 
-            _log->info("In TS %u %u", _framePtrs.getDepth(), VoterUtil::getHeaderTimeNs(packet));
+            //_log->info("In TS %u %u", _framePtrs.getDepth(), VoterUtil::getHeaderTimeNs(packet));
 
             // Save the frame
             const unsigned ptr = _framePtrs.writePtrThenPush();
