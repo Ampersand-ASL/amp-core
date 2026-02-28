@@ -98,7 +98,7 @@ void PicoEventLoop::run(Log& log, Clock& clock,
         
         if (workTimeUs > slowestLoopUs) {
             slowestLoopUs = workTimeUs;
-            //log.info("Slowest loop %lu us", slowestLoopUs);
+            log.info("Slowest loop %lu us", slowestLoopUs);
         }
 
         if (trace && showStats) {

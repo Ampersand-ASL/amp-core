@@ -31,7 +31,7 @@
 
 // How long we can go without hearing from the other side before
 // giving up and resetting.
-#define TIMEOUT_INTERVAL_MS (30 * 1000)
+#define TIMEOUT_INTERVAL_MS (15 * 1000)
 // Period of no audio packets before declaring the spurt to be over
 #define SPURT_TIMEOUT_MS (80)
 
@@ -77,7 +77,8 @@ void VoterPeer::reset() {
         f.rssi = 0;
     _inSpurt = false;
     _spurtStartMs = 0;
-    _audioSeq = 1;
+    // We start ahead so that the other side has some room to back up
+    _audioSeq = 100;
     _playCursorS = 0;
     _playCursorNs = 0;
     _lastRxMs = 0;
@@ -238,11 +239,10 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
                         _playCursorNs = ns - _initialMarginGPS;
                     }
                 }
-                _log->info("VOTER start of TS from %s %u", _localPassword, _framePtrs.getDepth());
+                _log->info("VOTER start of TS from %s", _localPassword);
             }
-            else {
-                _log->info("In TS %u %u", _framePtrs.getDepth(), VoterUtil::getHeaderTimeNs(packet));
-            }
+
+            _log->info("In TS %u %u", _framePtrs.getDepth(), VoterUtil::getHeaderTimeNs(packet));
 
             // Save the frame
             const unsigned ptr = _framePtrs.writePtrThenPush();
