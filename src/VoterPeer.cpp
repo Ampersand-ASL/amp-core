@@ -205,6 +205,9 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
         _populateHeader(0, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
+    else {
+        _log->info("Got trusted");
+    }
 
     _consumePacketTrusted(packet, packetLen);
 }
@@ -398,6 +401,7 @@ void VoterPeer::oneSecTick() {
 
         // Generate a ping (only the server does this)
         if (!_isClient) {
+            _log->info("Ping");
             // IMPORTANT NOTE: After review of the VOTER source code, I think there
             // is a mistake in the VOTER protocol documentation. The original docs read:
             // 
