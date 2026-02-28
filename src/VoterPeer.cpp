@@ -166,7 +166,10 @@ bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
 void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet, 
     unsigned packetLen) {
 
+    // Record time so we can manage timeouts
     _lastRxMs = _clock->timeMs();
+    // Lock in ther reply address
+    memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
 
     // Quietly Ignore a few types
     if (VoterUtil::getHeaderPayloadType(packet) == 3 ||
@@ -196,17 +199,11 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
         }
         strcpyLimited(_remoteChallenge, remoteChallenge, sizeof(remoteChallenge));
 
-        // Grab the peer address
-        memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
-
         // Send one more type 0 packet in case it is needed to establish
         // trust in the other direction.
         uint8_t resp[HEADER_SIZE] = { 0 };
         _populateHeader(0, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
-    }
-    else {
-        _log->info("Got trusted");
     }
 
     _consumePacketTrusted(packet, packetLen);
@@ -401,7 +398,6 @@ void VoterPeer::oneSecTick() {
 
         // Generate a ping (only the server does this)
         if (!_isClient) {
-            _log->info("Ping");
             // IMPORTANT NOTE: After review of the VOTER source code, I think there
             // is a mistake in the VOTER protocol documentation. The original docs read:
             // 
@@ -423,7 +419,6 @@ void VoterPeer::oneSecTick() {
         }
         // Generate GPS
         else {
-            _log->info("GPS");
             uint8_t resp[HEADER_SIZE + 26] = { 0 };
             // Long (9 including null)
             strcpy((char*)resp + 24, "4231.36N");

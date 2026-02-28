@@ -213,6 +213,7 @@ bool VoterClient::_processInboundData() {
 void VoterClient::_processReceivedPacket(
     const uint8_t* packet, unsigned packetLen,
     const sockaddr& peerAddr, uint32_t rxStampMs) {
+    _log.info("Got packet");
     _client.consumePacket(peerAddr, packet, packetLen);
 }
 
