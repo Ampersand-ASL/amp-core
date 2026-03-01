@@ -21,98 +21,14 @@
 #include <cstdint>
 #include <functional>
 
+#include "kc1fsz-tools/CircularQueuePointers.h"
+
 #include "Runnable2.h"
 
 namespace kc1fsz {
 
 class Log;
 class Clock;
-
-/**
- * A generic class for managing the pointers in a circular queue.
- * (I'm tired of writing this over an over again.)
- */
-class CircularQueuePointers {
-public:
-    
-    CircularQueuePointers(unsigned capacity)
-    :   _capacity(capacity) {        
-        reset();
-    }
-
-    void reset() {
-        _readPtr = 0; _writePtr = 0; _fault = false; _depth = 0;
-    }
-
-    bool isEmpty() const {
-        return _readPtr == _writePtr;
-    }
-
-    bool isFull() const {
-        return _next(_writePtr) == _readPtr;
-    }
-
-    /**
-     * @return The current number of items on the queue
-     */
-    unsigned getDepth() const {
-        return _depth;
-    }
-
-    bool isFault() const { return _fault; }
-
-    unsigned writePtr() const { return _writePtr; }
-
-    unsigned writePtrThenPush() { 
-        unsigned t = _writePtr; 
-        push(); 
-        return t;
-    }
-
-    unsigned readPtr() const { return _readPtr; }
-
-    unsigned readPtrThenPop() { 
-        unsigned t = _readPtr; 
-        pop(); 
-        return t;
-    }
-
-    void push() { 
-        if (isFull())
-            _fault = true;
-        else {
-            _writePtr = _next(_writePtr);
-            _depth++;
-        }
-    }
-
-    void pop() {
-        if (isEmpty())
-            _fault = true;
-        else {
-            _readPtr = _next(_readPtr);
-            _depth--;
-        }
-    }
-
-private:
-
-    /**
-     * Increments the value, wrapping if needed
-     */
-    unsigned _next(unsigned i) const {
-        i++;
-        if (i == _capacity)
-            i = 0;
-        return i;
-    }
-
-    const unsigned _capacity;
-    unsigned _readPtr = 0;
-    unsigned _writePtr = 0;
-    bool _fault = false;
-    unsigned _depth = 0;
-};
 
     namespace amp {
 
