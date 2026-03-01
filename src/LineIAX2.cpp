@@ -36,7 +36,10 @@
 #include <iostream>
 #include <algorithm>
 
+// Crypto not supported on microcontroller
+#ifndef PICO_BOARD
 #include "ed25519.h"
+#endif
 
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/NetUtils.h"
@@ -1166,6 +1169,10 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 unsigned char sigBin[64];
                 asciiHexToBin(sigHex, 128, sigBin, 64);
 
+// ED25519 not supported on microcontroller at this time.
+// ##### TODO: Come up with a better way to plug in crypto stuff to 
+// ##### avoid messy ifndef
+#ifndef PICO_BOARD                
                 // Do the actual public key validation 
                 if (ed25519_verify(sigBin, 
                     (const uint8_t*)challengeTxt, strlen(challengeTxt), 
@@ -1177,6 +1184,9 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 else {
                     _log.info("Call %u invalid signature", destCallId);
                 }
+#else
+                _log.info("Call %u invalid signature", destCallId);
+#endif
 
                 // Normally the sequence/ACK would be handled later, but this message
                 // is a special case.
@@ -1369,6 +1379,12 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             return;
         }
 
+// #### TODO: Come up with a better way to plug in crypto stuff to 
+// #### avoid messy ifdef
+#ifdef PICO_BOARD
+        _log.error("Token type not supported");
+        return;
+#else 
         // Sign the challenge token using our private key
         uint8_t seedBin[32];
         asciiHexToBin(_privateKeyHex, 64, seedBin, 32);
@@ -1390,6 +1406,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
 
         _sendFrameToPeer(authrepFrame, call);
+#endif 
     } 
     // REJECT
     else if (frame.getType() == 6 && frame.getSubclass() == 6) {
