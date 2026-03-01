@@ -1792,7 +1792,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             frame.getType(), frame.getSubclass());
         _log.infoDump("Frame", frame.buf(), frame.size());
     }
- }
+}
 
 int LineIAX2::_allocateCallIx() {
     for (unsigned i = 0; i < _maxCalls; i++)
@@ -1847,7 +1847,7 @@ void LineIAX2::_processMiniFrame(const uint8_t* buf, unsigned bufLen,
             }
         },
         // Predicate
-        [sourceCallId, unverifiedPeerAddr](const Call& call) {
+        [sourceCallId, &unverifiedPeerAddr](const Call& call) {
             return call.remoteCallId == sourceCallId && call.isPeerAddr(unverifiedPeerAddr);
         }
     );
