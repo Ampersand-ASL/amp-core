@@ -139,7 +139,7 @@ void BridgeCall::init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock,
     if (netTestBindAddr)
         _netTestBindAddr = netTestBindAddr;
     else 
-        _netTestBindAddr = "0.0.0.0";
+        _netTestBindAddr.clear();
     _bridgeIn.init(_log, _traceLog, _clock);
     _bridgeOut.init(_log, _clock);
 }
@@ -753,21 +753,28 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
         setOutputTalkerId(PARROT_TALKER_ID);
 
-        // Launch the network test for this new connection
-        Poker::Request req;
-        strcpyLimited(req.bindAddr, _netTestBindAddr.c_str(), sizeof(_netTestBindAddr));
-        strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
-        req.timeoutMs = 250;
+        if (!_netTestBindAddr.empty()) {
+            // Launch the network test for this new connection
+            Poker::Request req;
+            strcpyLimited(req.bindAddr, _netTestBindAddr.c_str(), sizeof(_netTestBindAddr));
+            strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
+            req.timeoutMs = 250;
 
-        MessageWrapper msg(Message::Type::NET_DIAG_1_REQ, 0, 
-            sizeof(req), (const uint8_t*)&req, 0, 0);
-        msg.setSource(_bridgeLineId, _bridgeCallId);
-        msg.setDest(_netTestLineId, Message::BROADCAST);
-        _sink->consume(msg);     
+            MessageWrapper msg(Message::Type::NET_DIAG_1_REQ, 0, 
+                sizeof(req), (const uint8_t*)&req, 0, 0);
+            msg.setSource(_bridgeLineId, _bridgeCallId);
+            msg.setDest(_netTestLineId, Message::BROADCAST);
+            _sink->consume(msg);     
 
-        _netTestResult.code = -99;
-        _parrotState = ParrotState::WAITING_FOR_NET_TEST;
-        _parrotStateStartMs = _clock->time();
+            _netTestResult.code = -99;
+            _parrotState = ParrotState::WAITING_FOR_NET_TEST;
+            _parrotStateStartMs = _clock->time();
+        }
+        else {
+            _parrotState = ParrotState::GREETING_0;
+            // Set a code that will bypass this part of the greeting
+            _netTestResult.code = -99;
+        }
     }
     else if (_parrotState == ParrotState::WAITING_FOR_NET_TEST) {
         // Check for timeout
