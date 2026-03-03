@@ -110,7 +110,8 @@ void LineParrot::consume(const Message& msg) {
 
             _setState(State::STATE_RECORDING);
         } 
-        else if (_state == State::STATE_RECORDING) {
+
+        if (_state == State::STATE_RECORDING) {
             if (_captureQueueDepth < MAX_CAPTURE_FRAMES) {
                 _captureQueue.push(PCM16Frame((const int16_t*)msg.body(), BLOCK_SIZE_48K));
                 _captureQueueDepth++;

@@ -163,6 +163,8 @@ unsigned codecSampleRate(CODECType type) {
         return 16000;
     else if (type == CODECType::IAX2_CODEC_SLIN_48K)
         return 48000;
+    else if (type == CODECType::IAX2_CODEC_PCM_48K)
+        return 48000;
     else 
         return 0;
 }
