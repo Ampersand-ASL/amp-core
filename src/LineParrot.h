@@ -33,12 +33,14 @@ class Clock;
 
     namespace amp {
 
+/**
+ * This is a special line that calls into the bridge and then makes recordings/paybacks
+ * of audio activity.
+ */
 class LineParrot : public Line {
 public:
 
-    static const unsigned BLOCK_SIZE_8K = 160;
-
-    /**
+     /**
      * @param consumer This is the sink interface that received messages
      * will be sent to. 
      */
@@ -46,12 +48,8 @@ public:
         unsigned audioDestLineId, unsigned ttsLineId);
 
     int open();
-
-    /**
-     * Resets all calls as a side-effect.
-     */
     void close();
-    
+    void setParrotLevelThresholds(std::vector<int>& thresholds) { _levelThresholds = thresholds; }
     void setTrace(bool a) { _trace = a; }
 
     struct AudioStats {
@@ -63,7 +61,7 @@ public:
     /**
      * Performs analysis of an audio recording
      */
-    static AudioStats analyzeRecording(const std::vector<PCM16Frame>& audio);
+    static AudioStats analyzeRecording(const std::vector<PCM16Frame>& audio48k);
 
     /**
      * @returns A statement of the audio analysis, suitable for TTS.
@@ -108,6 +106,7 @@ private:
     const unsigned _audioDestLineId;
     // Where the text-to-speech requests get sent
     const unsigned _ttsLineId;
+    bool _enabled = false;
     // Enables detailed network tracing
     bool _trace = false;
 

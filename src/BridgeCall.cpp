@@ -154,7 +154,9 @@ void BridgeCall::reset() {
     _echo = false;
     _sourceAddrValidated = false;
     _permanent = false;
-    
+    _callStartMs = 0;
+    _callMaxDurationMs = 0;
+
     _bridgeIn.reset();
     _bridgeOut.reset();
 
@@ -168,7 +170,6 @@ void BridgeCall::reset() {
     _playQueue = std::queue<PCM16Frame>();
     _parrotState = ParrotState::NONE;
     _parrotStateStartMs = 0;
-    _parrotStartMs = 0;
     _lastUnkeyProcessedMs = 0;
 
     _stageInSet = false;
@@ -199,7 +200,8 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _lineId = lineId;  
     _callId = callId; 
     _remoteNodeNumber = remoteNodeNumber;
-
+    _callStartMs = _clock->timeMs();
+    _callMaxDurationMs = 0;
     _lastAudioRxMs = 0;
 
     _bridgeIn.setCodec(codec);
@@ -217,19 +219,33 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeIn.setKerchunkFilterEnabled(useKerchunkFilter);
     _bridgeIn.setKerchunkFilterEvaluationIntervalMs(kerchunkFilterEvaluationIntervalMs);
 
-    if (initialMode == Mode::PARROT)
+    if (initialMode == Mode::PARROT) {
         _enterParrotMode();
+        if (!permanent)
+            _callMaxDurationMs = PARROT_SESSION_TIMEOUT_MS;
+    }
     else if (initialMode == Mode::PROGRAM)
         _enterProgramMode();
+    else if (initialMode == Mode::NORMAL)
+        _enterNormalMode();
     else 
         _mode = initialMode;
 }
 
-void BridgeCall::_enterParrotMode() {
-    _mode = Mode::PARROT;
-    _parrotState = ParrotState::CONNECTED;
-    _parrotStartMs = _clock->timeMs();
-    _parrotStateStartMs = _clock->time();
+void BridgeCall::_forceEnd() {
+    // Request to have the call killed on the IAX side
+    MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+        0, 0);
+    msg.setSource(LINE_ID, CALL_ID);
+    msg.setDest(_lineId, _callId);
+    _bridgeOut.consume(msg);
+    // Reset this bridge session
+    reset();
+}
+
+void BridgeCall::_enterNormalMode() {
+    _log->info("Call %u:%u going into normal conference mode", _lineId, _callId);
+    _mode = Mode::NORMAL;
 }
 
 bool BridgeCall::isRecentCommander() const {
@@ -410,16 +426,33 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
 }
 
 void BridgeCall::oneSecTick() {
+
     // Has a full DMTF sequence been collected?
     if (!_dtmfAccumulator.empty() && 
          _clock->isPastWindow(_lastDtmfRxMs, DTMF_WINDOW_MS)) {
         _processDtmfCommand(_dtmfAccumulator);
         _dtmfAccumulator.clear();
     }
+
     // Refresh the talker as long as there is active audio being 
     // transmitted.
     if (_bridgeOut.isActiveRecently())
         _signalTalker();
+
+    // Mode-specific activity
+    if (_mode == Mode::NORMAL) 
+        _normalOneSecTick();
+    else if (_mode == Mode::PARROT)
+        _parrotOneSecTick();
+}
+
+void BridgeCall::_normalOneSecTick() {
+    // General timeout
+    if (_callMaxDurationMs != 0 && 
+        _clock->isPastWindow(_callStartMs, _callMaxDurationMs)) {
+        _log->info("Timing out call %u/%d", _lineId, _callId);
+        _forceEnd();
+    }
 }
 
 void BridgeCall::setOutputTalkerId(const char* talkerId) {
@@ -654,6 +687,11 @@ void BridgeCall::_toneAudioRateTick(uint32_t tickMs) {
 
 // ===== Parrot Related =======================================================
 
+void BridgeCall::_enterParrotMode() {
+    _mode = Mode::PARROT;
+    _parrotState = ParrotState::CONNECTED;
+}
+
 /**
  * This function will be called by the input adaptor after the PLC and 
  * transcoding has happened.
@@ -711,19 +749,7 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
 
 void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
-    if (_parrotState == ParrotState::WAITING_FOR_RECORD) {
-        // General timeout
-        if (_clock->isPastWindow(_parrotStartMs, PARROT_SESSION_TIMEOUT_MS)) {
-
-            _log->info("Timing out parrot call %u/%d", _lineId, _callId);
-
-            requestTTS("Parrot session ended. Goodbye!");
-
-            _parrotState = ParrotState::TTS_GOODBYE;
-            _parrotStateStartMs = _clock->time();
-        }
-    }
-    else if (_parrotState == ParrotState::CONNECTED) {
+    if (_parrotState == ParrotState::CONNECTED) {
 
         setOutputTalkerId(PARROT_TALKER_ID);
 
@@ -808,8 +834,17 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
     else if (_parrotState == ParrotState::PLAYING_GREETING_1) {
         if (_playQueue.empty()) {
-            _parrotState = ParrotState::WAITING_FOR_RECORD;
-            _parrotStateStartMs = _clock->time();
+
+            // Once the greeting has compelted we either wait for 
+            // local audio activity to record/playback or we 
+            // dump the call into the conference as a normal participant.
+            if (!_bridge->_parrotConference) {
+                _parrotState = ParrotState::WAITING_FOR_RECORD;
+                _parrotStateStartMs = _clock->time();
+            }  
+            else {
+                _enterNormalMode();
+            }
         }
     }
     else if (_parrotState == ParrotState::RECORDING) {
@@ -872,16 +907,23 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
     else if (_parrotState == ParrotState::PLAYING_GOODBYE) {
         if (_playQueue.empty()) {
+            _forceEnd();
+        }
+    }
+}
 
-            // Request to have the call killed on the IAX side
-            MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
-                0, tickMs * 1000);
-            msg.setSource(LINE_ID, CALL_ID);
-            msg.setDest(_lineId, _callId);
-            _bridgeOut.consume(msg);
+void BridgeCall::_parrotOneSecTick() {
+    // Check for timeout
+    if (_parrotState == ParrotState::WAITING_FOR_RECORD) {
+        if (_callMaxDurationMs != 0 &&
+            _clock->isPastWindow(_callStartMs, _callMaxDurationMs)) {
 
-            // Reset this bridge session
-            reset();
+            _log->info("Timing out call %u/%d", _lineId, _callId);
+
+            requestTTS("Parrot session ended. Goodbye!");
+
+            _parrotState = ParrotState::TTS_GOODBYE;
+            _parrotStateStartMs = _clock->time();
         }
     }
 }

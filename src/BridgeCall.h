@@ -247,6 +247,9 @@ private:
     bool _sourceAddrValidated = false;
     Mode _mode = Mode::NORMAL;
     bool _permanent = false;
+    uint64_t _callStartMs = 0;
+    // Set this to zero for non max-duration
+    uint64_t _callMaxDurationMs = 0;
 
     BridgeIn _bridgeIn;
     BridgeOut _bridgeOut;
@@ -287,12 +290,14 @@ private:
     void _requestTTS(Message::Type type, const char* arg, unsigned preSilenceMs, 
         unsigned postSilenceMs);
     void _signalTalker();
+    void _forceEnd();
 
     // ----- Normal Mode Related ----------------------------------------------
-
+    
+    void _enterNormalMode();
     void _processDtmfCommand(const std::string& cmd);
-
     void _processNormalAudio(const Message& msg);
+    void _normalOneSecTick();
 
     // This is the call's contribution to the conference when in normal mode.
     // IMPORTANT: All of the signaling has been handled ahead of this point
@@ -319,6 +324,7 @@ private:
     void _enterParrotMode();
     void _processParrotAudio(const Message& msg);
     void _parrotAudioRateTick(uint32_t tickMs);
+    void _parrotOneSecTick();
     void _processParrotTTS_END(const Message& msg);
 
     void _loadSilence(unsigned ticks, std::queue<PCM16Frame>& queue) const;
@@ -333,7 +339,7 @@ private:
     void _loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const;
 
     // The start of the parrot session, used to manage session timeout
-    uint64_t _parrotStartMs = 0;
+    //uint64_t _parrotStartMs = 0;
 
     // Last time the parrot received audio. Used to detect end of 
     // transmission.

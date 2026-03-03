@@ -74,6 +74,8 @@ int LineParrot::open() {
     msg.setDest(_audioDestLineId, Message::BROADCAST);
     _bus.consume(msg);
 
+    _enabled = true;
+
     return 0;
 }
 
@@ -82,9 +84,13 @@ void LineParrot::close() {
     payload.localNumber[0] = 0;
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "Parrot");
     _sendSignal(Message::SignalType::CALL_END, &payload, sizeof(payload));
+    _enabled = false;
 } 
 
 void LineParrot::consume(const Message& msg) {   
+
+    if (!_enabled)
+        return;
 
     if (msg.isVoice()) {
 
@@ -139,6 +145,9 @@ void LineParrot::consume(const Message& msg) {
 }
 
 void LineParrot::audioRateTick(uint32_t ms) {
+
+    if (!_enabled)
+        return;
 
     if (_state == State::STATE_RECORDING) {
         // Look for a timeout on the recording

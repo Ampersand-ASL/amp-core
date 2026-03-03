@@ -75,7 +75,8 @@ public:
         unsigned lineId, unsigned ttsLineId, 
         unsigned netTestLineId, const char* netTestBindAddr, 
         unsigned netDestLineId, unsigned statsLineId,
-        BridgeCall* callSpace, unsigned callSpaceLen);
+        BridgeCall* callSpace, unsigned callSpaceLen,
+        bool parrotConference = false);
 
     void reset();
 
@@ -159,6 +160,7 @@ private:
     unsigned _statusMessageLevel = 0;
 
     uint64_t _maxTickUs = 0;
+    const bool _parrotConference;
 };
 
 // #### TODO: CAN WE CONSOLIDATE THE CONFIG POLLER WITH THIS?
