@@ -18,6 +18,7 @@
 
 #include <functional>
 #include <queue>
+#include <vector>
 
 #include "PCM16Frame.h"
 #include "Line.h"
@@ -42,7 +43,7 @@ public:
      * will be sent to. 
      */
     LineParrot(Log& log, Clock& clock, unsigned lineId, MessageConsumer& consumer, 
-        unsigned audioDestLineId);
+        unsigned audioDestLineId, unsigned ttsLineId);
 
     int open();
 
@@ -53,29 +54,47 @@ public:
     
     void setTrace(bool a) { _trace = a; }
 
+    struct AudioStats {
+        bool good = false;
+        float peakPower = 0;
+        float avgPower = 0;
+    };
+
+    /**
+     * Performs analysis of an audio recording
+     */
+    static AudioStats analyzeRecording(const std::vector<PCM16Frame>& audio);
+
+    /**
+     * @returns A statement of the audio analysis, suitable for TTS.
+     */
+    static std::string summarizeAnalysis(const AudioStats& stats, 
+        std::vector<int>& levelThresholds);
+
     // ----- Line/MessageConsumer-----------------------------------------------------
 
     virtual void consume(const Message& m);
 
     // ----- Runnable -------------------------------------------------------
 
-    virtual bool run2();  
     virtual void audioRateTick(uint32_t tickTimeMs);
-    virtual void oneSecTick();
 
 private:
 
     enum State {
-        STATE_INIT,
         STATE_LISTENING,
         STATE_RECORDING,
+        STATE_POST_RECORDING_TTS,
+        STATE_PAUSE_AFTER_RECORDING,
         STATE_PLAYING
     };
 
     void _setState(State state);
     void _endRecording();
+    void _endAnalysisTTS();
 
     // #### TODO: CONSIDER MOVING SOME OF THIS STUFF TO Line
+    void _requestTTS(const char* prompt);
     void _sendSignal(Message::SignalType type, void* body, unsigned len);
     void _sendSignal(Message::SignalType type, void* body, unsigned len,
         unsigned destLineId, unsigned destCallId);
@@ -87,17 +106,21 @@ private:
     MessageConsumer& _bus;
     // Where the inbound audio gets sent
     const unsigned _audioDestLineId;
+    // Where the text-to-speech requests get sent
+    const unsigned _ttsLineId;
     // Enables detailed network tracing
     bool _trace = false;
 
-    State _state = State::STATE_INIT;
+    State _state = State::STATE_LISTENING;
     uint64_t _stateStartMs = 0;
+    uint64_t _lastAudioRxMs = 0;
 
     // The audio captured from the caller
     std::queue<PCM16Frame> _captureQueue;
     unsigned _captureQueueDepth = 0;
 
     std::queue<PCM16Frame> _playQueue;
+    std::vector<int> _levelThresholds;
 };
     }
 }

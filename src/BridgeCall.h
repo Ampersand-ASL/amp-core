@@ -332,8 +332,6 @@ private:
      */
     void _loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& queue) const;
 
-    void _analyzeRecording(const std::vector<PCM16Frame>& audio, float* peakPower, float* avgPower);
-
     // The start of the parrot session, used to manage session timeout
     uint64_t _parrotStartMs = 0;
 

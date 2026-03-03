@@ -30,6 +30,7 @@
 #include "Poker.h"
 #include "Bridge.h"
 #include "ProgramUtils.h"
+#include "LineParrot.h"
 
 // The duration of silence after which the parrot decides the 
 // recording should be ended.
@@ -836,8 +837,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             }
 
             // Analyze the recording for relevant stats
-            float peakPower, avgPower;
-            _analyzeRecording(captureCopy, &peakPower, &avgPower);
+            LineParrot::AudioStats stats = LineParrot::analyzeRecording(captureCopy);
 
             // Re-queue the captured frames
             for (auto it = captureCopy.begin(); it != captureCopy.end(); it++)
@@ -847,48 +847,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _recordedTalkerId = _talkerId;
 
             // Create the speech that will be sent to the caller
-            string prompt;
-            char sp[64];
-           
-            // #### TODO: DO A BETTER JOB ON THE CLIPPING CASE
+            string prompt = LineParrot::summarizeAnalysis(stats, _bridge->_parrotLevelThresholds);
 
-            int peakPowerInt = std::round(peakPower);
-            if (peakPowerInt < -40) {
-                snprintf(sp, 64, "Peak is less than minus 40db");
-            } else if (peakPowerInt < 0) {                
-                snprintf(sp, 64, "Peak is minus %ddb", abs(peakPowerInt));
-            } else {
-                snprintf(sp, 64, "Peak is 0db");
-            }
-            prompt += sp;
-            prompt += ", ";
-
-            int avgPowerInt = std::round(avgPower);
-            if (avgPower < -40) {
-                snprintf(sp, 64, "Average is less than minus 40db");
-            } else if (avgPower < 0) {
-                snprintf(sp, 64, "Average is minus %ddb", abs(avgPowerInt));
-            } else {
-                snprintf(sp, 64, "Average is 0db");
-            }
-            prompt += sp;
-            prompt += ". ";
-
-            // Now add some subjective commentary (CONTROVERSIAL!)
-            if (_bridge->_parrotLevelThresholds.size() >= 4) {
-                prompt += "Level is ";
-                if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(0))
-                    prompt += "very high";
-                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
-                    prompt += "high";
-                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(2)) 
-                    prompt += "good";
-                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(3)) 
-                    prompt += "low";
-                else 
-                    prompt += "very low";
-                prompt += ". ";
-            }
             prompt += "Playback.";
 
             // Queue a request for TTS
@@ -1057,74 +1017,6 @@ void BridgeCall::_loadSweep(std::queue<PCM16Frame>& queue) {
     // Sweep
     for (unsigned f = 0; f < upperHz; f += 100)
         _loadCw(0.5, f, 5, queue);
-}
-
-void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio, 
-    float* peakPower, float* avgPower) {
-
-    unsigned blockSize = 160 * 50;
-
-    // Perform the audio analysis on the recording using the David NR9V method. 
-    float peak = 0;
-    float avgSquareBlock = 0;
-    unsigned sampleCountBlock = 0;
-    float peakAvgSquare = 0;
-
-    unsigned frameCount = audio.size();
-
-    // Ignore the first 300ms of the recording to avoid distortion due to pops/clips
-    unsigned startI = 300 / 20;
-    // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
-    // influence of tail.
-    unsigned endIgnoreCount = 300 / 20;
-    unsigned endI = 0;
-    if (frameCount > endIgnoreCount)
-        endI = frameCount - endIgnoreCount;
-    else 
-        endI = 0;
-    // Look for the case where there is no audio left to analyze
-    if (endI <= startI) {
-        *peakPower = -96.0;
-        *avgPower = -96.0;
-        _log->info("Recording too short to analyze");
-        return;
-    }
-
-    for (unsigned j = startI; j < endI; j++) {
-        assert(audio.at(j).size() == BLOCK_SIZE_48K);
-        for (unsigned i = 0; i < BLOCK_SIZE_48K; i += 6) {
-            
-            int16_t sample = abs(audio.at(j).data()[i]);
-
-            if (sample > peak) {
-                peak = sample;
-            }
-
-            avgSquareBlock += (float)sample * (float)sample;
-            sampleCountBlock++;
-
-            // On every complete block we stop to see if we have a new peak average
-            if (sampleCountBlock == blockSize) {
-                avgSquareBlock /= (float)sampleCountBlock;
-                if (avgSquareBlock > peakAvgSquare)
-                    peakAvgSquare = avgSquareBlock;
-                sampleCountBlock = 0;
-                avgSquareBlock = 0;
-            }
-        }
-    }
-    
-    if (peak == 0) {
-        *peakPower = -96.0;
-    } else {
-        *peakPower = 10.0 * log10((peak * peak) / (32767.0f * 32767.0f));
-    }
-
-    if (peakAvgSquare == 0) {
-        *avgPower = -96.0;
-    } else {
-        *avgPower = 10.0 * log10(peakAvgSquare / (32767.0f * 32767.0f));
-    }
 }
 
 // ====== PROGRAM MODE ======================================================
