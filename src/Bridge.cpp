@@ -429,6 +429,12 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
         // This is the target for the mixing of the conference audio
         int16_t mixedFrame[BLOCK_SIZE_48K] = { 0 };
+        // Default to scale of 1.0 in q11 format
+        int16_t echoScale_q11 = 2048;
+        // If this call has echo enabled then compute the scaling factor that
+        // should be applied to the local audio.
+        if (_calls[i].isEcho()) 
+            echoScale_q11 = _calls[i].getEchoScale() * (32768.0f / 16.0f);
 
         // Now do the actual mixing
         if (mixCount > 0) {
@@ -443,7 +449,7 @@ void Bridge::audioRateTick(uint32_t tickMs) {
                     continue;
                 // NOTE: This appears to be the most time-critical step in this 
                 // process at the moment.
-                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixCount, tickMs);
+                _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixCount, tickMs, echoScale_q11);
             }
         }
 

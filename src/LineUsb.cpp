@@ -112,7 +112,7 @@ LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer,
         signalDestLineId) {
 }
 
-int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel) {
+int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, bool echo) {
 
     close();
 
@@ -256,7 +256,7 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     _inError = false;
 
     // Call up to the base for signaling
-    _open();
+    _open(echo);
 
     return 0;
 }

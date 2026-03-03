@@ -48,7 +48,7 @@ public:
      * in dB.
      * @param captureLevel Used to set the "Mic Capture Volume" control, in dB.
      */
-    int open(int cardNumber, int playLevelL, int playLevelR, int captureLevel);
+    int open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, bool echo = false);
 
     void close();
 

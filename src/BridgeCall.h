@@ -124,6 +124,11 @@ public:
 
     bool isEcho() const { return _echo; }
 
+    /**
+     * If echo is enabled this factor is used to scale the local audio.
+     */
+    float getEchoScale() const { return _echoScale; }
+
     std::string getRemoteNodeNumber() const { return _remoteNodeNumber; }
 
     /**
@@ -153,8 +158,11 @@ public:
      * @param calls The total number of calls that are being combined. This
      *   is used to scale this call's contribution appropriately.
      * @param tickMs The start of the time interval for which this frame is applicable.
+     * @param sacle_q11 An additional scaling factor in q11 fixed-point format. For 
+     * reference, q11 is (normal / 2048.0) and a 1.0 = 2048.
      */
-    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, int calls, uint32_t tickMs);    
+    void extractInputAudio(int16_t* pcmBlock, unsigned blockSize, int calls, uint32_t tickMs,
+        int16_t scale_q11 = 2048);    
 
     /**
      * Clear the call's contribution so that we never use it again.
@@ -235,6 +243,7 @@ private:
     // #### TODO: MOVE TO BRIDGE
 
     bool _echo = false;
+    float _echoScale = 1.0;
     bool _sourceAddrValidated = false;
     Mode _mode = Mode::NORMAL;
     bool _permanent = false;

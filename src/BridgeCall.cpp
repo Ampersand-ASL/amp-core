@@ -542,7 +542,7 @@ void BridgeCall::_processNormalAudio(const Message& msg) {
  * conference audio. 
  */
 void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize, 
-    int calls, uint32_t tickMs) {
+    int calls, uint32_t tickMs, int16_t scale_q11) {
     assert(blockSize == BLOCK_SIZE_48K);   
     if (_stageInSet) {
         // Make the fixed-point scale factor
@@ -554,6 +554,10 @@ void BridgeCall::extractInputAudio(int16_t* pcmBlock, unsigned blockSize,
             // to give the compiler the best chance at optimization.
             int32_t product = (int32_t)scaleFixed * (int32_t)_stageIn[i];
             product >>= 15;            
+            // Now multiply the q15 audio value by the q11 scaling factor
+            product *= (int32_t)scale_q11;
+            product >>= 11;
+            // Contribute to the existing audio value
             pcmBlock[i] += product;
         }
     }
