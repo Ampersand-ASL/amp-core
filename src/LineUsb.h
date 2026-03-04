@@ -47,8 +47,10 @@ public:
      * @param playLevelR Used to set the "Speaker Playback Volume" control on the right,
      * in dB.
      * @param captureLevel Used to set the "Mic Capture Volume" control, in dB.
+     * @param echoGainDb In dB.
      */
-    int open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, bool echo = false);
+    int open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, 
+        bool echo = false, float echoGainDb = 0.0);
 
     void close();
 

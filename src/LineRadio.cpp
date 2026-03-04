@@ -226,13 +226,14 @@ void LineRadio::_sendTalkerId() {
     _sendSignal(Message::SignalType::CALL_TALKERID, talkerId, strlen(talkerId) + 1);
 }
 
-void LineRadio::_open(bool echo) {    
+void LineRadio::_open(bool echo, float echoGainDb) {    
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
     PayloadCallStart payload;
     payload.codec = CODECType::IAX2_CODEC_SLIN_48K;
     payload.bypassJitterBuffer = true;
     payload.echo = echo;
+    payload.echoGainDb = echoGainDb;
     payload.startMs = _clock.time();
     payload.localNumber[0] = 0;
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio");

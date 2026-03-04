@@ -148,7 +148,14 @@ void ConfigPoller::_populateDefaults(json& j) {
     if (!j.contains("sa818vol")) {
         j["sa818vol"] = "8";
     }
+    if (!j.contains("duplexmode")) {
+        j["duplexmode"] = "0";
+    }
+    if (!j.contains("echogain")) {
+        j["echogain"] = "0";
+    }
 }
 
     }
 }
+

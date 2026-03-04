@@ -134,7 +134,7 @@ protected:
 
     void _setCosStatus(bool cos);
 
-    void _open(bool echo = false);
+    void _open(bool echo, float echoGainDb);
     void _close();
 
     Log& _log;

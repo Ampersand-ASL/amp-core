@@ -276,13 +276,16 @@ void Bridge::consume(const Message& msg) {
                 _log.info("Enabling kerchunk filter, delay %u ms", 
                     _kerchunkFilterDelayMs);
 
+            // Here we are converting the gain from a dB float to 
+            // a q11 fixed integer format.
+            float echoGain = std::pow(10.0f, (payload.echoGainDb / 20.0f));
+            int16_t echoGainQ11 = echoGain * 2048.0f;
+
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
                 payload.startMs, payload.codec, payload.bypassJitterBuffer, 
                 payload.echo, 
-                // Here we are converting the scale factor from a float to 
-                // a q11 fixed integer format.
-                payload.echoScale * 2048.0,
+                echoGainQ11,
                 payload.sourceAddrValidated, _defaultMode, 
                 payload.remoteNumber, payload.permanent, useKerchunkFilter,
                 _kerchunkFilterDelayMs);

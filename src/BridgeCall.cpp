@@ -499,18 +499,19 @@ void BridgeCall::_processDtmfCommand(const string& cmd) {
     if (cmd.starts_with("*3")) {
         // Parse off the node number
         string targetNode = cmd.substr(2);
+        if (!targetNode.empty()) {
+            _log->info("DTMF request to call %s -> %s", 
+                _bridge->_nodeNumber.c_str(), targetNode.c_str());
 
-        _log->info("DTMF request to call %s -> %s", 
-            _bridge->_nodeNumber.c_str(), targetNode.c_str());
-
-        // Create a signal and publish it to the LineIAX2 for processing
-        PayloadCall payload;
-        strcpyLimited(payload.localNumber, _bridge->_nodeNumber.c_str(), sizeof(payload.localNumber));
-        strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
-        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
-            sizeof(payload), (const uint8_t*)&payload, 0, 0);
-        msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
-        _bridge->_bus.consume(msg);
+            // Create a signal and publish it to the LineIAX2 for processing
+            PayloadCall payload;
+            strcpyLimited(payload.localNumber, _bridge->_nodeNumber.c_str(), sizeof(payload.localNumber));
+            strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
+            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+                sizeof(payload), (const uint8_t*)&payload, 0, 0);
+            msg.setDest(_bridge->_networkDestLineId, Message::UNKNOWN_CALL_ID);
+            _bridge->_bus.consume(msg);
+        }
     }
     // *71 drop all outbound calls
     else if (cmd.starts_with("*71")) {
