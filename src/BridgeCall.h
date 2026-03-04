@@ -84,9 +84,15 @@ public:
 
     /**
      * Used at the very beginning of a call.
+     * @param echo Controls whether this call's transmit audio is wrapped
+     * back to receive.
+     * @param echoScaleQ11 A scaling factor applied to this call's transmit
+     * audio when echoing it back to recieved. This number is in Q11 format
+     * (i.e. 1.0 is expressed as 2048)!
      */
     void setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-        bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
+        bool bypassJitterBuffer, bool echo, int16_t echoScaleQ11, 
+        bool sourceAddrValidated, Mode initialMode,
         const char* remoteNodeNumber, bool permanent, bool useKerchunkFilter,
         unsigned kerchunkFilterEvaluationIntervalMs);
 
@@ -126,8 +132,9 @@ public:
 
     /**
      * If echo is enabled this factor is used to scale the local audio.
+     * The scale is expressed in q11 format (i.e. 1.0 = 2048)
      */
-    float getEchoScale() const { return _echoScale; }
+    int16_t getEchoScale() const { return _echoScale; }
 
     std::string getRemoteNodeNumber() const { return _remoteNodeNumber; }
 
@@ -243,7 +250,8 @@ private:
     // #### TODO: MOVE TO BRIDGE
 
     bool _echo = false;
-    float _echoScale = 1.0;
+    // Default to 1 in q11 format
+    int16_t _echoScale = 2048;
     bool _sourceAddrValidated = false;
     Mode _mode = Mode::NORMAL;
     bool _permanent = false;

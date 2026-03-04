@@ -277,7 +277,11 @@ void Bridge::consume(const Message& msg) {
 
             BridgeCall& call = _calls.at(newIndex);
             call.setup(msg.getSourceBusId(), msg.getSourceCallId(), 
-                payload.startMs, payload.codec, payload.bypassJitterBuffer, payload.echo, 
+                payload.startMs, payload.codec, payload.bypassJitterBuffer, 
+                payload.echo, 
+                // Here we are converting the scale factor from a float to 
+                // a q11 fixed integer format.
+                payload.echoScale * 2048.0,
                 payload.sourceAddrValidated, _defaultMode, 
                 payload.remoteNumber, payload.permanent, useKerchunkFilter,
                 _kerchunkFilterDelayMs);
@@ -429,12 +433,6 @@ void Bridge::audioRateTick(uint32_t tickMs) {
 
         // This is the target for the mixing of the conference audio
         int16_t mixedFrame[BLOCK_SIZE_48K] = { 0 };
-        // Default to scale of 1.0 in q11 format
-        int16_t echoScale_q11 = 2048;
-        // If this call has echo enabled then compute the scaling factor that
-        // should be applied to the local audio.
-        if (_calls[i].isEcho()) 
-            echoScale_q11 = _calls[i].getEchoScale() * (32768.0f / 16.0f);
 
         // Now do the actual mixing
         if (mixCount > 0) {
@@ -442,18 +440,26 @@ void Bridge::audioRateTick(uint32_t tickMs) {
                 // Ignore calls that are inactive or are silent
                 if (!_calls[j].isActive())
                     continue;
+                // Ignore calls that have nothing to contribute
                 if (!_calls[j].hasInputAudio())
                     continue;
-                // Ignore ourself if echo is turned off
-                if (i == j && !_calls[j].isEcho())
-                    continue;
+                // Default to scale of 1.0 in q11 format
+                int16_t echoScale_q11 = 2048;
+                // Look for the echo case.
+                if (i == j) {
+                    // Ignore calls that have echo turned off
+                    if (!_calls[i].isEcho())
+                        continue;
+                    echoScale_q11 = _calls[i].getEchoScale();
+                }
+                // Mix call j's input into call i's output.
                 // NOTE: This appears to be the most time-critical step in this 
-                // process at the moment.
+                // process at the moment!
                 _calls[j].extractInputAudio(mixedFrame, BLOCK_SIZE_48K, mixCount, tickMs, echoScale_q11);
             }
         }
 
-        // Output the result
+        // Output call i's final/total result
         _calls[i].setConferenceOutput(mixedFrame, BLOCK_SIZE_48K, tickMs, mixCount);
     }
 

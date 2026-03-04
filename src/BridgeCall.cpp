@@ -151,6 +151,8 @@ void BridgeCall::reset() {
     _callId = 0; 
     _lastAudioRxMs = 0;
     _echo = false;
+    // Default to scale of 1 in q11 format
+    _echoScale = 2048;
     _sourceAddrValidated = false;
     _permanent = false;
     
@@ -190,7 +192,8 @@ void BridgeCall::reset() {
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-    bool bypassJitterBuffer, bool echo, bool sourceAddrValidated, Mode initialMode,
+    bool bypassJitterBuffer, bool echo, bo int16_t echoScaleQ11,
+    bool sourceAddrValidated, Mode initialMode,
     const char* remoteNodeNumber, bool permanent, bool useKerchunkFilter,
     unsigned kerchunkFilterEvaluationIntervalMs) {
 
@@ -210,6 +213,7 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeOut.setCodec(codec);
 
     _echo = echo;
+    _echoScale = echoScaleQ11;
     _sourceAddrValidated = sourceAddrValidated;
     _permanent = permanent;
 

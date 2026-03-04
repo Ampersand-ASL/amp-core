@@ -206,6 +206,8 @@ struct PayloadCallStart {
     bool bypassJitterBuffer = false;
     uint32_t startMs;
     bool echo = false;
+    // Used to scale up/down echoed audio for the call
+    float echoScale = 1.0;
     bool originated = false;
     bool sourceAddrValidated = false;
     bool permanent = false;
