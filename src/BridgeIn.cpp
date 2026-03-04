@@ -145,7 +145,6 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
     if (frame.getType() == Message::Type::AUDIO ||
         frame.getType() == Message::Type::AUDIO_INTERPOLATE) {
     
-        int16_t pcm48k[BLOCK_SIZE_48K];
         int16_t pcm2[BLOCK_SIZE_48K];
 
         // #### TODO: REORGANIZE TO ELIMINATE REPEATED CODE. EX:
@@ -210,8 +209,23 @@ void BridgeIn::_handleJitBufOut(const Message& frame) {
                     pcm2[i] = 0;
             }
         }
+        else if (_codecType == CODECType::IAX2_CODEC_PCM_48K) {
+            if (frame.getType() == Message::Type::AUDIO) {
+                assert(frame.size() == BLOCK_SIZE_48K * 2);
+                // Nothing to transcode, already PCM
+                const int16_t* src = (const int16_t*)frame.body();
+                for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
+                    pcm2[i] = src[i];
+            } else {
+                // There is no PLC at the moment, so we just create a frame 
+                // of silence
+                for (unsigned i = 0; i < BLOCK_SIZE_48K; i++)
+                    pcm2[i] = 0;
+            }
+        }
 
         // Resample PCM data up to 48K
+        int16_t pcm48k[BLOCK_SIZE_48K];
         _resampler.resample(pcm2, codecBlockSize(_codecType), 
             pcm48k, BLOCK_SIZE_48K);
 

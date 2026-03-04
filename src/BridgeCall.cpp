@@ -30,6 +30,7 @@
 #include "Poker.h"
 #include "Bridge.h"
 #include "ProgramUtils.h"
+#include "LineParrot.h"
 
 // The duration of silence after which the parrot decides the 
 // recording should be ended.
@@ -138,7 +139,7 @@ void BridgeCall::init(Bridge* bridge, Log* log, Log* traceLog, Clock* clock,
     if (netTestBindAddr)
         _netTestBindAddr = netTestBindAddr;
     else 
-        _netTestBindAddr = "0.0.0.0";
+        _netTestBindAddr.clear();
     _bridgeIn.init(_log, _traceLog, _clock);
     _bridgeOut.init(_log, _clock);
 }
@@ -155,7 +156,9 @@ void BridgeCall::reset() {
     _echoScale = 2048;
     _sourceAddrValidated = false;
     _permanent = false;
-    
+    _callStartMs = 0;
+    _callMaxDurationMs = 0;
+
     _bridgeIn.reset();
     _bridgeOut.reset();
 
@@ -169,7 +172,6 @@ void BridgeCall::reset() {
     _playQueue = std::queue<PCM16Frame>();
     _parrotState = ParrotState::NONE;
     _parrotStateStartMs = 0;
-    _parrotStartMs = 0;
     _lastUnkeyProcessedMs = 0;
 
     _stageInSet = false;
@@ -201,7 +203,8 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _lineId = lineId;  
     _callId = callId; 
     _remoteNodeNumber = remoteNodeNumber;
-
+    _callStartMs = _clock->timeMs();
+    _callMaxDurationMs = 0;
     _lastAudioRxMs = 0;
 
     _bridgeIn.setCodec(codec);
@@ -220,19 +223,33 @@ void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODEC
     _bridgeIn.setKerchunkFilterEnabled(useKerchunkFilter);
     _bridgeIn.setKerchunkFilterEvaluationIntervalMs(kerchunkFilterEvaluationIntervalMs);
 
-    if (initialMode == Mode::PARROT)
+    if (initialMode == Mode::PARROT) {
         _enterParrotMode();
+        if (!permanent)
+            _callMaxDurationMs = PARROT_SESSION_TIMEOUT_MS;
+    }
     else if (initialMode == Mode::PROGRAM)
         _enterProgramMode();
+    else if (initialMode == Mode::NORMAL)
+        _enterNormalMode();
     else 
         _mode = initialMode;
 }
 
-void BridgeCall::_enterParrotMode() {
-    _mode = Mode::PARROT;
-    _parrotState = ParrotState::CONNECTED;
-    _parrotStartMs = _clock->timeMs();
-    _parrotStateStartMs = _clock->time();
+void BridgeCall::_forceEnd() {
+    // Request to have the call killed on the IAX side
+    MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
+        0, 0);
+    msg.setSource(LINE_ID, CALL_ID);
+    msg.setDest(_lineId, _callId);
+    _bridgeOut.consume(msg);
+    // Reset this bridge session
+    reset();
+}
+
+void BridgeCall::_enterNormalMode() {
+    _log->info("Call %u:%u going into normal conference mode", _lineId, _callId);
+    _mode = Mode::NORMAL;
 }
 
 bool BridgeCall::isRecentCommander() const {
@@ -413,16 +430,33 @@ void BridgeCall::audioRateTick(uint32_t tickMs) {
 }
 
 void BridgeCall::oneSecTick() {
+
     // Has a full DMTF sequence been collected?
     if (!_dtmfAccumulator.empty() && 
          _clock->isPastWindow(_lastDtmfRxMs, DTMF_WINDOW_MS)) {
         _processDtmfCommand(_dtmfAccumulator);
         _dtmfAccumulator.clear();
     }
+
     // Refresh the talker as long as there is active audio being 
     // transmitted.
     if (_bridgeOut.isActiveRecently())
         _signalTalker();
+
+    // Mode-specific activity
+    if (_mode == Mode::NORMAL) 
+        _normalOneSecTick();
+    else if (_mode == Mode::PARROT)
+        _parrotOneSecTick();
+}
+
+void BridgeCall::_normalOneSecTick() {
+    // General timeout
+    if (_callMaxDurationMs != 0 && 
+        _clock->isPastWindow(_callStartMs, _callMaxDurationMs)) {
+        _log->info("Timing out call %u/%d", _lineId, _callId);
+        _forceEnd();
+    }
 }
 
 void BridgeCall::setOutputTalkerId(const char* talkerId) {
@@ -657,6 +691,11 @@ void BridgeCall::_toneAudioRateTick(uint32_t tickMs) {
 
 // ===== Parrot Related =======================================================
 
+void BridgeCall::_enterParrotMode() {
+    _mode = Mode::PARROT;
+    _parrotState = ParrotState::CONNECTED;
+}
+
 /**
  * This function will be called by the input adaptor after the PLC and 
  * transcoding has happened.
@@ -714,37 +753,32 @@ void BridgeCall::_processParrotAudio(const Message& msg) {
 
 void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
 
-    if (_parrotState == ParrotState::WAITING_FOR_RECORD) {
-        // General timeout
-        if (_clock->isPastWindow(_parrotStartMs, PARROT_SESSION_TIMEOUT_MS)) {
-
-            _log->info("Timing out parrot call %u/%d", _lineId, _callId);
-
-            requestTTS("Parrot session ended. Goodbye!");
-
-            _parrotState = ParrotState::TTS_GOODBYE;
-            _parrotStateStartMs = _clock->time();
-        }
-    }
-    else if (_parrotState == ParrotState::CONNECTED) {
+    if (_parrotState == ParrotState::CONNECTED) {
 
         setOutputTalkerId(PARROT_TALKER_ID);
 
-        // Launch the network test for this new connection
-        Poker::Request req;
-        strcpyLimited(req.bindAddr, _netTestBindAddr.c_str(), sizeof(_netTestBindAddr));
-        strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
-        req.timeoutMs = 250;
+        if (!_netTestBindAddr.empty()) {
+            // Launch the network test for this new connection
+            Poker::Request req;
+            strcpyLimited(req.bindAddr, _netTestBindAddr.c_str(), sizeof(_netTestBindAddr));
+            strcpyLimited(req.nodeNumber, _remoteNodeNumber.c_str(), sizeof(req.nodeNumber));
+            req.timeoutMs = 250;
 
-        MessageWrapper msg(Message::Type::NET_DIAG_1_REQ, 0, 
-            sizeof(req), (const uint8_t*)&req, 0, 0);
-        msg.setSource(_bridgeLineId, _bridgeCallId);
-        msg.setDest(_netTestLineId, Message::BROADCAST);
-        _sink->consume(msg);     
+            MessageWrapper msg(Message::Type::NET_DIAG_1_REQ, 0, 
+                sizeof(req), (const uint8_t*)&req, 0, 0);
+            msg.setSource(_bridgeLineId, _bridgeCallId);
+            msg.setDest(_netTestLineId, Message::BROADCAST);
+            _sink->consume(msg);     
 
-        _netTestResult.code = -99;
-        _parrotState = ParrotState::WAITING_FOR_NET_TEST;
-        _parrotStateStartMs = _clock->time();
+            _netTestResult.code = -99;
+            _parrotState = ParrotState::WAITING_FOR_NET_TEST;
+            _parrotStateStartMs = _clock->time();
+        }
+        else {
+            _parrotState = ParrotState::GREETING_0;
+            // Set a code that will bypass this part of the greeting
+            _netTestResult.code = -99;
+        }
     }
     else if (_parrotState == ParrotState::WAITING_FOR_NET_TEST) {
         // Check for timeout
@@ -811,8 +845,17 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
     else if (_parrotState == ParrotState::PLAYING_GREETING_1) {
         if (_playQueue.empty()) {
-            _parrotState = ParrotState::WAITING_FOR_RECORD;
-            _parrotStateStartMs = _clock->time();
+
+            // Once the greeting has compelted we either wait for 
+            // local audio activity to record/playback or we 
+            // dump the call into the conference as a normal participant.
+            if (!_bridge->_parrotConference) {
+                _parrotState = ParrotState::WAITING_FOR_RECORD;
+                _parrotStateStartMs = _clock->time();
+            }  
+            else {
+                _enterNormalMode();
+            }
         }
     }
     else if (_parrotState == ParrotState::RECORDING) {
@@ -840,8 +883,7 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             }
 
             // Analyze the recording for relevant stats
-            float peakPower, avgPower;
-            _analyzeRecording(captureCopy, &peakPower, &avgPower);
+            LineParrot::AudioStats stats = LineParrot::analyzeRecording(captureCopy);
 
             // Re-queue the captured frames
             for (auto it = captureCopy.begin(); it != captureCopy.end(); it++)
@@ -851,48 +893,8 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
             _recordedTalkerId = _talkerId;
 
             // Create the speech that will be sent to the caller
-            string prompt;
-            char sp[64];
-           
-            // #### TODO: DO A BETTER JOB ON THE CLIPPING CASE
+            string prompt = LineParrot::summarizeAnalysis(stats, _bridge->_parrotLevelThresholds);
 
-            int peakPowerInt = std::round(peakPower);
-            if (peakPowerInt < -40) {
-                snprintf(sp, 64, "Peak is less than minus 40db");
-            } else if (peakPowerInt < 0) {                
-                snprintf(sp, 64, "Peak is minus %ddb", abs(peakPowerInt));
-            } else {
-                snprintf(sp, 64, "Peak is 0db");
-            }
-            prompt += sp;
-            prompt += ", ";
-
-            int avgPowerInt = std::round(avgPower);
-            if (avgPower < -40) {
-                snprintf(sp, 64, "Average is less than minus 40db");
-            } else if (avgPower < 0) {
-                snprintf(sp, 64, "Average is minus %ddb", abs(avgPowerInt));
-            } else {
-                snprintf(sp, 64, "Average is 0db");
-            }
-            prompt += sp;
-            prompt += ". ";
-
-            // Now add some subjective commentary (CONTROVERSIAL!)
-            if (_bridge->_parrotLevelThresholds.size() >= 4) {
-                prompt += "Level is ";
-                if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(0))
-                    prompt += "very high";
-                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(1))
-                    prompt += "high";
-                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(2)) 
-                    prompt += "good";
-                else if (peakPowerInt >= _bridge->_parrotLevelThresholds.at(3)) 
-                    prompt += "low";
-                else 
-                    prompt += "very low";
-                prompt += ". ";
-            }
             prompt += "Playback.";
 
             // Queue a request for TTS
@@ -916,16 +918,23 @@ void BridgeCall::_parrotAudioRateTick(uint32_t tickMs) {
     }
     else if (_parrotState == ParrotState::PLAYING_GOODBYE) {
         if (_playQueue.empty()) {
+            _forceEnd();
+        }
+    }
+}
 
-            // Request to have the call killed on the IAX side
-            MessageEmpty msg(Message::Type::SIGNAL, Message::SignalType::CALL_TERMINATE, 
-                0, tickMs * 1000);
-            msg.setSource(LINE_ID, CALL_ID);
-            msg.setDest(_lineId, _callId);
-            _bridgeOut.consume(msg);
+void BridgeCall::_parrotOneSecTick() {
+    // Check for timeout
+    if (_parrotState == ParrotState::WAITING_FOR_RECORD) {
+        if (_callMaxDurationMs != 0 &&
+            _clock->isPastWindow(_callStartMs, _callMaxDurationMs)) {
 
-            // Reset this bridge session
-            reset();
+            _log->info("Timing out call %u/%d", _lineId, _callId);
+
+            requestTTS("Parrot session ended. Goodbye!");
+
+            _parrotState = ParrotState::TTS_GOODBYE;
+            _parrotStateStartMs = _clock->time();
         }
     }
 }
@@ -1061,74 +1070,6 @@ void BridgeCall::_loadSweep(std::queue<PCM16Frame>& queue) {
     // Sweep
     for (unsigned f = 0; f < upperHz; f += 100)
         _loadCw(0.5, f, 5, queue);
-}
-
-void BridgeCall::_analyzeRecording(const std::vector<PCM16Frame>& audio, 
-    float* peakPower, float* avgPower) {
-
-    unsigned blockSize = 160 * 50;
-
-    // Perform the audio analysis on the recording using the David NR9V method. 
-    float peak = 0;
-    float avgSquareBlock = 0;
-    unsigned sampleCountBlock = 0;
-    float peakAvgSquare = 0;
-
-    unsigned frameCount = audio.size();
-
-    // Ignore the first 300ms of the recording to avoid distortion due to pops/clips
-    unsigned startI = 300 / 20;
-    // Per Patrick Perdue (N2DYI), we ignore the last 300ms of the recording to avoid
-    // influence of tail.
-    unsigned endIgnoreCount = 300 / 20;
-    unsigned endI = 0;
-    if (frameCount > endIgnoreCount)
-        endI = frameCount - endIgnoreCount;
-    else 
-        endI = 0;
-    // Look for the case where there is no audio left to analyze
-    if (endI <= startI) {
-        *peakPower = -96.0;
-        *avgPower = -96.0;
-        _log->info("Recording too short to analyze");
-        return;
-    }
-
-    for (unsigned j = startI; j < endI; j++) {
-        assert(audio.at(j).size() == BLOCK_SIZE_48K);
-        for (unsigned i = 0; i < BLOCK_SIZE_48K; i += 6) {
-            
-            int16_t sample = abs(audio.at(j).data()[i]);
-
-            if (sample > peak) {
-                peak = sample;
-            }
-
-            avgSquareBlock += (float)sample * (float)sample;
-            sampleCountBlock++;
-
-            // On every complete block we stop to see if we have a new peak average
-            if (sampleCountBlock == blockSize) {
-                avgSquareBlock /= (float)sampleCountBlock;
-                if (avgSquareBlock > peakAvgSquare)
-                    peakAvgSquare = avgSquareBlock;
-                sampleCountBlock = 0;
-                avgSquareBlock = 0;
-            }
-        }
-    }
-    
-    if (peak == 0) {
-        *peakPower = -96.0;
-    } else {
-        *peakPower = 10.0 * log10((peak * peak) / (32767.0f * 32767.0f));
-    }
-
-    if (peakAvgSquare == 0) {
-        *avgPower = -96.0;
-    } else {
-        *avgPower = 10.0 * log10(peakAvgSquare / (32767.0f * 32767.0f));
-    }
 }
 
 // ====== PROGRAM MODE ======================================================

@@ -151,6 +151,16 @@ void BridgeOut::consume(const Message& frame) {
             else if (_codecType == CODECType::IAX2_CODEC_SLIN_48K) {
                 // No support for interpolation
                 if (frame.getType() == Message::Type::AUDIO) {
+                    // ### TODO: THIS DOESN'T LOOK RIGHT - NEED TO TRANSCODE
+                    // No conversion needed
+                    _sink(frame);
+                }
+                else
+                    assert(false);
+            }
+            else if (_codecType == CODECType::IAX2_CODEC_PCM_48K) {
+                // No support for interpolation
+                if (frame.getType() == Message::Type::AUDIO) {                    
                     // No conversion needed
                     _sink(frame);
                 }

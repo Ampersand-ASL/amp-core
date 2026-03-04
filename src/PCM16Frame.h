@@ -27,11 +27,14 @@ namespace kc1fsz {
 class PCM16Frame {
 public:
 
-    // Space for a 48K PCM16 frame
+    // Space for a 48K PCM16 frame in samples (not bytes)
     static const unsigned MAX_SIZE = 160 * 6;
 
     PCM16Frame() : _size(0) { }
     
+    /**
+     * @param size In samples (not bytes)
+     */
     PCM16Frame(const int16_t* data, unsigned size) {
         assert(size <= MAX_SIZE);
         memcpy(_body, data, sizeof(int16_t) * size);
