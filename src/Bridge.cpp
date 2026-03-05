@@ -265,7 +265,7 @@ void Bridge::consume(const Message& msg) {
                 payload.codec, 
                 payload.bypassJitterBuffer,
                 payload.echo, 
-                payload.echoGainDb
+                payload.echoGainDb,
                 payload.sourceAddrValidated);
 
             // Check to see if this node should be using the kerchunk filter
