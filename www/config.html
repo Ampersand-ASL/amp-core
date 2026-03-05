@@ -402,8 +402,8 @@ function configStore() {
     // Move across a few specific things 
 
     // #### TODO: USE THIS FOR EVERYTHING
-    var storeFields = [ "duplexmode", "echogain" ];
-    for (storeField in storeFields)
+    const storeFields = [ "duplexmode", "echogain" ];
+    for (const storeField of storeFields)
         storeUi(storeField, formObject, fullConfig)
 
     // ----- Top Section -----------------------------------------------------

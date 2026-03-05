@@ -258,13 +258,14 @@ void Bridge::consume(const Message& msg) {
             assert(msg.size() == sizeof(payload));
             memcpy(&payload, msg.body(), sizeof(payload));
 
-            _log.info("Call %u:%u started node %s CODEC %08X, jbBypass %d, echo %d, validated %d", 
+            _log.info("Call %u:%u started node %s CODEC %08X, jb bypass %d, echo %d, echo gain %f (dB), IP validated %d", 
                 msg.getSourceBusId(),
                 msg.getSourceCallId(), 
                 payload.remoteNumber, 
                 payload.codec, 
                 payload.bypassJitterBuffer,
                 payload.echo, 
+                payload.echoGainDb
                 payload.sourceAddrValidated);
 
             // Check to see if this node should be using the kerchunk filter
