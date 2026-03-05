@@ -194,7 +194,7 @@ void BridgeCall::reset() {
 }
 
 void BridgeCall::setup(unsigned lineId, unsigned callId, uint32_t startMs, CODECType codec,
-    bool bypassJitterBuffer, bool echo, bo int16_t echoScaleQ11,
+    bool bypassJitterBuffer, bool echo, int16_t echoScaleQ11,
     bool sourceAddrValidated, Mode initialMode,
     const char* remoteNodeNumber, bool permanent, bool useKerchunkFilter,
     unsigned kerchunkFilterEvaluationIntervalMs) {
