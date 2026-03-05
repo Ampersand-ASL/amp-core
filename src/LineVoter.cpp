@@ -275,7 +275,7 @@ void LineVoter::_processReceivedPacket(
     }
    
     // Figure out who the packet belongs to
-    if (_client0.belongsTo(packet, packetLen)) {
+    if (_client0.belongsTo(peerAddr, packet, packetLen)) {
         _client0.consumePacket(peerAddr, packet, packetLen);
     } 
     else {

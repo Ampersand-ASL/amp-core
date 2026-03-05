@@ -120,7 +120,7 @@ public:
      * this peer's password. This is used for the server case to 
      * determine which peer a message belongs to.
      */
-    bool belongsTo(const uint8_t* packet, unsigned packetLen) const;
+    bool belongsTo(const sockaddr& peerAddr, const uint8_t* packet, unsigned packetLen) const;
 
     // ----- For the Voter-facing side of the system ------------------
 

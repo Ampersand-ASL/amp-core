@@ -78,6 +78,15 @@ uint32_t VoterUtil::crc32(const char* msg) {
 	return ~result;
 }
 
+uint32_t VoterUtil::crc32(const char* msg0, const char* msg1) {
+	uint32_t result = 0xFFFFFFFF;
+	while (msg0 != 0 && *msg0 != 0)
+		result = crc32Table[(result ^ *msg0++) & 0xff] ^ ((uint32_t)result >> 8);
+	while (msg1 != 0 && *msg1 != 0)
+		result = crc32Table[(result ^ *msg1++) & 0xff] ^ ((uint32_t)result >> 8);
+	return ~result;
+}
+
 uint32_t VoterUtil::crc32(const char* msg, unsigned len) {
 	uint32_t result = 0xFFFFFFFF;
 	for (unsigned i = 0; i < len; i++)

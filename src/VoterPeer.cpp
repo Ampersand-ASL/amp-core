@@ -125,27 +125,14 @@ int VoterPeer::makeInitialChallengeResponse(Clock* clock, const uint8_t* packet,
     if (VoterUtil::getHeaderAuthChallenge(packet, 
         remoteChallenge, sizeof(remoteChallenge)) != 0)
         return -1;
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%s%s", remoteChallenge, localPassword);
-    uint32_t crc = VoterUtil::crc32(buf);
     memset(resp, 0, HEADER_SIZE);
     // #### TODO DEAL WITH FLAGS
     VoterUtil::setHeaderPayloadType(resp, 0);
     VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
+    uint32_t crc = VoterUtil::crc32(remoteChallenge, localPassword);
     VoterUtil::setHeaderAuthResponse(resp, crc);
     VoterUtil::setHeaderTimeS(resp, clock->timeMs() / 1000);
     return HEADER_SIZE;
-}
-
-bool VoterPeer::belongsTo(const uint8_t* packet, unsigned packetLen) const {
-    if (!isValidPacket(packet, packetLen))
-        return false;
-    if (VoterUtil::getHeaderAuthResponse(packet) == 0)
-        return false;
-    // ### TODO SPEED THIS UP
-    char buf[64];
-    snprintf(buf, sizeof(buf),"%s%s", _localChallenge, _remotePassword);
-    return VoterUtil::crc32(buf) == VoterUtil::getHeaderAuthResponse(packet);
 }
 
 bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
@@ -164,13 +151,35 @@ bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
     return true;
 }
 
+bool VoterPeer::belongsTo(const sockaddr& potentialPeerAddr, const uint8_t* packet, unsigned packetLen) const {
+    if (!isValidPacket(packet, packetLen))
+        return false;
+    if (VoterUtil::getHeaderAuthResponse(packet) == 0)
+        return false;
+    // Once a peer is trusted then the IP address/port must match to prevent 
+    // hijacking. Otherwise, any address that knows the password is fine.
+    if (_peerTrusted && 
+        !equalIPAddrAndPort(potentialPeerAddr, (const sockaddr&)_peerAddr)) {
+        return false;
+    }
+    // If we get to this point then it comes down to password validation
+    return VoterUtil::crc32(_localChallenge, _remotePassword) == 
+        VoterUtil::getHeaderAuthResponse(packet);
+}
+
 void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet, 
     unsigned packetLen) {
 
     // Record time so we can manage timeouts
     _lastRxMs = _clock->timeMs();
-    // Lock in ther reply address
-    memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
+
+    // Lock in their reply address if it has changed
+    if (!equalIPAddr(peerAddr, (const sockaddr&)_peerAddr)) {
+        char addr[64];
+        formatIPAddrAndPort(peerAddr, addr, sizeof(addr));
+        _log->info("Peer %s has new address %s", _remotePassword, addr);
+        memcpy(&_peerAddr, &peerAddr, getIPAddrSize(peerAddr));
+    }
 
     // Quietly Ignore a few types
     if (VoterUtil::getHeaderPayloadType(packet) == 3 ||
@@ -186,7 +195,6 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
         char addr[64];
         formatIPAddrAndPort(peerAddr, addr, sizeof(addr));
-
         _log->info("VOTER %s now trusts its peer %s (%s)", _localPassword,
             _remotePassword, addr);
 
@@ -198,6 +206,7 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
             _badPackets++;
             return;
         }
+
         strcpyLimited(_remoteChallenge, remoteChallenge, sizeof(remoteChallenge));
 
         // Send one more type 0 packet in case it is needed to establish

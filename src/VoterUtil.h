@@ -34,6 +34,13 @@ public:
      * @returns The 32-bit CRC for given null-terminated string.
      */
     static uint32_t crc32(const char* msg);
+
+    /**
+     * @returns The 32-bit CRC for two null-terminated strings, assuming they
+     * were concatenated.
+     */
+    static uint32_t crc32(const char* msg0, const char* msg1);
+
     static uint32_t crc32(const char* msg, unsigned len);
 
     // General header stuff
