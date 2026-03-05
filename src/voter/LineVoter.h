@@ -20,28 +20,29 @@
 
 #include <functional>
 
-#include "Runnable2.h"
+#include "Line.h"
 #include "IAX2Util.h"
 #include "Message.h"
 #include "MessageConsumer.h"
-#include "VoterPeer.h"
+
+#include "voter/VoterPeer.h"
 
 namespace kc1fsz {
 
 class Log;
 class Clock;
 
-class VoterClient : public Runnable2, public MessageConsumer {
+class LineVoter : public Line {
 public:
+
+    static const unsigned BLOCK_SIZE_8K = 160;
+    static const unsigned MAX_PEERS = 8;
 
     /**
      * @param consumer This is the sink interface that received messages
-     * will be sent to. VERY IMPORTANT: Audio frames will not have been 
-     * de-jittered before they are passed to this sink. 
-     * @param audioDestLineId The line ID used to send any inbound audio 
-     * received on the network.
+     * will be sent to. 
      */
-    VoterClient(Log& log, Clock& clock, int lineId, MessageConsumer& consumer,
+    LineVoter(Log& log, Clock& clock, unsigned lineId, MessageConsumer& consumer, 
         unsigned audioDestLineId);
 
     /**
@@ -49,15 +50,23 @@ public:
      *  
      * NOTE: At the moment listening happens on all local interfaces.
      *
+     * @param listenFamily - Either AF_INET or AF_INET6
+     * @param listenPort
      * @returns 0 if the open was successful.
      */
-    int open(const char* serverAddrAndPort);
+    int open(short addrFamily, int listenPort);
 
+    /**
+     * Resets all calls as a side-effect.
+     */
     void close();
     
-    void setClientPassword(const char* p);
-
     void setServerPassword(const char* p);
+
+    /**
+     * @param ps A comma-separated list of client passwords. 
+     */
+    void setClientPasswords(const char* ps);
 
     void setTrace(bool a) { _trace = a; }
 
@@ -90,7 +99,7 @@ private:
     Clock& _clock;
     const unsigned _lineId;
     MessageConsumer& _bus;
-    // The line ID used to send any inbound audio received on the network
+    // Where the inbound audio gets sent
     const unsigned _audioDestLineId;
 
     // The IP address family used for this connection. Either AF_INET
@@ -102,9 +111,11 @@ private:
     int _sockFd = 0;
     // Enables detailed network tracing
     bool _trace = false;
-    sockaddr_storage _serverAddr;
 
-    amp::VoterPeer _client;
+    std::string _serverChallenge;
+    std::string _serverPassword;
+
+    amp::VoterPeer _clients[MAX_PEERS];
 };
 
 }

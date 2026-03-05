@@ -18,7 +18,7 @@
 
 #include "kc1fsz-tools/Common.h"
 
-#include "VoterUtil.h"
+#include "voter/VoterUtil.h"
 
 namespace kc1fsz {
 

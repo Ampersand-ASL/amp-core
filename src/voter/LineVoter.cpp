@@ -23,13 +23,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
-//#include <linux/sockios.h> // Required for SIOCOUTQ
 
 #include <sys/types.h>
 
 #include <cstring>
 #include <iostream>
 #include <algorithm>
+#include <sstream>
 
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/NetUtils.h"
@@ -37,9 +37,10 @@
 
 #include "MessageConsumer.h"
 #include "Message.h"
-#include "VoterUtil.h"
-#include "VoterPeer.h"
-#include "LineVoter.h"
+
+#include "voter/VoterUtil.h"
+#include "voter/VoterPeer.h"
+#include "voter/LineVoter.h"
 
 #define CALL_ID_FIXED (1)
 
@@ -59,13 +60,15 @@ LineVoter::LineVoter(Log& log, Clock& clock, unsigned lineId,
     _bus(bus),
     _audioDestLineId(audioDestLineId) {
 
-    _client0.init(&clock, &log);
-    // Make the connection so we can send packets out to the client
-    _client0.setSink([this]
-        (const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
-            _sendPacketToPeer(data, dataLen, addr);
-        }
-    );
+    for (unsigned i = 0; i < MAX_PEERS; i++) {
+        _clients[i].init(&clock, &log);
+        // Make the connection so we can send packets out to the client
+        _clients[i].setSink([this]
+            (const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
+                _sendPacketToPeer(data, dataLen, addr);
+            }
+        );
+    }
 }
 
 int LineVoter::open(short addrFamily, int listenPort) {
@@ -82,12 +85,12 @@ int LineVoter::open(short addrFamily, int listenPort) {
     _addrFamily = addrFamily;
     _listenPort = listenPort;
 
-    _log.info("Listening on Voter port %d", _listenPort);
+    _log.info("Listening on VOTER port %d", _listenPort);
 
     // UDP open/bind
     int sockFd = socket(_addrFamily, SOCK_DGRAM, 0);
     if (sockFd < 0) {
-        _log.error("Unable to open Voter port (%d)", errno);
+        _log.error("Unable to open VOTER port (%d)", errno);
         return -1;
     }    
 
@@ -97,7 +100,7 @@ int LineVoter::open(short addrFamily, int listenPort) {
     // This allows the socket to bind to a port that is in TIME_WAIT state,
     // or allows multiple sockets to bind to the same port (useful for multicast).
     if (setsockopt(sockFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) < 0) {
-        _log.error("Voter setsockopt SO_REUSEADDR failed (%d)", errno);
+        _log.error("VOTER setsockopt SO_REUSEADDR failed (%d)", errno);
         ::close(sockFd);
         return -1;
     }
@@ -122,7 +125,7 @@ int LineVoter::open(short addrFamily, int listenPort) {
     }
 
     if (::bind(sockFd, (const struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
-        _log.error("Unable to bind to Voter port (%d)", errno);
+        _log.error("Unable to bind to VOTER port (%d)", errno);
         ::close(sockFd);
         return -1;
     }
@@ -143,7 +146,7 @@ int LineVoter::open(short addrFamily, int listenPort) {
     payload.echo = false;
     payload.startMs = _clock.time();
     payload.localNumber[0] = 0;
-    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "Voter");
+    snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "VOTER");
     payload.originated = true;
     payload.permanent = true;
     MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
@@ -164,24 +167,40 @@ void LineVoter::close() {
 } 
 
 void LineVoter::setServerPassword(const char* p) {
+
     // A random challenge for security reasons
     _serverPassword = p;
     _serverChallenge = amp::VoterPeer::makeChallenge();
-    _client0.setLocalPassword(p);
-    _client0.setLocalChallenge(_serverChallenge.c_str());
+
+    for (unsigned i = 0; i < MAX_PEERS; i++) {
+        _clients[i].setLocalPassword(p);
+        _clients[i].setLocalChallenge(_serverChallenge.c_str());
+    }
 }
 
 void LineVoter::setClientPasswords(const char* ps) {
-    // ### TODO: PARSE THE LIST
-    _client0.setRemotePassword(ps);
+    // Parse comma-delimited list
+    string s(ps);
+    stringstream ss(s);
+    string token;
+    unsigned peerCount = 0;
+    while (std::getline(ss, token, ',') && peerCount < MAX_PEERS) {
+        trim(token);
+        if (!token.empty() && token.length() <= 9)
+            _clients[peerCount++].setRemotePassword(token.c_str());
+            // #### TODO: SET MASTER FLAG
+    }
 }
 
 void LineVoter::consume(const Message& msg) {   
     if (msg.isVoice()) {
+        // This handles internal voice from conference out to VOTER client
         assert(msg.getFormat() == CODECType::IAX2_CODEC_G711_ULAW);
         assert(msg.size() == BLOCK_SIZE_8K);
-        if (_client0.isPeerTrusted())
-            _client0.sendAudio(0, msg.body(), msg.size());
+        for (unsigned i = 0; i < MAX_PEERS; i++)
+            if (_clients[i].isPeerTrusted())
+                // NOTE: RSSI value has no significance on transmit
+                _clients[i].sendAudio(0, msg.body(), msg.size());
     }
 }
 
@@ -191,32 +210,43 @@ bool LineVoter::run2() {
 
 void LineVoter::audioRateTick(uint32_t ms) {
 
-    _client0.audioRateTick(ms);
+    // Pass the tick to all of the trusted clients
+    for (unsigned i = 0; i < MAX_PEERS; i++)
+        if (_clients[i].isPeerTrusted())
+            _clients[i].audioRateTick(ms);
 
     // #### TODO: VOTER LOGIC!
+    // At the moment it is first-come, first-served
 
-    if (_client0.isAudioAvailable()) {
+    for (unsigned i = 0; i < MAX_PEERS; i++) {
+        if (_clients[i].isPeerTrusted() && _clients[i].isAudioAvailable()) {
 
-        // Extract the current audio frame from the Voter buffer
-        uint8_t ulaw8[BLOCK_SIZE_8K];
-        _client0.getAudioFrame(ms, ulaw8, BLOCK_SIZE_8K);
+            // Extract the current audio frame from the VOTER buffer
+            uint8_t ulaw8[BLOCK_SIZE_8K];
+            _clients[i].getAudioFrame(ms, ulaw8, BLOCK_SIZE_8K);
 
-        // Make a message and transmit to the Bridge
-        MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
-        msg.setSource(_lineId, CALL_ID_FIXED);
-        msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
-        _bus.consume(msg);
+            // Make a message and transmit to the Bridge
+            MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
+            msg.setSource(_lineId, i);
+            msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
+            _bus.consume(msg);
 
-        _client0.popAudioFrame();
-    } 
+            _clients[i].popAudioFrame();
+            break;
+        } 
+    }
 }
 
 void LineVoter::oneSecTick() {    
-    _client0.oneSecTick();
+    for (unsigned i = 0; i < MAX_PEERS; i++)
+        if (_clients[i].isPeerTrusted())
+            _clients[i].oneSecTick();
 }
 
 void LineVoter::tenSecTick() {
-    _client0.tenSecTick();
+    for (unsigned i = 0; i < MAX_PEERS; i++)
+        if (_clients[i].isPeerTrusted())
+            _clients[i].tenSecTick();
 }
 
 int LineVoter::getPolls(pollfd* fds, unsigned fdsCapacity) {
@@ -274,21 +304,26 @@ void LineVoter::_processReceivedPacket(
         _log.infoDump(msg, packet, packetLen);
     }
    
-    // Figure out who the packet belongs to
-    if (_client0.belongsTo(peerAddr, packet, packetLen)) {
-        _client0.consumePacket(peerAddr, packet, packetLen);
-    } 
-    else {
-        _log.info("VOTER packet from %s, not trusted yet", addr);
-        // Make a response to send back to the potential new client
-        uint8_t resp[24] = { 0 };
-        // If a zero auth response is received then send back the initial 
-        // challenge response.
-        int rc = amp::VoterPeer::makeInitialChallengeResponse(&_clock, packet,
-            _serverChallenge.c_str(), _serverPassword.c_str(), resp);
-        assert(rc == 24);
-        _sendPacketToPeer(resp, 24, peerAddr);
+    // Figure out who the packet belongs to.
+    for (unsigned i = 0; i < MAX_PEERS; i++) {
+        if (_clients[i].belongsTo(peerAddr, packet, packetLen)) {
+            _clients[i].consumePacket(peerAddr, packet, packetLen);
+            return;
+        } 
     }
+
+    // If we get here then the message wasn't trusted. Generate a challenge
+    // to try to establish communications with a potential client.
+    // ### TODO: MAKE THIS SMARTER TO AVOID DUPLICATES
+    _log.info("VOTER packet from %s, not trusted yet", addr);
+
+    uint8_t resp[24] = { 0 };
+    // If a zero auth response is received then send back the initial 
+    // challenge response.
+    int rc = amp::VoterPeer::makeInitialChallengeResponse(&_clock, packet,
+        _serverChallenge.c_str(), _serverPassword.c_str(), resp);
+    assert(rc == 24);
+    _sendPacketToPeer(resp, 24, peerAddr);
 }
 
 void LineVoter::_sendPacketToPeer(const uint8_t* b, unsigned len, 

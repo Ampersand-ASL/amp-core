@@ -40,9 +40,9 @@
 
 #include "Message.h"
 
-#include "VoterPeer.h"
-#include "VoterUtil.h"
-#include "VoterClient.h"
+#include "voter/VoterPeer.h"
+#include "voter/VoterUtil.h"
+#include "voter/VoterClient.h"
 
 #define BLOCK_SIZE_8K (160)
 
