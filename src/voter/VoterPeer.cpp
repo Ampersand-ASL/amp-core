@@ -225,13 +225,13 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     if (!_isClient) {
         if (VoterUtil::getHeaderFlags(packet) & 32) {
             if (!_generalPurposeMode) {
-                _log->info("Peer %s entering general purpose mode", _localPassword);
+                _log->info("Peer %s entering general purpose mode", _remotePassword);
                 _generalPurposeMode = true;
             }
         }
         else {
             if (_generalPurposeMode) {
-                _log->info("Peer %s leaving general purpose mode", _localPassword);
+                _log->info("Peer %s leaving general purpose mode", _remotePassword);
                 _generalPurposeMode = false;
             }
         }
