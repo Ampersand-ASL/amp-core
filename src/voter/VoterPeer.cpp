@@ -222,17 +222,19 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen) {
 
     // Pull out flags
-    if (!_isClient) {
-        if (VoterUtil::getHeaderFlags(packet) & 32) {
-            if (!_generalPurposeMode) {
-                _log->info("Peer %s entering general purpose mode", _remotePassword);
-                _generalPurposeMode = true;
+    if (VoterUtil::getHeaderPayloadType(packet) == 0) {
+        if (!_isClient) {
+            if (VoterUtil::getHeaderFlags(packet) & 32) {
+                if (!_generalPurposeMode) {
+                    _log->info("Peer %s entering general purpose mode", _remotePassword);
+                    _generalPurposeMode = true;
+                }
             }
-        }
-        else {
-            if (_generalPurposeMode) {
-                _log->info("Peer %s leaving general purpose mode", _remotePassword);
-                _generalPurposeMode = false;
+            else {
+                if (_generalPurposeMode) {
+                    _log->info("Peer %s leaving general purpose mode", _remotePassword);
+                    _generalPurposeMode = false;
+                }
             }
         }
     }
