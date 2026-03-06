@@ -323,9 +323,23 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
 
     uint8_t resp[HEADER_SIZE + 1 + FRAME_SIZE] = { 0 };
     _populateHeader(1, resp);
+
     uint32_t nowS = _clock->timeUs() / 1000000;
     VoterUtil::setHeaderTimeS(resp, nowS);
-    VoterUtil::setHeaderTimeNs(resp, _audioSeq);
+
+    if (_generalPurposeMode) {
+        VoterUtil::setHeaderTimeNs(resp, _audioSeq);
+    } 
+    else {
+        uint32_t nowUs = _clock->timeUs() % 1000000;
+        // Round to 20ms boundary
+        uint32_t nowMs = nowUs / 1000;
+        uint32_t nowMsRounded = (nowMs / 20) * 20;
+        // Change from ms -> ns
+        uint32_t nowNs = nowMsRounded * 1000000;
+        VoterUtil::setHeaderTimeNs(resp, nowNs);
+    }
+
     // #### TODO: FUNCTIONS FOR THIS
     resp[HEADER_SIZE] = rssi;
     memcpy(resp + HEADER_SIZE + 1, frame, FRAME_SIZE);

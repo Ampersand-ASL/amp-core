@@ -134,7 +134,7 @@ void VoterClient::setClientPassword(const char* p) {
 void VoterClient::consume(const Message& m) {   
     if (m.isVoice()) {
         if (_client.isPeerTrusted()) 
-            _client.sendAudio(0xff, m.body(), m.size());
+            _client.sendAudio(_rssi, m.body(), m.size());
     }
 }
 

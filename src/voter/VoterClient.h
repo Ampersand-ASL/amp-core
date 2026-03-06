@@ -32,6 +32,9 @@ namespace kc1fsz {
 class Log;
 class Clock;
 
+/**
+ * Used for devices/simulators on the client side of a VOTER interface.
+ */
 class VoterClient : public Runnable2, public MessageConsumer {
 public:
 
@@ -61,6 +64,10 @@ public:
     void setServerPassword(const char* p);
 
     void setTrace(bool a) { _trace = a; }
+
+    void setGeneralPurposeMode(bool m) { _client.setGeneralPurposeMode(m); }
+
+    void setRSSI(uint8_t rssi) { _rssi = rssi; }
 
     // ----- Line/MessageConsumer-----------------------------------------------------
 
@@ -103,7 +110,10 @@ private:
     int _sockFd = 0;
     // Enables detailed network tracing
     bool _trace = false;
+    // Address of VOTER server
     sockaddr_storage _serverAddr;
+    // The receive strength that should be sent with audio
+    uint8_t _rssi = 0xff;
 
     amp::VoterPeer _client;
 };
