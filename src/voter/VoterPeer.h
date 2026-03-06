@@ -106,6 +106,18 @@ public:
     void setRemotePassword(const char* p);
 
     /**
+     * Controls whether this peer should be transmitting audio to 
+     * the other side of the VOTER link.
+     */
+    void setAudioTransmit(bool b) { _audioTransmit = b; }
+
+    /**
+     * @returns True if this peer is configured to transmit audio 
+     * to the other side of the VOTER link.
+     */
+    bool isAudioTransmit() const { return _audioTransmit; }
+
+    /**
      * Used when the address of the peer is known in advance, like
      * for a client that knows the location of its server.
      */
@@ -254,6 +266,8 @@ private:
     char _remotePassword[10];
     char _localChallenge[16];
     char _remoteChallenge[16];
+
+    bool _audioTransmit = false;
 
     uint32_t _audioSeq = 0;
 

@@ -71,7 +71,7 @@ void VoterPeer::init(Clock* clock, Log* log) {
 void VoterPeer::reset() {
     _masterTimingSource = false;
     _generalPurposeMode = false;
-    //_generalPurposeMode = true;
+    _audioTransmit = false;
     _badPackets = 0;
     for (AudioFrame& f : _frames)
         f.rssi = 0;
@@ -87,8 +87,9 @@ void VoterPeer::reset() {
     _framePtrs.reset();
     _audioAvailableThisTick = false;
     // Only clear out the peer address if we are a server
-    if (!_isClient)
-        memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+    //if (!_isClient)
+    //    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
 }
 
 void VoterPeer::setLocalChallenge(const char* p) { 

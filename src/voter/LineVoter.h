@@ -64,7 +64,8 @@ public:
     void setServerPassword(const char* p);
 
     /**
-     * @param ps A comma-separated list of client passwords. 
+     * @param ps A comma-separated list of client passwords. Will also include some 
+     * flags (transmit). So for example: password0,password1,password2/transmit,password3.
      */
     void setClientPasswords(const char* ps);
 
@@ -111,6 +112,7 @@ private:
     int _sockFd = 0;
     // Enables detailed network tracing
     bool _trace = false;
+    bool _generalPurpose = false;
 
     std::string _serverChallenge;
     std::string _serverPassword;

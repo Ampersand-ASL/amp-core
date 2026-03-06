@@ -175,6 +175,7 @@ void LineVoter::setServerPassword(const char* p) {
     for (unsigned i = 0; i < MAX_PEERS; i++) {
         _clients[i].setLocalPassword(p);
         _clients[i].setLocalChallenge(_serverChallenge.c_str());
+        _clients[i].setGeneralPurposeMode(_generalPurpose);
     }
 }
 
@@ -186,9 +187,25 @@ void LineVoter::setClientPasswords(const char* ps) {
     unsigned peerCount = 0;
     while (std::getline(ss, token, ',') && peerCount < MAX_PEERS) {
         trim(token);
-        if (!token.empty() && token.length() <= 9)
-            _clients[peerCount++].setRemotePassword(token.c_str());
-            // #### TODO: SET MASTER FLAG
+        if (token.empty())
+            continue;
+        bool transmitFlag = false;
+        string password = token;
+        // Are ther flags besides the password?
+        size_t index = token.find('/');
+        if (index != std::string::npos) {
+            password = token.substr(0, index);
+            string flags = token.substr(index + 1);
+            if (flags.find("transmit") != std::string::npos)
+                transmitFlag = true;
+        }
+        if (password.length() > 9)
+            continue;
+        _clients[peerCount].setRemotePassword(password.c_str());
+        _clients[peerCount].setAudioTransmit(transmitFlag);
+        // Only the first client is the master source
+        _clients[peerCount].setMasterTimingSource(peerCount == 0);
+        peerCount++;
     }
 }
 
@@ -198,7 +215,7 @@ void LineVoter::consume(const Message& msg) {
         assert(msg.getFormat() == CODECType::IAX2_CODEC_G711_ULAW);
         assert(msg.size() == BLOCK_SIZE_8K);
         for (unsigned i = 0; i < MAX_PEERS; i++)
-            if (_clients[i].isPeerTrusted())
+            if (_clients[i].isPeerTrusted() && _clients[i].isAudioTransmit())
                 // NOTE: RSSI value has no significance on transmit
                 _clients[i].sendAudio(0, msg.body(), msg.size());
     }
