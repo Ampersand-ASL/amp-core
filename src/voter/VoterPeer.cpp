@@ -467,7 +467,7 @@ void VoterPeer::tenSecTick() {
 
 void VoterPeer::_populateHeader(uint16_t type, uint8_t* resp) const {
     uint8_t flags = 0;
-    if (_isClient && _generalPurposeMode)
+    if (_generalPurposeMode)
         flags |= 32;
     VoterUtil::setHeaderFlags(resp, flags);
     VoterUtil::setHeaderPayloadType(resp, type);
