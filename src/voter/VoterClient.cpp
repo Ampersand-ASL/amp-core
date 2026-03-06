@@ -66,6 +66,7 @@ VoterClient::VoterClient(Log& log, Clock& clock, int lineId,
             _sendPacketToPeer(data, dataLen, addr);
         }
     );
+    _client.setAudioTransmit(true);
 }
 
 int VoterClient::open(const char* serverAddrAndPort) {

@@ -87,9 +87,8 @@ void VoterPeer::reset() {
     _framePtrs.reset();
     _audioAvailableThisTick = false;
     // Only clear out the peer address if we are a server
-    //if (!_isClient)
-    //    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
-    memset(&_peerAddr, 0, sizeof(sockaddr_storage));
+    if (!_isClient)
+        memset(&_peerAddr, 0, sizeof(sockaddr_storage));
 }
 
 void VoterPeer::setLocalChallenge(const char* p) { 
