@@ -175,7 +175,6 @@ void LineVoter::setServerPassword(const char* p) {
     for (unsigned i = 0; i < MAX_PEERS; i++) {
         _clients[i].setLocalPassword(p);
         _clients[i].setLocalChallenge(_serverChallenge.c_str());
-        _clients[i].setGeneralPurposeMode(_generalPurpose);
     }
 }
 

@@ -220,6 +220,23 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 }
 
 void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen) {
+
+    // Pull out flags
+    if (!_isClient) {
+        if (VoterUtil::getHeaderFlags(packet) & 32) {
+            if (!_generalPurposeMode) {
+                _log->info("Peer %s entering general purpose mode", _localPassword);
+                _generalPurposeMode = true;
+            }
+        }
+        else {
+            if (_generalPurposeMode) {
+                _log->info("Peer %s leaving general purpose mode", _localPassword);
+                _generalPurposeMode = false;
+            }
+        }
+    }
+
     // Audio packet
     if (VoterUtil::getHeaderPayloadType(packet) == 1) {
 
@@ -277,7 +294,6 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
             // Make a pong
             uint8_t resp[HEADER_SIZE + PING_PAYLOAD_SIZE] = { 0 };
             _populateHeader(5, resp);
-            // #### TODO: LOOK AT FLAGS
 
             // IMPORTANT NOTE: After review of the VOTER source code, I think there
             // is a mistake in the VOTER protocol documentation. The original docs read:
@@ -450,6 +466,10 @@ void VoterPeer::tenSecTick() {
 }
 
 void VoterPeer::_populateHeader(uint16_t type, uint8_t* resp) const {
+    uint8_t flags = 0;
+    if (_isClient && _generalPurposeMode)
+        flags |= 32;
+    VoterUtil::setHeaderFlags(resp, flags);
     VoterUtil::setHeaderPayloadType(resp, type);
     VoterUtil::setHeaderTimeS(resp, _clock->timeMs() / 1000);
     char buf[64];

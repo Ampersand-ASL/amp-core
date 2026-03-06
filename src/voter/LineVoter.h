@@ -112,7 +112,6 @@ private:
     int _sockFd = 0;
     // Enables detailed network tracing
     bool _trace = false;
-    bool _generalPurpose = false;
 
     std::string _serverChallenge;
     std::string _serverPassword;
