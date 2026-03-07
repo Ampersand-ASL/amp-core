@@ -124,11 +124,14 @@ void ConfigPoller::_populateDefaults(json& j) {
     if (!j.contains("aslPttTo")) {
         j["aslPttTo"] = "usb";
     }
+
+    // SA818 defaults
+
     if (!j.contains("sa818port")) {
         j["sa818port"] = "";
     }
     if (!j.contains("sa818bw")) {
-        j["sa818bw"] = "wide";
+        j["sa818bw"] = "1";
     }
     if (!j.contains("sa818txf")) {
         j["sa818txf"] = "";
@@ -148,6 +151,32 @@ void ConfigPoller::_populateDefaults(json& j) {
     if (!j.contains("sa818vol")) {
         j["sa818vol"] = "8";
     }
+
+    if (!j.contains("sa818port_1")) {
+        j["sa818port_1"] = "";
+    }
+    if (!j.contains("sa818bw_1")) {
+        j["sa818bw_1"] = "1";
+    }
+    if (!j.contains("sa818txf_1")) {
+        j["sa818txf_1"] = "";
+    }
+    if (!j.contains("sa818txpl_1")) {
+        j["sa818txpl_1"] = "0000";
+    }
+    if (!j.contains("sa818rxf_1")) {
+        j["sa818rxf_1"] = "";
+    }
+    if (!j.contains("sa818rxpl_1")) {
+        j["sa818rxpl_1"] = "0000";
+    }
+    if (!j.contains("sa818sq_1")) {
+        j["sa818sq_1"] = "4";
+    }
+    if (!j.contains("sa818vol_1")) {
+        j["sa818vol_1"] = "8";
+    }
+
     if (!j.contains("duplexmode")) {
         j["duplexmode"] = "0";
     }

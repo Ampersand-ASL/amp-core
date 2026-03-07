@@ -415,7 +415,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 #endif  
         }          
         // The menu that shows the list of USB serial devices
-        else if (menuName == "sa818port") {
+        else if (menuName == "sa818port" || menuName == "sa818port_1") {
 #ifndef _WIN32            
             json o;
             o["value"] = "";
