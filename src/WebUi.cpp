@@ -47,6 +47,7 @@ extern "C" {
 #include "WebUi.h"
 #include "ThreadUtil.h"
 #include "TraceLog.h"
+#include "SerialUtil.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
 
@@ -93,6 +94,14 @@ extern unsigned int _amp_core_www_main_css_len;
 namespace kc1fsz {
 
     namespace amp {
+
+static void checkJSON(json j, const char* name) {
+    if (!j[name].is_string()) {
+        string msg = name;
+        msg += " is missing/invalid";
+        throw invalid_argument(msg);
+    }
+}
 
 WebUi::WebUi(Log& log, Clock& clock, unsigned listenPort,
     unsigned networkDestLineId, unsigned radioDestLineId, const char* configFileName,
@@ -474,6 +483,79 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         );
 #endif        
         res.set_content(a.dump(), "application/json");
+    });
+
+    // An end-point for programming SA818 radios
+    svr.Post("/program-sa818", [ui, bus](const httplib::Request &, httplib::Response &res, 
+        const httplib::ContentReader &content_reader) {
+
+        // Pull out the JSON content from the post body
+        std::string body;
+        content_reader([&body](const char *data, size_t data_length) {
+            body.append(data, data_length);
+            return true;
+        });
+
+        json cfg = json::parse(body);
+        json result;
+
+        int radio = cfg["radio"].get<int>();
+
+        if ((radio == 0 || radio == 1) && cfg.contains("sa818port")) {
+
+            string sa818portQuery = cfg["sa818port"].get<std::string>().c_str();
+            if (!sa818portQuery.empty()) {
+
+                string sa818Device;
+                ui->_log.info("SA818 port config [%s]", sa818portQuery.c_str());
+                if (querySerialDevices(sa818portQuery.c_str(), sa818Device) == 0) {
+
+                    ui->_log.info("Resolved to SA818 device %s", sa818Device.c_str());
+
+                    {
+                        // Get the configuration parameters and program the device
+                        checkJSON(cfg, "sa818bw");
+                        unsigned bw = std::stoi(cfg["sa818bw"].get<std::string>());
+                        checkJSON(cfg, "sa818txf");
+                        float f = std::stof(cfg["sa818txf"].get<std::string>());
+                        unsigned txKhz = f * 10000;
+                        checkJSON(cfg, "sa818rxf");
+                        f = std::stof(cfg["sa818rxf"].get<std::string>());
+                        unsigned rxKhz = f * 10000;
+                        checkJSON(cfg, "sa818txpl");
+                        unsigned txPl = std::stoi(cfg["sa818txpl"].get<std::string>());
+                        checkJSON(cfg, "sa818rxpl");
+                        unsigned rxPl = std::stoi(cfg["sa818rxpl"].get<std::string>());
+                        checkJSON(cfg, "sa818sq");
+                        unsigned sq = std::stoi(cfg["sa818sq"].get<std::string>());
+                        checkJSON(cfg, "sa818vol");
+                        unsigned vol = std::stoi(cfg["sa818vol"].get<std::string>());
+
+                        int rc = SerialUtil::configureSA818(ui->_log, sa818Device.c_str(), bw, txKhz, rxKhz,
+                            txPl, rxPl, sq, vol);
+                        if (rc != 0) {
+                            ui->_log.error("SA818 config error %d", rc);
+                            result["status"] = "fail";
+                            result["msg"] = "Programming error: " +  std::to_string(rc);
+                        } else {
+                            result["status"] = "ok";
+                        }
+                    }
+                } else {
+                    result["status"] = "fail";
+                    result["msg"] = "SA818 not found";
+                }
+            }
+            else {
+                result["status"] = "fail";
+                result["msg"] = "SA818 not selected";
+            }
+        } else {
+            result["status"] = "fail";
+            result["msg"] = "SA818 not selected";
+        }
+
+        res.set_content(result.dump(), "application/json");
     });
 
     svr.Get("/log", [](const httplib::Request &, httplib::Response &res) {

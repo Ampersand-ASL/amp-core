@@ -19,7 +19,7 @@
 }
 
 .save-button {
-    width: 100px;
+    width: 150px;
 }
 
 #favorites {
@@ -125,7 +125,7 @@
                     <input type="number" id="echogain" name="echogain"/>
                 </div>
                 <div class="form2">
-                    <div>SA818 Settings (SHARI):</div><div></div>
+                    <div>SA818 Settings (Radio 0):</div><div></div>
                     <label for="sa818port">Command Port:</label>
                     <select id="sa818port" name="sa818port">
                     </select>
@@ -245,9 +245,16 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+                    <div></div>
+                    <input type="submit"  name="action" value="Program Radio 0" class="green-button save-button"/>
+                    <!-- Message Area -->
+                    <div></div>
+                    <div id="program-0-message-div">
+                        <span id="program-0-message"></span> 
+                    </div>
                 </div>
                 <span></span>
-                <input type="submit" value="Save" class="green-button save-button"/>
+                <input type="submit" name="action" value="Save" class="green-button save-button"/>
             </form>
         </div> <!-- /content-row -->
         <div class="footer-row">
@@ -336,6 +343,11 @@ async function fixMixerRanges() {
     ]);
 }
 
+const RadioControls = [ 
+    [ "sa818port", "sa818bw", "sa818txf", "sa818txpl", "sa818rxf", "sa818rxpl", "sa818sq", "sa818vol" ],
+    [ "sa818port_1", "sa818bw_1", "sa818txf_1", "sa818txpl_1", "sa818rxf_1", "sa818rxpl_1", "sa818sq_1", "sa818vol_1" ]
+];
+
 // Loads data into the configuration screen
 async function configLoad() {
     try {
@@ -376,14 +388,8 @@ async function configLoad() {
 
         // ------ SA8181 Section -----------------------------------------------------
 
-        loadUi("sa818port", data, document);
-        loadUi("sa818bw", data, document);
-        loadUi("sa818txf", data, document);
-        loadUi("sa818txpl", data, document);
-        loadUi("sa818rxf", data, document);
-        loadUi("sa818rxpl", data, document);
-        loadUi("sa818sq", data, document);
-        loadUi("sa818vol", data, document);
+        for (const field of RadioControls[0])
+            loadUi(field, data, document)
 
     } catch (error) {
         console.error('Error fetching configuration data:', error.message);
@@ -433,15 +439,9 @@ function configStore() {
 
     // ------ SA8181 Section -----------------------------------------------------
 
-    storeUi("sa818port", formObject, fullConfig);
-    storeUi("sa818bw", formObject, fullConfig);
-    storeUi("sa818txf", formObject, fullConfig);
-    storeUi("sa818txpl", formObject, fullConfig);
-    storeUi("sa818rxf", formObject, fullConfig);
-    storeUi("sa818rxpl", formObject, fullConfig);
-    storeUi("sa818sq", formObject, fullConfig);
-    storeUi("sa818vol", formObject, fullConfig);
-
+    for (const field of RadioControls[0])
+        storeUi(field, formObject, fullConfig)
+   
     // Push back to the server
     fetch('/config-save', {
         method: 'POST',
@@ -453,15 +453,67 @@ function configStore() {
     );
 }
 
+function programSA818(radioId) {
+
+    if (radioId != 0 && radioId != 1)
+        return;
+
+    const form = document.getElementById('config-form');
+    const formData = new FormData(form);
+    const formObject = Object.fromEntries(formData.entries());
+
+    // Pull out the relevant radio parameters
+    param = { 
+        "radio": radioId
+    };
+    for (var i = 0; i < RadioControls[0].length; i++) {
+        console.log(RadioControls[radioId][i]);
+        param[RadioControls[0][i]] = formObject[RadioControls[radioId][i]];
+    }
+
+    fetch('/program-sa818', {
+        method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(param, null, 2)
+        }
+    ).then((response) => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        // Returns a promise for the parsed JSON
+        return response.json(); 
+    }).then(data => {
+        
+        msgDiv = document.getElementById("program-0-message-div");
+        msgDiv.className = "message-div";
+        msgSpan = document.getElementById("program-0-message");
+
+        if (data["status"] == "ok") {
+            msgSpan.innerHTML = "Program OK";
+        } else if (data["status"] == "fail") {
+            msgSpan.innerHTML = data["msg"];
+            msgDiv.classList.add("message-alert");
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async() => {
 
     document.getElementById('config-form').addEventListener('submit', function (event) {
         event.preventDefault();
-        configStore();
+        console.log(event.submitter.value)
+        if (event.submitter.value == "Save")
+            configStore();
+        else if (event.submitter.value == "Program Radio 0")
+            programSA818(0);
+        else if (event.submitter.value == "Program Radio 1")
+            programSA818(1);
     });   
 
-    // Since the mixer menus depend on the selected audio deveice we need to attach 
-    // a change notification callaback
+    // Since the mixer menus depend on the selected audio device we need to attach 
+    // a change notification callback
     document.getElementById("aslAudioDevice").addEventListener("change", function(event) {
         fixMixerRanges();
     });

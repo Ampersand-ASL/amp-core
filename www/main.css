@@ -87,3 +87,20 @@ a {
 .grey-button {
     background-color: #444444;
 }
+
+.message-div {
+    margin-bottom: 5px;
+    width: 100%;
+    padding: 3px;
+}
+
+.message-alert {
+    background-color: red;
+    color: white;
+    font-weight: bold;
+}
+
+.message-info {
+    color: green;
+    font-weight: bold;
+}
