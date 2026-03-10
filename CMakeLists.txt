@@ -635,8 +635,8 @@ target_link_libraries(unit-test)
 
 add_executable(voter-test
   src/tests/voter-test.cpp
-  src/VoterUtil.cpp
-  src/VoterPeer.cpp
+  src/voter/VoterUtil.cpp
+  src/voter/VoterPeer.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/StdPollTimer.cpp
