@@ -230,7 +230,17 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         json data = json::parse(body);
 
         if (data.contains("action")) {
-            if (data["action"] == "ptt") {
+            if (data["action"] == "tone") {
+                PayloadTone payload;
+                string freq = data["freq"];
+                payload.freq = std::stof(freq);
+                payload.level = 0.5;
+                ui->_log.info("Tone %f %f", payload.freq, payload.level);
+                MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::TONE, 
+                    sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
+                bus->consume(msg);
+            } else if (data["action"] == "ptt") {
                 ui->_ptt.store(!ui->_ptt.load());
                 MessageEmpty msg;
                 if (ui->_ptt.load()) 
@@ -530,9 +540,15 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                         unsigned sq = std::stoi(cfg["sa818sq"].get<std::string>());
                         checkJSON(cfg, "sa818vol");
                         unsigned vol = std::stoi(cfg["sa818vol"].get<std::string>());
+                        checkJSON(cfg, "sa818emp");
+                        bool emp = cfg["sa818emp"].get<std::string>() == "1";
+                        checkJSON(cfg, "sa818lpf");
+                        bool lpf = cfg["sa818lpf"].get<std::string>() == "1";
+                        checkJSON(cfg, "sa818hpf");
+                        bool hpf = cfg["sa818hpf"].get<std::string>() == "1";
 
                         int rc = SerialUtil::configureSA818(ui->_log, sa818Device.c_str(), bw, txKhz, rxKhz,
-                            txPl, rxPl, sq, vol);
+                            txPl, rxPl, sq, vol, emp, lpf, hpf);
                         if (rc != 0) {
                             ui->_log.error("SA818 config error %d", rc);
                             result["status"] = "fail";

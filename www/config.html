@@ -246,6 +246,21 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+                    <label for="sa818emp">Pre/Deemphasis:</label>
+                    <select id="sa818emp" name="sa818emp">
+                        <option value="0">Off</option>
+                        <option value="1">On</option>
+                    </select>
+                    <label for="sa818lpf">Low-Pass Filter:</label>
+                    <select id="sa818lpf" name="sa818lpf">
+                        <option value="0">Off</option>
+                        <option value="1">On</option>
+                    </select>
+                    <label for="sa818hpf">High-Pass Filter:</label>
+                    <select id="sa818hpf" name="sa818hpf">
+                        <option value="0">Off</option>
+                        <option value="1">On</option>
+                    </select>
                     <div></div>
                     <input type="submit"  name="action" value="Program Radio 0" class="green-button save-button"/>
                     <!-- Message Area -->
@@ -376,6 +391,21 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+                    <label for="sa818emp_1">Pre/Deemphasis:</label>
+                    <select id="sa818emp_1" name="sa818emp_1">
+                        <option value="0">Off</option>
+                        <option value="1">On</option>
+                    </select>
+                    <label for="sa818lpf_1">Low-Pass Filter:</label>
+                    <select id="sa818lpf_1" name="sa818lpf_1">
+                        <option value="0">Off</option>
+                        <option value="1">On</option>
+                    </select>
+                    <label for="sa818hpf_1">High-Pass Filter:</label>
+                    <select id="sa818hpf_1" name="sa818hpf_1">
+                        <option value="0">Off</option>
+                        <option value="1">On</option>
+                    </select>
                     <div></div>
                     <input type="submit"  name="action" value="Program Radio 1" class="green-button save-button"/>
                     <!-- Message Area -->
@@ -476,8 +506,8 @@ async function fixMixerRanges() {
 }
 
 const RadioControls = [ 
-    [ "sa818port", "sa818bw", "sa818txf", "sa818txpl", "sa818rxf", "sa818rxpl", "sa818sq", "sa818vol" ],
-    [ "sa818port_1", "sa818bw_1", "sa818txf_1", "sa818txpl_1", "sa818rxf_1", "sa818rxpl_1", "sa818sq_1", "sa818vol_1" ]
+    [ "sa818port", "sa818bw", "sa818txf", "sa818txpl", "sa818rxf", "sa818rxpl", "sa818sq", "sa818vol", "sa818emp", "sa818lpf", "sa818hpf" ],
+    [ "sa818port_1", "sa818bw_1", "sa818txf_1", "sa818txpl_1", "sa818rxf_1", "sa818rxpl_1", "sa818sq_1", "sa818vol_1", "sa818emp_1", "sa818lpf_1", "sa818hpf_1" ]
 ];
 
 // Loads data into the configuration screen

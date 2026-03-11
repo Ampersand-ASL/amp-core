@@ -30,6 +30,8 @@
 
 #include "Line.h"
 
+#define FFT_SIZE (512)
+
 namespace kc1fsz {
 
 class Log;
@@ -173,13 +175,14 @@ protected:
     unsigned _captureRecordCounter = 0;
 
     bool _toneActive = false;
-    float _toneAmpTarget = dbvToPeak(-20);
+    float _toneAmpTarget = dbvToPeak(-10);
     float _toneAmpRamp = 0;
     float _toneRampIncrement = 0;
     float _toneOmega = 0;
     float _tonePhi = 0;
     // Controls the length of the amplitude transition in order to avoid clicks.
     const float _toneTransitionLength = 0.015f;
+    unsigned _toneTicks = 0;
 
     // Statistical analysis
     uint32_t _captureClipCount = 0;
@@ -201,6 +204,13 @@ protected:
     float _injectToneAmp = 0.31;
     float _injectToneOmega = 2.0f * 3.1415926f * 440.0f / 48000.0f;
     float _injectTonePhi = 0;
+
+    bool _fftEnabled = false;
+    int16_t _fftWindow[FFT_SIZE];
+    int16_t _fftBlock[FFT_SIZE];
+    float _fftMaxMag = 0;
+    float _fftMaxFreq = 0;
+    bool _triggerTone = false;
 };
 
 }

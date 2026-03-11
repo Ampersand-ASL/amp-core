@@ -30,6 +30,61 @@ using namespace std;
 
 namespace kc1fsz {
 
+/**
+ * Floating-point complex number
+ */
+struct cf32 {
+
+    float r = 0;
+    float i = 0;
+
+    cf32() : r(0), i(0) {}
+    cf32(float ar, float ai) : r(ar), i(ai) {}
+    cf32(const cf32& other) : r(other.r), i(other.i) { }
+
+    float mag() const {
+        return std::sqrt(magSquared());
+    }
+    float magSquared() const {
+        return r * r + i * i;
+    }
+    /**
+     * @returns Phase angle in radians.
+     */
+    float phase() const {
+        return std::atan2(i, r);
+    }
+    /**
+     * @returns this number plus b.
+     */
+    cf32 add(cf32 b) const {
+        return cf32(r + b.r, i + b.i);
+    }
+    /**
+     * @returns this number times b.
+     */
+    cf32 mult(cf32 b) const {
+        return cf32(r * b.r - i * b.i, r * b.i + i * b.r);
+    }
+};
+
+/**
+ * This is an out-of-the-book implementation to use for sanity checking.
+*/
+static void simpleDFT(cf32* in, cf32* out, uint16_t n) {
+    for (uint16_t k = 0; k < n; k++) { 
+        float sumreal = 0;
+        float sumimag = 0;
+        for (uint16_t t = 0; t < n; t++) {  // For each input element
+            float angle = 2.0 * PI * (float)t * (float)k / (float)n;
+            sumreal +=  in[t].r * std::cos(angle) + in[t].i * std::sin(angle);
+            sumimag += -in[t].r * std::sin(angle) + in[t].i * std::cos(angle);
+        }
+        out[k].r = sumreal / (float)n;
+        out[k].i = sumimag / (float)n;
+    }
+}
+
 LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
     unsigned destBusId, unsigned destCallId, 
@@ -61,6 +116,8 @@ void LineRadio::resetStatistics() {
     _playPcmValueMax = 0;
     _playPcmValueSum = 0;
     _playPcmValueCount = 0;
+    _fftMaxMag = 0;
+    _fftMaxFreq = 0;
 }
 
 /**
@@ -75,44 +132,53 @@ void LineRadio::consume(const Message& msg) {
     // This is a hardware signal coming in from the outside
     else if (msg.isSignal(Message::SignalType::COS_OFF)) {
         _setCosStatus(false);
-    }
+    }    
     // NOTE: Tone generation will override. 
-    // TODO: MIX INBOUND AUDIO WITH TONE?
     else if (msg.getType() == Message::Type::AUDIO) {
 
-        if (!_toneActive) {
+        // TODO: MIX INBOUND AUDIO WITH TONE?
+        if (_toneActive) 
+            return;
 
-            // Detect transitions from silence to playing
-            if (!_playing)
-                _playStart();
+        // Detect transitions from silence to playing
+        if (!_playing)
+            _playStart();
 
-            assert(msg.size() == BLOCK_SIZE_48K * 2);
+        assert(msg.size() == BLOCK_SIZE_48K * 2);
 
-            int16_t pcm48k_2[BLOCK_SIZE_48K];
+        int16_t pcm48k_2[BLOCK_SIZE_48K];
 
-            // #### TODO: LOOKING INTO REMOVING THIS CASE
-            if (msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K) {
-                // Convert the SLIN_48K LE into 16-bit PCM audio
-                Transcoder_SLIN_48K transcoder;
-                transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
-            }
-            else if (msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K) {
-                // In this case no conversion is needed
-                memcpy(pcm48k_2, msg.body(), BLOCK_SIZE_48K * 2);
-            }
-            else assert(false);
-
-            // Here is where statistical analysis and/or local recording can take 
-            // place for diagnostic purposes.
-            _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
-
-            // Call down to do the actual play on the hardware
-            _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
-
-            _lastPlayedFrameMs = _clock.time();
-            _playing = true;
+        // #### TODO: LOOKING INTO REMOVING THIS CASE
+        if (msg.getFormat() == CODECType::IAX2_CODEC_SLIN_48K) {
+            // Convert the SLIN_48K LE into 16-bit PCM audio
+            Transcoder_SLIN_48K transcoder;
+            transcoder.decode(msg.body(), msg.size(), pcm48k_2, BLOCK_SIZE_48K);
         }
+        else if (msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K) {
+            // In this case no conversion is needed
+            memcpy(pcm48k_2, msg.body(), BLOCK_SIZE_48K * 2);
+        }
+        else assert(false);
+
+        // Here is where statistical analysis and/or local recording can take 
+        // place for diagnostic purposes.
+        _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+
+        // Call down to do the actual play on the hardware
+        _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+
+        _lastPlayedFrameMs = _clock.time();
+        _playing = true;
     }
+    else if (msg.isSignal(Message::SignalType::TONE)) {
+        PayloadTone payload;
+        assert(msg.size() == sizeof(payload));
+        memcpy(&payload, msg.body(), msg.size());
+        // Enable some tone generation
+        _toneActive = true;
+        _toneTicks = 50 * 3;
+        _toneOmega = 2.0f * 3.1415926f * payload.freq / 48000.0f;
+    }    
 }
 
 /**
@@ -124,19 +190,9 @@ void LineRadio::_generateToneFrame() {
     int16_t pcm48k_2[BLOCK_SIZE_48K];
 
     for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-        pcm48k_2[i] = 32767.0f * _toneAmpRamp * std::cos(_tonePhi);
+        pcm48k_2[i] = 32767.0f * _toneAmpTarget * std::cos(_tonePhi);
         // IMPORTANT: Phase continuity at all times
         _tonePhi += _toneOmega;
-        _toneAmpRamp += _toneRampIncrement;
-        // Check to see if the target has been achieved.  If so, turn 
-        // off the ramp.
-        if (_toneRampIncrement > 0 && _toneAmpRamp >= _toneAmpTarget) {
-            _toneAmpRamp = _toneAmpTarget;
-            _toneRampIncrement = 0;
-        } else if (_toneRampIncrement < 0 && _toneAmpRamp <= _toneAmpTarget) {
-            _toneAmpRamp = _toneAmpTarget;
-            _toneRampIncrement = 0;
-        }
     }
 
     // Avoids strange artifacts when phi becomes very large and precision problems
@@ -149,6 +205,9 @@ void LineRadio::_generateToneFrame() {
 
     // Call down to do the actual play on the hardware
     _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+
+    _lastPlayedFrameMs = _clock.time();
+    _playing = true;
 }
 
 void LineRadio::oneSecTick() {
@@ -158,8 +217,12 @@ void LineRadio::oneSecTick() {
     
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
-        _log.info("TXLEVEL %6u %5.1f %5.1f", _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg));
+        float magDb = 20.0 * std::log10(2.0f * _fftMaxFreq / 32767.0f);
+        _log.info("RXLEVEL %6u %5.1f %5.1f %6.0f at %4.0f Hz", 
+            _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg),
+            magDb, _fftMaxFreq);
     }
+
     if (_playPcmValueCount) {
         //uint32_t avg = _playPcmValueSum / _playPcmValueCount;
         //_log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
@@ -199,8 +262,14 @@ void LineRadio::audioRateTick(uint32_t tickMs) {
     _checkTimeouts();
 
     // Handle audio synthesis if necessary
-    if (_toneActive) {
-        _generateToneFrame();
+    if (_toneActive) {     
+        if (--_toneTicks == 0) 
+            _toneActive = false;
+        else {
+            if (!_playing) 
+                _playStart();
+            _generateToneFrame();
+        }
     }
 }
 
@@ -266,6 +335,29 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
         _capturePcmValueSum += sample;
         _capturePcmValueCount++;
     }
+
+    // Perform rolling FFT
+    if (_fftEnabled) {
+
+        // Slide everything to the left to make room for a new block
+        //memmove(_fftBlock, _fftBlock + BLOCK_SIZE_48K, sizeof(int16_t) * (FFT_SIZE - BLOCK_SIZE_48K));
+        //memcpy(_fftBlock + FFT_SIZE - BLOCK_SIZE_48K, frame, BLOCK_SIZE_48K);
+
+        // NOTE: FFT SIZE IS SMALLER THAN FRAME SIZE!
+        cf32 inBlock[FFT_SIZE];
+        for (unsigned i = 0; i < FFT_SIZE; i++)
+            inBlock[i].r = frame[i];
+        cf32 outBlock[FFT_SIZE];
+        simpleDFT(inBlock, outBlock, FFT_SIZE);
+
+        // Find largest power
+        for (unsigned i = 1; i < FFT_SIZE / 2; i++) 
+            if (outBlock[i].mag() > _fftMaxMag) {
+                _fftMaxMag = outBlock[i].mag();
+                _fftMaxFreq = (48000.0f / (float)FFT_SIZE) * (float)i;
+            }
+
+    }
 }
 
 void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
@@ -290,7 +382,7 @@ void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
         _log.info("DTMF %c", _dtmfDetector.popDetection());
     }
 
-    // Make an SLIN_48K buffer in CODEC format.
+    // Make an SLIN_48K buffer in CODEC format.5
     uint8_t outBuffer[BLOCK_SIZE_48K * 2];
     Transcoder_SLIN_48K transcoder;
 
@@ -368,11 +460,17 @@ void LineRadio::_setCosStatus(bool cosActive) {
 
         _log.info("COS active");
         _cosActive = true;    
+        
+        if (_triggerTone) {
+            _injectToneActive = true;
+        }
 
     } else if (!cosActive && _cosActive) {
 
         _log.info("COS inactive");
         _cosActive = false;
+        
+        _injectToneActive = false;
 
         // Generate an UNKEY signal on the negative transition
         _sendSignal(Message::SignalType::RADIO_UNKEY, 0, 0);

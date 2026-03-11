@@ -140,7 +140,8 @@ static int sendToSA818(Log& log, int fd, const char* cmd) {
 }
 
 int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsigned rxKhz,
-    unsigned txPl, unsigned rxPl, unsigned sq, unsigned vol) {
+    unsigned txPl, unsigned rxPl, unsigned sq, unsigned vol, 
+    bool emp, bool lpf, bool hpf) {
 
     int fd = ::open(port, O_RDWR | O_NOCTTY);
     if (fd < 0) 
@@ -204,6 +205,20 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         close(fd);
         return -8;
     }
+
+    char cmd3[64];
+    snprintf(cmd3, sizeof(cmd3), "AT+SETFILTER=%u,%u,%u\r\n",
+        emp ? 1 : 0, hpf ? 1 : 0, lpf ? 1 : 0);
+    rc = sendToSA818(log, fd, cmd3);
+    if (rc < 0) {
+        close(fd);
+        return -9;
+    }
+    if (!expect818(log, fd, 250, "+DMOSETFILTER:0\r\n")) {
+        close(fd);
+        return -10;
+    }
+
     close(fd);
     return 0;
 }
