@@ -151,6 +151,15 @@ void ConfigPoller::_populateDefaults(json& j) {
     if (!j.contains("sa818vol")) {
         j["sa818vol"] = "8";
     }
+    if (!j.contains("sa818emp")) {
+        j["sa818emp"] = "0";
+    }
+    if (!j.contains("sa818lpf")) {
+        j["sa818lpf"] = "0";
+    }
+    if (!j.contains("sa818hpf")) {
+        j["sa818hpf"] = "0";
+    }
 
     if (!j.contains("sa818port_1")) {
         j["sa818port_1"] = "";
@@ -175,6 +184,15 @@ void ConfigPoller::_populateDefaults(json& j) {
     }
     if (!j.contains("sa818vol_1")) {
         j["sa818vol_1"] = "8";
+    }
+    if (!j.contains("sa818emp_1")) {
+        j["sa818emp_1"] = "0";
+    }
+    if (!j.contains("sa818lpf_1")) {
+        j["sa818lpf_1"] = "0";
+    }
+    if (!j.contains("sa818hpf_1")) {
+        j["sa818hpf_1"] = "0";
     }
 
     if (!j.contains("duplexmode")) {

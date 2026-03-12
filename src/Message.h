@@ -83,7 +83,9 @@ public:
         // Used to generate outbound DTMF
         DTMF_GEN,
         // Used to publish the list of connected nodes
-        LINK_REPORT
+        LINK_REPORT,
+        // Requests a test tone
+        TONE
     };
 
     // Message needs to be large enough for 20ms of PCM16 at 48K 
@@ -255,6 +257,11 @@ struct PayloadTTS {
     char req[128];
     unsigned preSilenceMs = 0;
     unsigned postSilenceMs = 0;
+};
+
+struct PayloadTone {
+    float freq;
+    float level;
 };
 
 }

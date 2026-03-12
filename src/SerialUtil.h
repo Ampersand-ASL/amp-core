@@ -34,7 +34,8 @@ int configurePort(int fd, unsigned baud);
  * @param rxPl The SA818 code from 0 to 38
  */
 int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsigned rxKhz,
-    unsigned txPl, unsigned rxPl, unsigned sq, unsigned vol);
+    unsigned txPl, unsigned rxPl, unsigned sq, unsigned vol,
+    bool emp, bool lpf, bool hpf);
 
     }
 }
