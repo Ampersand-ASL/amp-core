@@ -690,3 +690,14 @@ target_include_directories(program-test-1 PRIVATE json/include)
 target_include_directories(program-test-1 PRIVATE itu-g711-codec/src)
 target_include_directories(program-test-1 PRIVATE cmsis-dsp-mock/include)
 target_include_directories(program-test-1 PRIVATE g726-codec/src)
+
+# ----- voter-test-2
+
+add_executable(voter-test-2
+  src/tests/voter-test-2.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
+)
+
+target_include_directories(voter-test-2 PRIVATE src)
+target_include_directories(voter-test-2 PRIVATE include)
+target_include_directories(voter-test-2 PRIVATE kc1fsz-tools-cpp/include)
