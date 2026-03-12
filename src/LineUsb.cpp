@@ -339,7 +339,7 @@ void LineUsb::_captureIfPossible() {
     if (!_captureH || _inError)
         return;
 
-    bool audioCaptureEnabled = (_cosActive && _ctcssActive) || _toneActive;
+    bool audioCaptureEnabled = (_cosActive && _ctcssActive);
 
     // Attempt to read inbound (captured) audio data. Whenever a full
     // block is accumulated it can be returned to the outside.

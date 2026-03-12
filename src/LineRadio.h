@@ -205,7 +205,7 @@ protected:
     float _injectToneOmega = 2.0f * 3.1415926f * 440.0f / 48000.0f;
     float _injectTonePhi = 0;
 
-    bool _fftEnabled = false;
+    bool _fftEnabled = true;
     int16_t _fftWindow[FFT_SIZE];
     int16_t _fftBlock[FFT_SIZE];
     float _fftMaxMag = 0;
