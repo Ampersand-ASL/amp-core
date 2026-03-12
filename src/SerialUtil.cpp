@@ -27,6 +27,8 @@
 
 #include "SerialUtil.h"
 
+#define MODULE_TIMEOUT_MS (1000)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -159,7 +161,7 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         close(fd);
         return -3;
     }
-    drainSA818(log, fd, 250);
+    drainSA818(log, fd, MODULE_TIMEOUT_MS);
 
     // Send the same command again
     rc = sendToSA818(log, fd, cmd0);
@@ -167,7 +169,7 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         close(fd);
         return -3;
     }
-    if (!expect818(log, fd, 250, "+DMOCONNECT:0\r\n")) {
+    if (!expect818(log, fd, MODULE_TIMEOUT_MS, "+DMOCONNECT:0\r\n")) {
         close(fd);
         return -4;
     }
@@ -179,7 +181,7 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         return -3;
     }
     // Consume but ignore the output
-    drainSA818(log, fd, 250);
+    drainSA818(log, fd, MODULE_TIMEOUT_MS);
 
     char cmd1[32];
     snprintf(cmd1, sizeof(cmd1), "AT+DMOSETVOLUME=%u\r\n", vol);
@@ -188,7 +190,7 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         close(fd);
         return -5;
     }
-    if (!expect818(log, fd, 250, "+DMOSETVOLUME:0\r\n")) {
+    if (!expect818(log, fd, MODULE_TIMEOUT_MS, "+DMOSETVOLUME:0\r\n")) {
         close(fd);
         return -6;
     }
@@ -201,7 +203,7 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         close(fd);
         return -7;
     }
-    if (!expect818(log, fd, 250, "+DMOSETGROUP:0\r\n")) {
+    if (!expect818(log, fd, MODULE_TIMEOUT_MS, "+DMOSETGROUP:0\r\n")) {
         close(fd);
         return -8;
     }
@@ -214,7 +216,7 @@ int configureSA818(Log& log, const char* port, unsigned bw, unsigned txKhz, unsi
         close(fd);
         return -9;
     }
-    if (!expect818(log, fd, 250, "+DMOSETFILTER:0\r\n")) {
+    if (!expect818(log, fd, MODULE_TIMEOUT_MS, "+DMOSETFILTER:0\r\n")) {
         close(fd);
         return -10;
     }

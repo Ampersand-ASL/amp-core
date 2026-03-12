@@ -118,6 +118,8 @@ void LineRadio::resetStatistics() {
     _playPcmValueCount = 0;
     _fftMaxMag = 0;
     _fftMaxFreq = 0;
+    // Prepare for another capture
+    _fftTrigger = true;
 }
 
 /**
@@ -217,7 +219,7 @@ void LineRadio::oneSecTick() {
     
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
-        float magDb = 20.0 * std::log10(2.0f * _fftMaxFreq / 32767.0f);
+        float magDb = 20.0 * std::log10(2.0f * _fftMaxMag / 32767.0f);
         _log.info("RXLEVEL %6u %5.1f %5.1f %6.0f at %4.0f Hz", 
             _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg),
             magDb, _fftMaxFreq);
@@ -337,7 +339,7 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
     }
 
     // Perform rolling FFT
-    if (_fftEnabled) {
+    if (_fftEnabled && _fftTrigger) {
 
         // Slide everything to the left to make room for a new block
         //memmove(_fftBlock, _fftBlock + BLOCK_SIZE_48K, sizeof(int16_t) * (FFT_SIZE - BLOCK_SIZE_48K));
@@ -345,18 +347,22 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
 
         // NOTE: FFT SIZE IS SMALLER THAN FRAME SIZE!
         cf32 inBlock[FFT_SIZE];
-        for (unsigned i = 0; i < FFT_SIZE; i++)
+        for (unsigned i = 0; i < FFT_SIZE; i++) {
             inBlock[i].r = frame[i];
+            inBlock[i].i = 0;
+        }
         cf32 outBlock[FFT_SIZE];
         simpleDFT(inBlock, outBlock, FFT_SIZE);
 
         // Find largest power
-        for (unsigned i = 1; i < FFT_SIZE / 2; i++) 
+        for (unsigned i = 1; i < FFT_SIZE / 2; i++) {
             if (outBlock[i].mag() > _fftMaxMag) {
                 _fftMaxMag = outBlock[i].mag();
                 _fftMaxFreq = (48000.0f / (float)FFT_SIZE) * (float)i;
             }
+        }
 
+        _fftTrigger = false;
     }
 }
 
