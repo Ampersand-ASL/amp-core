@@ -339,7 +339,7 @@ void LineUsb::_captureIfPossible() {
     if (!_captureH || _inError)
         return;
 
-    bool audioCaptureEnabled = (_cosActive && _ctcssActive);
+    //bool audioCaptureEnabled = (_cosActive && _ctcssActive);
 
     // Attempt to read inbound (captured) audio data. Whenever a full
     // block is accumulated it can be returned to the outside.
@@ -358,9 +358,9 @@ void LineUsb::_captureIfPossible() {
         // Do we have a full audio block available yet?
         if (_captureAccumulatorSize + samplesRead >= BLOCK_SIZE_48K) {
 
-            uint32_t nowMs = _clock.time();
-            uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
-            _captureCount++;
+            //uint32_t nowMs = _clock.time();
+            //uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
+            //_captureCount++;
            
             // Form a complete block of mono 16-bit PCM by joining what
             // we had already accumulated previously with the new samples 
@@ -398,6 +398,9 @@ void LineUsb::_captureIfPossible() {
                 // Left side audio only
                 _captureAccumulator[_captureAccumulatorSize++] = unpack_int16_le(srcPtr);
 
+            _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
+
+            /*
             // The processing steps are only done if capture is enabled, otherwise
             // the new audio data is just dropped.
             if (audioCaptureEnabled) {
@@ -420,6 +423,7 @@ void LineUsb::_captureIfPossible() {
                 // Here is where the actual processing of the new block happens
                 _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, nowMs, idealNowMs);
             }
+            */
         }
         // If we don't have a complete block yet then just keep storing
         // the captured audio in the accumulator.
@@ -453,14 +457,14 @@ void LineUsb::_playStart() {
 /**
  * This will be called by the base class after all decoding has happened.
  */
-void LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
+bool LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
     if (_inError)
-        return;
+        return false;
 
     // Check to make sure we actually have room in the accumulator
     if (_playAccumulatorSize + BLOCK_SIZE_48K > PLAY_ACCUMULATOR_CAPACITY) {
-        _log.error("Play accumulator is full, lost a frame");
+        return false;
     }
     else {
         // Move new audio block into the play accumulator 
@@ -471,8 +475,11 @@ void LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
     _playFrameCount++;
 
-    // Try to clear the buffer
+    // Try to clear the _playAccumulator into the hardware.
     _playIfPossible();
+
+    // At this point at least the frame has been accepted into the _playAccumulator.
+    return true;
 }
 
 void LineUsb::_playIfPossible() {

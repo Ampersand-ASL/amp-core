@@ -73,7 +73,7 @@ protected:
     /**
      * This function is called to do the actual playing of the 48K PCM.
      */
-    virtual void _playPCM48k(int16_t* pcm48k_2, unsigned blockSize);
+    virtual bool _playPCM48k(int16_t* pcm48k_2, unsigned blockSize);
 
 private:
 
@@ -82,7 +82,6 @@ private:
 
     static void _sndCloser(snd_pcm_t* h) { snd_pcm_close(h); }
 
-    uint32_t _captureStartMs = 0;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
 
@@ -99,7 +98,6 @@ private:
     unsigned _playAccumulatorSize = 0;
 
     bool _startOfTs = false;
-    uint32_t _captureCount = 0;
     bool _inError = false;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------

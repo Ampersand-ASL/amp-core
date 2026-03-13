@@ -116,8 +116,15 @@ protected:
 
     /**
      * This function is called to do the actual playing of the 48K PCM.
+     * Since it possible that the underlying hardware may have a finite
+     * buffer, it's possible that this will report a busy status and
+     * require the block to be re-attempted later.
+     *
+     * This must be all or nothing!
+     * 
+     * @return True if accepted, false if not accepted.
      */
-    virtual void _playPCM48k(int16_t* pcm48k_2, unsigned blockSize) = 0;
+    virtual bool _playPCM48k(int16_t* pcm48k_2, unsigned blockSize) = 0;
 
     void _checkTimeouts();
 
@@ -126,9 +133,25 @@ protected:
     void _playStart();
     void _playEnd();
 
+    /**
+     * This should be called whenever the hardware as captured a complete 
+     * frame, regardless of signals or anything else. This is where the 
+     * decision is made to proceed with distribution.
+     */
+    void _processCapturedAudio(const int16_t* frame, unsigned frameLen);
+
+    /**
+     * Performs any requested statistical analysis.
+     */
     void _analyzeCapturedAudio(const int16_t* frame, unsigned frameLen);
-    void _processCapturedAudio(const int16_t* frame, unsigned frameLen,
+
+    /**
+     * This method takes a block of audio and passes it out for distribution
+     * on the bus.
+     */
+    void _distributeCapturedAudio(const int16_t* frame, unsigned frameLen,
         uint32_t actualCaptureMs, uint32_t idealCaptureMs);
+
     void _sendTalkerId();
 
     void _captureStart();
@@ -146,6 +169,9 @@ protected:
     const unsigned _destBusId, _destCallId;
     const unsigned _signalDestLineId;
     const uint32_t _startTimeMs;
+
+    uint32_t _captureStartMs = 0;
+    uint32_t _captureCount = 0;
 
     // Primarily used for setting the talker ID
     std::string _callsign;

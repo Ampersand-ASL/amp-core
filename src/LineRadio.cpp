@@ -167,7 +167,9 @@ void LineRadio::consume(const Message& msg) {
         _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
 
         // Call down to do the actual play on the hardware
-        _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+        if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) == false) {
+            _log.error("USB play buffer overflow");
+        }
 
         _lastPlayedFrameMs = _clock.time();
         _playing = true;
@@ -206,7 +208,9 @@ void LineRadio::_generateToneFrame() {
     _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
 
     // Call down to do the actual play on the hardware
-    _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+    if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) == false) {
+        _log.error("USB play buffer overflow");
+    }
 
     _lastPlayedFrameMs = _clock.time();
     _playing = true;
@@ -320,6 +324,38 @@ void LineRadio::_close() {
     _sendSignal(Message::SignalType::CALL_END, &payload, sizeof(payload));
 }
 
+
+void LineRadio::_processCapturedAudio(const int16_t* pcm48k_1, unsigned frameLen) {
+
+    bool audioCaptureEnabled = (_cosActive && _ctcssActive);
+    uint32_t nowMs = _clock.time();
+    uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
+    _captureCount++;
+
+    // The processing steps are only done if capture is enabled, otherwise
+    // the new audio data is just dropped.
+    if (audioCaptureEnabled) {
+
+        // Transition detect, the beginning of a capture "run"
+        if (!_capturing) {
+            _capturing = true;
+            // Force a synchronization of the actual system clock and 
+            // the timestamps that will be put on the generated frames.
+            _captureStartMs = nowMs;
+            _captureCount = 0;
+            idealNowMs = nowMs;
+            _captureStart();
+        }
+        _lastCapturedFrameMs = _clock.time();
+
+        // Here is where statistics and possibly recording happens
+        _analyzeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
+        
+        // Here is where the actual processing of the new block happens
+        _distributeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, nowMs, idealNowMs);
+    }
+}
+
 void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
 
     _lastFullCaptureMs = _clock.time();
@@ -366,7 +402,7 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
     }
 }
 
-void LineRadio::_processCapturedAudio(const int16_t* block, unsigned blockLen,
+void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen,
     uint32_t actualCaptureMs, uint32_t idealCaptureMs) {
 
     assert(blockLen == BLOCK_SIZE_48K);
