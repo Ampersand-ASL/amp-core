@@ -29,7 +29,8 @@ void MicroEventLoop::run(Log& log, Clock& clock,
     Runnable** tasks1, unsigned task1Count,
     Runnable2** tasks, unsigned taskCount,
     std::function<bool(Log& log, Clock& clock)> cb, 
-    void (*cb2)(),
+    void (*cb_top)(),
+    void (*cb_bottom)(),
     bool trace) {
 
     StdPollTimer timer20ms(clock, 20000);
@@ -49,6 +50,9 @@ void MicroEventLoop::run(Log& log, Clock& clock,
     unsigned long maxLateUs = 0;
 
     while (true) {        
+
+        if (cb_top)
+            cb_top();
 
         uint64_t pollStartUs = clock.timeUs();
         uint64_t pollEndUs = clock.timeUs();
@@ -95,9 +99,8 @@ void MicroEventLoop::run(Log& log, Clock& clock,
                 break;
         }
 
-        if (cb2) {
-            cb2();
-        }
+        if (cb_bottom)
+            cb_bottom();
 
         unsigned long workEndUs = clock.timeUs();
         unsigned long workTimeUs = workEndUs - workStartUs;

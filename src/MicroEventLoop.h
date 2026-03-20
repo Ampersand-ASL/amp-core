@@ -34,13 +34,15 @@ public:
     /**
      * @param cb (Optional) Called on every cycle. If false is
      * returned then the loop exits.
-     * @param cb2 (Optional) Called on every cycle. 
+     * @param cb_top (Optional) Called at the top of every cycle. 
+     * @param cb_bottom (Optional) Called at the bottom of every cycle. 
      */
     static void run(Log& log, Clock& lock, 
         Runnable** tasks, unsigned tasksLen,
         Runnable2** tasks2, unsigned tasks2Len,
         std::function<bool(Log& log, Clock& clock)> cb = nullptr,
-        void (*cb2)() = 0,
+        void (*cb_top)() = 0,
+        void (*cb_bottom)() = 0,
         bool trace = false);    
 };
 
