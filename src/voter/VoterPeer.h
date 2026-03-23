@@ -171,10 +171,11 @@ public:
     void popAudioFrame();
 
     /**
-     * Called by the conference to transmit a frame of audio to the
+     * Called by the conference to transmit a frame of audio to the 
      * Voter device.
      */
-    void sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen);
+    void sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen,
+        uint64_t originMs);
 
     static bool isValidPacket(const uint8_t* packet, unsigned packetLen);
 

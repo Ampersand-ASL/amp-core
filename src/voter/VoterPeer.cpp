@@ -317,12 +317,15 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     }
 }
 
-void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen) {
+void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen,
+    uint64_t originMs) {
 
     assert(frameLen == FRAME_SIZE);
 
     uint8_t resp[HEADER_SIZE + 1 + FRAME_SIZE] = { 0 };
     _populateHeader(1, resp);
+
+    // NOTE: Time is being looked at
 
     uint32_t nowS = _clock->timeUs() / 1000000;
     VoterUtil::setHeaderTimeS(resp, nowS);
@@ -334,6 +337,9 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen)
         uint32_t nowUs = _clock->timeUs() % 1000000;
         // Round to 20ms boundary
         uint32_t nowMs = nowUs / 1000;
+
+        //_log->info("Time %ld %ld", (long)originMs, (long)_clock->timeUs() / 1000L);
+
         uint32_t nowMsRounded = (nowMs / 20) * 20;
         // Change from ms -> ns
         uint32_t nowNs = nowMsRounded * 1000000;
