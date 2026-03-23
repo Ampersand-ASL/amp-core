@@ -44,22 +44,16 @@ void MicroEventLoop::run(Log& log, Clock& clock,
     timer10s.reset();
 
     unsigned long slowestLoopUs = 0;
-    unsigned long totalPollUs = 0;
-    unsigned long totalWorkUs = 0;
+    uint64_t totalWorkUs = 0;
     unsigned long loopCount = 0;   
     unsigned long maxLateUs = 0;
 
     while (true) {        
 
+        uint64_t workStartUs = clock.timeUs();
+
         if (cb_top)
             cb_top();
-
-        uint64_t pollStartUs = clock.timeUs();
-        uint64_t pollEndUs = clock.timeUs();
-        unsigned long pollTimeUs = pollEndUs - pollStartUs;
-        totalPollUs += pollTimeUs;
-
-        unsigned long workStartUs = clock.timeUs();
 
         for (unsigned i = 0; i < task1Count; i++)
             tasks1[i]->run();
@@ -69,8 +63,9 @@ void MicroEventLoop::run(Log& log, Clock& clock,
         if (timer20ms.poll(&intervalUs)) {
             if (timer20ms.getLateUs() > maxLateUs)
                 maxLateUs = timer20ms.getLateUs();
+            uint64_t intervalMs = intervalUs / 1000;
             for (unsigned i = 0; i < taskCount; i++)
-                tasks[i]->audioRateTick(intervalUs / 1000);
+                tasks[i]->audioRateTick(intervalMs);
         }  
 
         for (unsigned i = 0; i < taskCount; i++)
@@ -89,9 +84,9 @@ void MicroEventLoop::run(Log& log, Clock& clock,
         bool showStats = false;
 
         if (timer10s.poll()) {
+            showStats = true;
             for (unsigned i = 0; i < taskCount; i++)
                 tasks[i]->tenSecTick();
-            showStats = true;
         }
 
         if (cb) {
@@ -102,24 +97,23 @@ void MicroEventLoop::run(Log& log, Clock& clock,
         if (cb_bottom)
             cb_bottom();
 
-        unsigned long workEndUs = clock.timeUs();
-        unsigned long workTimeUs = workEndUs - workStartUs;
+        uint64_t workEndUs = clock.timeUs();
+
+        uint64_t workTimeUs = workEndUs - workStartUs;
         totalWorkUs += workTimeUs;
         
         if (workTimeUs > slowestLoopUs) {
             slowestLoopUs = workTimeUs;
-            //log.info("Slowest loop %lu us", slowestLoopUs);
+            log.info("Slowest loop %lu us", (unsigned long)slowestLoopUs);
         }
 
         if (trace && showStats) {
             // Internal stats
-            log.info("AvgPoll: %6lu, AvgWork: %6lu, MaxWork: %6lu, MaxLate: %6lu", 
-                totalPollUs / loopCount,
+            log.info("AvgWork: %6lu, MaxWork: %6lu, MaxLate: %6lu", 
                 totalWorkUs / loopCount, 
                 slowestLoopUs,
                 maxLateUs);
 
-            totalPollUs = 0;
             totalWorkUs = 0;
             maxLateUs = 0;
             slowestLoopUs = 0;

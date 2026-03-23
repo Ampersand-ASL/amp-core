@@ -282,7 +282,13 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
         }
         else {
             // #### TODO: OVERFLOW COUNTER
-            _log->info("VOTER buffer full");
+            uint32_t packetS = VoterUtil::getHeaderTimeS(packet);
+            uint32_t packetNs = VoterUtil::getHeaderTimeNs(packet);
+            _log->info("VOTER buffer full %u %u", packetS, packetNs);
+            /*
+            for (unsigned i = 0; i < FRAME_COUNT; i++)
+                _log->info("  Frame %u -> %u %u", i, _frames[i].packetS, _frames[i].packetNs);
+            */
         }
     } 
     // Ping packet
@@ -337,9 +343,6 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen,
         uint32_t nowUs = _clock->timeUs() % 1000000;
         // Round to 20ms boundary
         uint32_t nowMs = nowUs / 1000;
-
-        //_log->info("Time %ld %ld", (long)originMs, (long)_clock->timeUs() / 1000L);
-
         uint32_t nowMsRounded = (nowMs / 20) * 20;
         // Change from ms -> ns
         uint32_t nowNs = nowMsRounded * 1000000;

@@ -133,6 +133,8 @@ void VoterClient::setClientPassword(const char* p) {
 
 void VoterClient::consume(const Message& m) {   
     if (m.isVoice()) {
+        // #### TEMP
+        //_log.info("Time %ld %ld", (long)m.getRxMs(), (long)_clock.timeUs() / 1000L);
         if (_client.isPeerTrusted()) 
             _client.sendAudio(_rssi, m.body(), m.size(), m.getRxMs());
     }
