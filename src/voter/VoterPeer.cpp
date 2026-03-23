@@ -285,10 +285,8 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
             uint32_t packetS = VoterUtil::getHeaderTimeS(packet);
             uint32_t packetNs = VoterUtil::getHeaderTimeNs(packet);
             _log->info("VOTER buffer full %u %u", packetS, packetNs);
-            /*
             for (unsigned i = 0; i < FRAME_COUNT; i++)
                 _log->info("  Frame %u -> %u %u", i, _frames[i].packetS, _frames[i].packetNs);
-            */
         }
     } 
     // Ping packet
