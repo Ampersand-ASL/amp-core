@@ -243,7 +243,7 @@ void LineVoter::audioRateTick(uint32_t ms) {
 
             // Make a message and transmit to the Bridge
             MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
-            msg.setSource(_lineId, i);
+            msg.setSource(_lineId, CALL_ID_FIXED);
             msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
             _bus.consume(msg);
 
