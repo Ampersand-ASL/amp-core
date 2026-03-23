@@ -182,6 +182,7 @@ public:
     static bool isInitialChallenge(const uint8_t* packet, unsigned packetLen);
 
     static int makeInitialChallengeResponse(Clock* clock, const uint8_t* inPacket, 
+        bool isClient, bool isGeneralPurposeMode, 
         const char* localChallenge, const char* localPassword, uint8_t* resp);
 
     /**

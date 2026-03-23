@@ -45,7 +45,6 @@ public:
 
     // General header stuff
 
-    static uint8_t getHeaderFlags(const uint8_t* packet); 
     static uint16_t getHeaderPayloadType(const uint8_t* packet); 
     static uint32_t getHeaderTimeS(const uint8_t* packet);
     static uint32_t getHeaderTimeNs(const uint8_t* packet);
@@ -54,12 +53,12 @@ public:
     static uint32_t getHeaderAuthResponse(const uint8_t* packet);
 
     static uint8_t getType0Flags(const uint8_t* packet);
+    static void setType0Flags(uint8_t* packet, uint8_t f);
 
     static uint8_t getType1RSSI(const uint8_t* packet);
     static int getType1Audio(const uint8_t* packet,
         uint8_t* audio, unsigned audioCapacity);
 
-    static void setHeaderFlags(uint8_t* packet, uint8_t f);
     static void setHeaderPayloadType(uint8_t* packet, uint16_t t);
     static void setHeaderAuthChallenge(uint8_t* packet, const char* challenge);
     static void setHeaderAuthResponse(uint8_t* packet, uint32_t crc32);

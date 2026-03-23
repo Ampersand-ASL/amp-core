@@ -333,13 +333,15 @@ void LineVoter::_processReceivedPacket(
     // ### TODO: MAKE THIS SMARTER TO AVOID DUPLICATES
     _log.info("VOTER packet from %s, not trusted yet", addr);
 
-    uint8_t resp[24] = { 0 };
+    const unsigned TYPE_0_LENGTH = 25;
+    uint8_t resp[TYPE_0_LENGTH] = { 0 };
     // If a zero auth response is received then send back the initial 
     // challenge response.
     int rc = amp::VoterPeer::makeInitialChallengeResponse(&_clock, packet,
+        false, false, 
         _serverChallenge.c_str(), _serverPassword.c_str(), resp);
-    assert(rc == 24);
-    _sendPacketToPeer(resp, 24, peerAddr);
+    assert(rc == TYPE_0_LENGTH);
+    _sendPacketToPeer(resp, TYPE_0_LENGTH, peerAddr);
 }
 
 void LineVoter::_sendPacketToPeer(const uint8_t* b, unsigned len, 

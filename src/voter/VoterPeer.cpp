@@ -119,24 +119,29 @@ bool VoterPeer::isInitialChallenge(const uint8_t* packet, unsigned packetLen) {
 }
 
 int VoterPeer::makeInitialChallengeResponse(Clock* clock, const uint8_t* packet, 
+    bool isClient, bool isGeneralPurposeMode, 
     const char* localChallenge, const char* localPassword, uint8_t* resp) {
     // Grab the remote challenge since we'll need it for any responses.
     char remoteChallenge[10];
     if (VoterUtil::getHeaderAuthChallenge(packet, 
         remoteChallenge, sizeof(remoteChallenge)) != 0)
         return -1;
-    memset(resp, 0, HEADER_SIZE);
-    // #### TODO DEAL WITH FLAGS
+    memset(resp, 0, HEADER_SIZE + 1);
     VoterUtil::setHeaderPayloadType(resp, 0);
     VoterUtil::setHeaderAuthChallenge(resp, localChallenge);
     uint32_t crc = VoterUtil::crc32(remoteChallenge, localPassword);
     VoterUtil::setHeaderAuthResponse(resp, crc);
     VoterUtil::setHeaderTimeS(resp, clock->timeMs() / 1000);
-    return HEADER_SIZE;
+    uint8_t flags = 0;
+    if (isClient && isGeneralPurposeMode)
+        flags |= 32;
+    VoterUtil::setType0Flags(resp, flags);
+    return HEADER_SIZE + 1;
 }
 
 bool VoterPeer::isValidPacket(const uint8_t* packet, unsigned packetLen) {
     if ((packetLen < HEADER_SIZE) ||
+        (VoterUtil::getHeaderPayloadType(packet) == 0 && packetLen != 25) ||
         (VoterUtil::getHeaderPayloadType(packet) == 1 && packetLen < HEADER_SIZE + 1 + FRAME_SIZE)) {
         return false;
     }
@@ -211,7 +216,7 @@ void VoterPeer::consumePacket(const sockaddr& peerAddr, const uint8_t* packet,
 
         // Send one more type 0 packet in case it is needed to establish
         // trust in the other direction.
-        uint8_t resp[HEADER_SIZE] = { 0 };
+        uint8_t resp[HEADER_SIZE + 1] = { 0 };
         _populateHeader(0, resp);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
@@ -224,7 +229,7 @@ void VoterPeer::_consumePacketTrusted(const uint8_t* packet, unsigned packetLen)
     // Pull out flags
     if (VoterUtil::getHeaderPayloadType(packet) == 0) {
         if (!_isClient) {
-            if (VoterUtil::getHeaderFlags(packet) & 32) {
+            if (VoterUtil::getType0Flags(packet) & 32) {
                 if (!_generalPurposeMode) {
                     _log->info("Peer %s entering general purpose mode", _remotePassword);
                     _generalPurposeMode = true;
@@ -433,11 +438,15 @@ void VoterPeer::oneSecTick() {
     // Check to see if an authentication packet should be sent out
     if (_peerAddr.ss_family != 0 && !_peerTrusted && 
         _localChallenge[0] && _localPassword[0]) {
-        uint8_t resp[HEADER_SIZE] = { 0 };
+        uint8_t resp[HEADER_SIZE + 1] = { 0 };
         VoterUtil::setHeaderPayloadType(resp, 0);
         VoterUtil::setHeaderAuthChallenge(resp, _localChallenge);
         VoterUtil::setHeaderAuthResponse(resp, 0);
         VoterUtil::setHeaderTimeS(resp, _clock->timeMs() / 1000);
+        uint8_t flags = 0;
+        if (_isClient && _generalPurposeMode)
+            flags |= 32;
+        VoterUtil::setType0Flags(resp, flags);
         _log->info("VOTER %s initiating handshake", _localPassword);
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
@@ -489,10 +498,6 @@ void VoterPeer::tenSecTick() {
 }
 
 void VoterPeer::_populateHeader(uint16_t type, uint8_t* resp) const {
-    uint8_t flags = 0;
-    if (_generalPurposeMode)
-        flags |= 32;
-    VoterUtil::setHeaderFlags(resp, flags);
     VoterUtil::setHeaderPayloadType(resp, type);
     VoterUtil::setHeaderTimeS(resp, _clock->timeMs() / 1000);
     char buf[64];

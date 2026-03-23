@@ -119,7 +119,10 @@ uint32_t VoterUtil::getHeaderAuthResponse(const uint8_t* packet) {
 
 uint8_t VoterUtil::getType0Flags(const uint8_t* packet) {
 	return packet[24];
+}
 
+void VoterUtil::setType0Flags(uint8_t* packet, uint8_t f) {
+	packet[24] = f;
 }
 
 uint8_t VoterUtil::getType1RSSI(const uint8_t* packet) {
@@ -132,10 +135,6 @@ int VoterUtil::getType1Audio(const uint8_t* packet,
 		return -1;
 	memcpy(audio, packet + 25, 160);
     return 0;
-}
-
-uint8_t VoterUtil::getHeaderFlags(const uint8_t* packet) {
-	return packet[24];
 }
 
 void VoterUtil::setHeaderPayloadType(uint8_t* packet, uint16_t t) {
@@ -156,10 +155,6 @@ void VoterUtil::setHeaderTimeS(uint8_t* packet, uint32_t s) {
 
 void VoterUtil::setHeaderTimeNs(uint8_t* packet, uint32_t ns) {
 	pack_uint32_be(ns, packet + 4);
-}
-
-void VoterUtil::setHeaderFlags(uint8_t* packet, uint8_t f) {
-	packet[24] = f;
 }
 
 }
