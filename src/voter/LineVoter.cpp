@@ -216,7 +216,7 @@ void LineVoter::consume(const Message& msg) {
         for (unsigned i = 0; i < MAX_PEERS; i++)
             if (_clients[i].isPeerTrusted() && _clients[i].isAudioTransmit())
                 // NOTE: RSSI value has no significance on transmit
-                _clients[i].sendAudio(0, msg.body(), msg.size());
+                _clients[i].sendAudio(0, msg.body(), msg.size(), msg.getRxMs());
     }
 }
 
