@@ -43,7 +43,7 @@ void MicroEventLoop::run(Log& log, Clock& clock,
     timer1s.reset();
     timer10s.reset();
 
-    unsigned long slowestLoopUs = 0;
+    uint64_t slowestLoopUs = 0;
     uint64_t totalWorkUs = 0;
     unsigned long loopCount = 0;   
     unsigned long maxLateUs = 0;
@@ -98,20 +98,21 @@ void MicroEventLoop::run(Log& log, Clock& clock,
             cb_bottom();
 
         uint64_t workEndUs = clock.timeUs();
-
         uint64_t workTimeUs = workEndUs - workStartUs;
         totalWorkUs += workTimeUs;
         
         if (workTimeUs > slowestLoopUs) {
             slowestLoopUs = workTimeUs;
-            log.info("Slowest loop %lu us", (unsigned long)slowestLoopUs);
+            //log.info("Slowest loop %lu us", (unsigned long)slowestLoopUs);
         }
+
+        loopCount++;
 
         if (trace && showStats) {
             // Internal stats
             log.info("AvgWork: %6lu, MaxWork: %6lu, MaxLate: %6lu", 
                 totalWorkUs / loopCount, 
-                slowestLoopUs,
+                (unsigned)slowestLoopUs,
                 maxLateUs);
 
             totalWorkUs = 0;
@@ -119,8 +120,6 @@ void MicroEventLoop::run(Log& log, Clock& clock,
             slowestLoopUs = 0;
             loopCount = 0;            
         }
-
-        loopCount++;
     }
 }
 
