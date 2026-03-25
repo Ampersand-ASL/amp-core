@@ -164,7 +164,8 @@ void VoterClient::audioRateTick(uint32_t ms) {
 }
 
 void VoterClient::oneSecTick() {
-    _client.oneSecTick();    
+    if (_sockFd)
+        _client.oneSecTick();    
 }
 
 void VoterClient::tenSecTick() {
