@@ -191,65 +191,6 @@ void IAX2FrameFull::addIE_raw(uint8_t id, const uint8_t* value, unsigned valueLe
     _bufLen += (2 + valueLen);
 }
 
-int extractIE(const uint8_t* packet, unsigned packetLen, 
-    uint8_t id, uint8_t* buf, unsigned bufMaxLen) {
-    // States
-    // 0: At ID
-    // 1: At len for the target ID
-    // 2: At len for an ID we don't care about
-    // 3: At a byte that we should accumulate
-    // 4: At a byte that we should skip past
-    unsigned state = 0;
-    unsigned len = 0;
-    unsigned j = 0;
-    for (unsigned i = 0; i < packetLen; i++) {
-        //cout << i << " " << state << endl;
-        if (state == 0) {
-            if (packet[i] == id) {
-                state = 1;
-            } else {
-                state = 2;
-            }
-        } else if (state == 1) {
-            len = packet[i];
-            if (len == 0) {
-                // Found what we want, but no data there
-                return 0;
-            } else {
-                // Collect
-                j = 0;
-                state = 3;
-            }
-        } else if (state == 2) {
-            len = packet[i];
-            if (len == 0) {
-                state = 0;
-            } else {
-                // Ignore
-                j = 0;
-                state = 4;
-            }
-        } else if (state == 3) {
-            if (j < bufMaxLen)
-                buf[j++] = packet[i];            
-            else {
-                // Problem, ran out of space
-                return -1;
-            }
-            if (j == len) {
-                return len;
-            }
-        } else if (state == 4) {
-            j++;
-            if (j == len) {
-                state = 0;
-            }
-        }
-    }
-    // Didn't find the target
-    return -1;
-}
-
 bool IAX2FrameFull::getIE_uint16(uint8_t id, uint16_t* result) const {
     uint8_t buf[2];
     int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, 2);
