@@ -405,6 +405,7 @@ public:
                     avgMargin, _worstMargin,
                     _originCursor, idealOriginCursor, 
                     (int32_t)_originCursor - (int32_t)idealOriginCursor, size()); 
+                log.info("%u %u %u", localMs, _lastPlayedLocal, _talkspurtTimeoutInteval);
             }
         }
 

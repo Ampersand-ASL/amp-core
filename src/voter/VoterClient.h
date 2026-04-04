@@ -69,6 +69,8 @@ public:
 
     void setRSSI(uint8_t rssi) { _rssi = rssi; }
 
+    unsigned getSendErrorCount() const { return _sendErrorCount; }
+
     // ----- Line/MessageConsumer-----------------------------------------------------
 
     virtual void consume(const Message& m);
@@ -116,6 +118,9 @@ private:
     uint8_t _rssi = 0xff;
 
     amp::VoterPeer _client;
+
+    // Diagnostics
+    unsigned _sendErrorCount = 0;
 };
 
 }

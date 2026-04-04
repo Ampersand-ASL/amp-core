@@ -60,7 +60,7 @@ VoterClient::VoterClient(Log& log, Clock& clock, int lineId,
     _client(true) {
 
     _client.init(&clock, &log);
-    // Make the connection so we can send packets out to the client
+    // Make the connection so we can send packets back to the server
     _client.setSink([this]
         (const sockaddr& addr, const uint8_t* data, unsigned dataLen) {
             _sendPacketToPeer(data, dataLen, addr);
@@ -86,9 +86,7 @@ int VoterClient::open(const char* serverAddrAndPort) {
         _log.error("Unable to open Voter port (%d)", errno);
         return -1;
     }    
-
-    // #### TODO RAAI TO ADDRESS LEAKS BELOW
-    
+   
     int optval = 1; 
     // This allows the socket to bind to a port that is in TIME_WAIT state,
     // or allows multiple sockets to bind to the same port (useful for multicast).
@@ -232,12 +230,12 @@ void VoterClient::_sendPacketToPeer(const uint8_t* b, unsigned len,
         b,
         len, 0, &peerAddr, getIPAddrSize(peerAddr));
     if (rc < 0) {
+        _sendErrorCount++;
         if (errno == 101) {
             char temp[64];
             formatIPAddrAndPort(peerAddr, temp, 64);
             _log.error("Network is unreachable to %s", temp);
-        } else 
-            _log.error("Send error %d", errno);
+        } 
     }
 }
 
