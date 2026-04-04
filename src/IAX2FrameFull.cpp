@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "kc1fsz-tools/Common.h"
+#include "kc1fsz-tools/NetUtils.h"
 #include "kc1fsz-tools/fixedstring.h"
 
 #include "IAX2Util.h"
@@ -192,6 +193,11 @@ void IAX2FrameFull::addIE_raw(uint8_t id, const uint8_t* value, unsigned valueLe
 }
 
 bool IAX2FrameFull::getIE_uint16(uint8_t id, uint16_t* result) const {
+    if (extractIE_uint16(_buf + 12, _bufLen - 12, id, result) == 0)
+        return true;
+    else 
+        return false;
+    /*
     uint8_t buf[2];
     int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, 2);
     if (rc == 2) {
@@ -199,9 +205,15 @@ bool IAX2FrameFull::getIE_uint16(uint8_t id, uint16_t* result) const {
         return true;
     }
     return false;
+    */
 }
 
 bool IAX2FrameFull::getIE_uint32(uint8_t id, uint32_t* result) const {
+    if (extractIE_uint32(_buf + 12, _bufLen - 12, id, result) == 0)
+        return true;
+    else 
+        return false;
+    /*
     uint8_t buf[4];
     int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, 4);
     if (rc == 4) {
@@ -209,9 +221,21 @@ bool IAX2FrameFull::getIE_uint32(uint8_t id, uint32_t* result) const {
         return true;
     }
     return false;
+    */
 }
 
 bool IAX2FrameFull::getIE_str(uint8_t id, char* buf, unsigned bufMaxLen) const {
+    // Leave space for the null that will be added
+    int rc = extractIE_raw(_buf + 12, _bufLen - 12, id, (uint8_t*)buf, bufMaxLen - 1);
+    if (rc > 0) {
+        // Apply the null-termination
+        buf[rc] = 0;
+        return true;
+    }
+    else {
+        return false;
+    }
+    /*
     // Leave space for the null that will be added
     int rc = extractIE(_buf + 12, _bufLen - 12, id, (uint8_t*)buf, bufMaxLen - 1);
     if (rc == -1) {
@@ -221,10 +245,12 @@ bool IAX2FrameFull::getIE_str(uint8_t id, char* buf, unsigned bufMaxLen) const {
         buf[rc] = 0;
         return true;
     }
+    */
 }
 
 int IAX2FrameFull::getIE_raw(uint8_t id, uint8_t* buf, unsigned bufCapacity) const {
-    int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, bufCapacity);
+    //int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, bufCapacity);
+    int rc = extractIE_raw(_buf + 12, _bufLen - 12, id, buf, bufCapacity);
     if (rc == -1)
         return -1;
     else 
