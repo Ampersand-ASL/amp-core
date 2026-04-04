@@ -226,6 +226,8 @@ bool LineVoter::run2() {
 
 void LineVoter::audioRateTick(uint32_t ms) {
 
+    bool thisTickAudio = false;
+
     // Pass the tick to all of the trusted clients
     for (unsigned i = 0; i < MAX_PEERS; i++)
         if (_clients[i].isPeerTrusted())
@@ -242,15 +244,25 @@ void LineVoter::audioRateTick(uint32_t ms) {
             _clients[i].getAudioFrame(ms, ulaw8, BLOCK_SIZE_8K);
 
             // Make a message and transmit to the Bridge
-            MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, 0, 0);
+            MessageWrapper msg(Message::Type::AUDIO, 0, BLOCK_SIZE_8K, ulaw8, ms, ms);
             msg.setSource(_lineId, CALL_ID_FIXED);
             msg.setDest(_audioDestLineId, Message::UNKNOWN_CALL_ID);
             _bus.consume(msg);
 
             _clients[i].popAudioFrame();
+            thisTickAudio = true;
             break;
         } 
     }
+
+    /*
+    // Some diagnostic 
+    if (thisTickAudio && !_lastTickAudio) 
+        _log.info("LineVoter start TS");
+    else if (!thisTickAudio && _lastTickAudio)
+        _log.info("LineVoter end TS");
+    */
+    _lastTickAudio = thisTickAudio;
 }
 
 void LineVoter::oneSecTick() {    

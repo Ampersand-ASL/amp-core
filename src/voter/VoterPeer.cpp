@@ -362,15 +362,21 @@ void VoterPeer::sendAudio(uint8_t rssi, const uint8_t* frame, unsigned frameLen,
 
 void VoterPeer::audioRateTick(uint32_t tickTimeMs) {
 
-    // The play cursor moves forward no matter what
-    if (_generalPurposeMode) 
-        _playCursorNs++;
+    // The play cursor moves forward no matter what, UNLESS a skip has 
+    // been requested by the margin tracker.
+    if (_skipTick) {
+        _skipTick = false;
+    }
     else {
-        _playCursorNs += 20000000;
-        // Pay attention to the wrap at 1 billion
-        if (_playCursorNs == 1000000000) {
-            _playCursorS++;
-            _playCursorNs = 0;
+        if (_generalPurposeMode) 
+            _playCursorNs++;
+        else {
+            _playCursorNs += 20000000;
+            // Pay attention to the wrap at 1 billion
+            if (_playCursorNs == 1000000000) {
+                _playCursorS++;
+                _playCursorNs = 0;
+            }
         }
     }
 
@@ -414,8 +420,16 @@ uint8_t VoterPeer::getRSSI(uint64_t ms) {
 }
 
 void VoterPeer::getAudioFrame(uint64_t ms, uint8_t* frame, unsigned frameLen) {    
-    if (isAudioAvailable())
+    if (isAudioAvailable()) {
         memcpy(frame, _frames[_framePtrs.readPtr()].content, FRAME_SIZE);
+        // Calculate the margin between arrival and playout and update 
+        // the cumulative stats.
+        _lastPlayMarginUs = _frames[_framePtrs.readPtr()].getMargin(*_clock);
+        if (_lastPlayMarginUs > _largestPlayMarginUs)
+            _largestPlayMarginUs = _lastPlayMarginUs;
+        if (_lastPlayMarginUs < _smallestPlayMarginUs)
+            _smallestPlayMarginUs = _lastPlayMarginUs;
+    }
     else 
         memset(frame, 0, 160);
 }
@@ -430,13 +444,15 @@ string VoterPeer::makeChallenge() {
     long randomNum = rand();
     snprintf(ch, sizeof(ch), "%09lu", randomNum);
     return string(ch);
-    //return string("123456789");
 }
 
 void VoterPeer::oneSecTick() {    
 
+    _oneTickCounter++;
+
     // Check to see if an authentication packet should be sent out
-    if (_peerAddr.ss_family != 0 && !_peerTrusted && 
+    if (_oneTickCounter % 10 == 0 &&
+        _peerAddr.ss_family != 0 && !_peerTrusted && 
         _localChallenge[0] && _localPassword[0]) {
         uint8_t resp[HEADER_SIZE + 1] = { 0 };
         VoterUtil::setHeaderPayloadType(resp, 0);
@@ -451,7 +467,7 @@ void VoterPeer::oneSecTick() {
         _sendCb((const sockaddr&)_peerAddr, resp, sizeof(resp));
     }
 
-    if (++_oneTickCounter % 2 == 0 && _peerTrusted) {
+    if (_oneTickCounter % 2 == 0 && _peerTrusted) {
 
         // Generate a ping (only the server does this)
         if (!_isClient) {
@@ -495,6 +511,22 @@ void VoterPeer::tenSecTick() {
         _log->info("VOTER timing out connection with %s", _remotePassword);
         reset();        
     }
+    // #### TEMP
+    //_log->info("Last/best margin %lu/%lu (us)", _lastPlayMarginUs, _largestPlayMarginUs);
+
+    // Evaluate the margin to see if we should consider moving forward or backward
+    // a tick to keep reasonably synchronized with the remote station.
+    if (_inSpurt && _clock->isPastWindow(_spurtStartMs, 30 * 1000)) {
+        // Need to speed up?
+        if (_largestPlayMarginUs != 0 && _largestPlayMarginUs < 20000) {
+            _log->info("Skip tick requested");
+            _skipTick = true;
+        }
+        // TODO: Need to slow down?
+    }
+    // Clear stats
+    _smallestPlayMarginUs = UINT32_MAX;
+    _largestPlayMarginUs = 0;
 }
 
 void VoterPeer::_populateHeader(uint16_t type, uint8_t* resp) const {

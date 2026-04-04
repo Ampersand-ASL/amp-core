@@ -144,18 +144,22 @@ void EventLoop::run(Log& log, Clock& clock,
         unsigned long workTimeUs = workEndUs - workStartUs;
         totalWorkUs += workTimeUs;
         
+        if (trace && workTimeUs > 10000)
+            log.info("Loop time %lu us", workTimeUs);
+        
         if (workTimeUs > slowestLoopUs) {
             slowestLoopUs = workTimeUs;
-            //log.info("Slowest loop %lu us", slowestLoopUs);
+            if (trace && slowestLoopUs > 5000)
+                log.info("Slowest loop %lu us", slowestLoopUs);
         }
 
         if (trace && showStats) {
             // Internal stats
-            log.info("AvgPoll: %6lu, AvgWork: %6lu, MaxWork: %6lu, MaxLate: %6lu", 
-                totalPollUs / loopCount,
-                totalWorkUs / loopCount, 
-                slowestLoopUs,
-                maxLateUs);
+            //log.info("AvgPoll: %6lu, AvgWork: %6lu, MaxWork: %6lu, MaxLate: %6lu", 
+            //    totalPollUs / loopCount,
+            //    totalWorkUs / loopCount, 
+            //    slowestLoopUs,
+            //    maxLateUs);
 
             totalPollUs = 0;
             totalWorkUs = 0;

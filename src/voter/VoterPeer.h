@@ -228,6 +228,15 @@ private:
                 return packetS == currentS && packetNs == currentNs;
         }
 
+        /**
+         * @returns Microseconds since the packet arrived. This is the "margin"
+         * that should be tracked to make sure we are giving packet enough time
+         * to come in from the peer before using them.
+         */
+        uint32_t getMargin(Clock& clock) const {
+            return (uint32_t)(clock.timeUs() - arrivalUs);
+        }
+
         uint64_t arrivalUs;
         uint32_t packetS;
         uint32_t packetNs;
@@ -284,8 +293,17 @@ private:
     uint32_t _initialMarginGP = 3;
     // In GPS mode is this is in nanoseconds
     uint32_t _initialMarginGPS = 60000000;
-
+    // Increments every second
     unsigned _oneTickCounter = 0;
+
+    // The time between arrival and playout of the last played frame
+    uint32_t _lastPlayMarginUs = 0;
+    // The smallest (worst) margin seen since last counter reset
+    uint32_t _smallestPlayMarginUs = 0;
+    // The largest (best) margin seen since last counter reset
+    uint32_t _largestPlayMarginUs = 0;
+    // Indicates whether a tick should be skipped to improve margin
+    bool _skipTick = false;
 };
 
 }
