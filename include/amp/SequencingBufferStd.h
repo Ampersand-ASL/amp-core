@@ -228,6 +228,7 @@ public:
                     _talkspurtFrameCount = 0;
                     _talkspurtFirstOrigin = frame.getOrigMs();
                     _lastPlayedLocal = 0;
+                    log.info("Start TS %u", frame.getOrigMs());
                 }
 
                 // Just play the oldest frame, no questions asked
@@ -405,8 +406,7 @@ public:
                     avgMargin, _worstMargin,
                     _originCursor, idealOriginCursor, 
                     (int32_t)_originCursor - (int32_t)idealOriginCursor, size()); 
-                log.info("%u %u %u", localMs, _lastPlayedLocal, _talkspurtTimeoutInteval);
-            }
+           }
         }
 
         // Always move the expectation forward one click to keep in sync with 

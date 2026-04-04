@@ -117,6 +117,8 @@ private:
     std::string _serverPassword;
 
     amp::VoterPeer _clients[MAX_PEERS];
+
+    bool _lastTickAudio = false;
 };
 
 }
