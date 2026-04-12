@@ -71,6 +71,8 @@ public:
 
     unsigned getSendErrorCount() const { return _sendErrorCount; }
 
+    bool isPeerTrusted() const { return _client.isPeerTrusted(); }
+
     // ----- Line/MessageConsumer-----------------------------------------------------
 
     virtual void consume(const Message& m);
