@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <functional>
 
+#include "kc1fsz-tools/Clock.h"
 #include "kc1fsz-tools/CircularQueuePointers.h"
 
 #include "Runnable2.h"
