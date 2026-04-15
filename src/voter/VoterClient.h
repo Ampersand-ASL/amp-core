@@ -69,9 +69,10 @@ public:
 
     void setRSSI(uint8_t rssi) { _rssi = rssi; }
 
-    unsigned getSendErrorCount() const { return _sendErrorCount; }
-
     bool isPeerTrusted() const { return _client.isPeerTrusted(); }
+
+    unsigned getSendErrorCount() const { return _sendErrorCount; }
+    unsigned getReadErrorCount() const { return _readErrorCount; }
 
     // ----- Line/MessageConsumer-----------------------------------------------------
 
@@ -108,10 +109,8 @@ private:
     // The IP address family used for this connection. Either AF_INET
     // or AF_INET6.
     short _addrFamily = 0;
-    // The UDP port number used to receive IAX packet
-    int _listenPort = 0;
     // The UDP socket on which IAX messages are received/sent
-    int _sockFd = 0;
+    int _sockFd = -1;
     // Enables detailed network tracing
     bool _trace = false;
     // Address of VOTER server
@@ -123,6 +122,7 @@ private:
 
     // Diagnostics
     unsigned _sendErrorCount = 0;
+    unsigned _readErrorCount = 0;
 };
 
 }

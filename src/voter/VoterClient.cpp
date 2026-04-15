@@ -76,6 +76,7 @@ int VoterClient::open(const char* serverAddrAndPort) {
     // Parse the server address and determine IPv4 vs IPv6
     int rc = parseIPAddrAndPort(serverAddrAndPort, _serverAddr);
     if (rc != 0) {
+        _log.error("Unable to parse VOTER address");
         return -1;
     }
     _addrFamily = _serverAddr.ss_family;
@@ -112,11 +113,12 @@ int VoterClient::open(const char* serverAddrAndPort) {
 }
 
 void VoterClient::close() {   
-    if (_sockFd) 
+    if (_sockFd >= 0) {
         ::close(_sockFd);
-    _sockFd = 0;
-    _listenPort = 0;
+    }
+    _sockFd = -1;
     _addrFamily = 0;
+    _client.reset();
 } 
 
 void VoterClient::setServerPassword(const char* p) {
@@ -162,7 +164,7 @@ void VoterClient::audioRateTick(uint32_t ms) {
 }
 
 void VoterClient::oneSecTick() {
-    if (_sockFd)
+    if (_sockFd >= 0)
         _client.oneSecTick();    
 }
 
@@ -174,7 +176,7 @@ int VoterClient::getPolls(pollfd* fds, unsigned fdsCapacity) {
     if (fdsCapacity < 1) 
         return -1;
     int used = 0;
-    if (_sockFd) {
+    if (_sockFd >= 0) {
         // We're only watching for receive events
         fds[used].fd = _sockFd;
         fds[used].events = POLLIN;
@@ -185,7 +187,7 @@ int VoterClient::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
 bool VoterClient::_processInboundData() {
 
-    if (!_sockFd)
+    if (!_sockFd >= 0)
         return false;
 
     // Check for new data on the socket
@@ -199,6 +201,7 @@ bool VoterClient::_processInboundData() {
         return false;
     } 
     else if (rc == -1 && errno == 11) {
+        // Normal (no data available)
         return false;
     } 
     else if (rc > 0) {
@@ -206,8 +209,8 @@ bool VoterClient::_processInboundData() {
         // Return back to be nice, but indicate that there might be more
         return true;
     } else {
-        // #### TODO: ERROR COUNTER
-        _log.error("Voter read error %d/%d", rc, errno);
+        _readErrorCount++;
+        //_log.error("Voter read error %d/%d", rc, errno);
         return false;
     }
 }
@@ -223,7 +226,7 @@ void VoterClient::_sendPacketToPeer(const uint8_t* b, unsigned len,
 
     //_log.infoDump("Sending packet", b, len);
 
-    if (!_sockFd)
+    if (!_sockFd >= 0)
         return;
 
     int rc = ::sendto(_sockFd, 
