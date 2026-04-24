@@ -187,7 +187,7 @@ int VoterClient::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
 bool VoterClient::_processInboundData() {
 
-    if (!_sockFd >= 0)
+    if (_sockFd < 0)
         return false;
 
     // Check for new data on the socket
@@ -224,9 +224,7 @@ void VoterClient::_processReceivedPacket(
 void VoterClient::_sendPacketToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
 
-    //_log.infoDump("Sending packet", b, len);
-
-    if (!_sockFd >= 0)
+    if (_sockFd < 0)
         return;
 
     int rc = ::sendto(_sockFd, 
