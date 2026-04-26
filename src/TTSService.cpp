@@ -165,16 +165,14 @@ static int queueAudioFile(const Message& req, const char* fileName,
     int16_t pcmLow[BLOCK_SIZE_48K];
     unsigned pcmPtr = 0;
 
-    // Stero 16-bit
-    char buffer[4];
+    // Mono 16-bit
+    char buffer[2];
     amp::Resampler resampler;
     resampler.setRates(rate, 48000);
     Transcoder_SLIN_48K trans;
 
-    // We are reading 4 bytes at a time: 4 bytes per PCM sample and two 
-    // stereo channels.
-    while (aud.read(buffer, 4)) {
-        // Only use one of the stero channels
+    // We are reading 2 bytes at a time: 2 bytes per LE PCM sample
+    while (aud.read(buffer, 2)) {
         pcmLow[pcmPtr++] = unpack_int16_le((const uint8_t*)buffer);
         if (pcmPtr == blockSize) {
             upsampleAndPublsh(req, pcmLow, blockSize, trans, resampler, ttsQueueRes);

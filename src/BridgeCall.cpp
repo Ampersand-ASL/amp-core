@@ -1001,15 +1001,6 @@ void BridgeCall::_loadAudioMessage(const Message& msg, std::queue<PCM16Frame>& q
     assert(msg.getType() == Message::Type::TTS_AUDIO);
     assert(msg.getFormat() == CODECType::IAX2_CODEC_PCM_48K);
     assert(msg.size() == BLOCK_SIZE_48K * sizeof(int16_t));
-    /*
-    int16_t pcm48k[BLOCK_SIZE_48K];
-    const uint8_t* buffer = msg.body();
-    for (unsigned i = 0; i < BLOCK_SIZE_48K; i++) {
-        pcm48k[i] = unpack_int16_le((const uint8_t*)buffer);
-        buffer += 2;
-    }
-    queue.push(PCM16Frame(pcm48k, BLOCK_SIZE_48K));
-    */
     queue.push(PCM16Frame((const int16_t*)msg.body(), BLOCK_SIZE_48K));
 }
 
