@@ -62,10 +62,14 @@ private:
     
     int _hidFd = 0;
     bool _hidFailed = false;
-    static const unsigned MAX_HID_SIZE = 16;
-    uint8_t _hidAcc[MAX_HID_SIZE];
+    static const unsigned MAX_HID_MESSAGE_SIZE = 8;
+    uint8_t _hidAcc[MAX_HID_MESSAGE_SIZE] = {};
+    uint8_t _previousHidAcc[MAX_HID_MESSAGE_SIZE] = {};
     unsigned _hidAccPtr = 0;
+
+    // These can be configured according to the behavior of the HID device.
     unsigned _hidPacketSize = 4;
+    // CM108 Volume Down button is register 0, bit 0x02.
     unsigned _hidOffset = 0;
     uint8_t _hidMask = 0x02;
 };

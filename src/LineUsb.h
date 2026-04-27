@@ -107,6 +107,7 @@ private:
     unsigned _underrunCountReported = 0;
     unsigned _captureErrorCount = 0;
     unsigned _playErrorCount = 0;
+    snd_pcm_state_t _lastState = snd_pcm_state_t::SND_PCM_STATE_DISCONNECTED;
 };
 
 // ====== Utility Functions ======================================================

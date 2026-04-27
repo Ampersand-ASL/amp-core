@@ -14,12 +14,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+/*
+CM108 - HID offset 0, HID mask 0x02 used for COS.
+*/
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
 #include <errno.h>
 
 #include <iostream>
+#include <cstring>
 
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/Log.h"
@@ -58,6 +62,8 @@ int SignalIn::openHid(const char* hidName) {
     _hidMask = 0x02;
     _hidFailed = false;
 
+    assert(_hidPacketSize <= MAX_HID_MESSAGE_SIZE);
+
     return 0;
 }
 
@@ -78,11 +84,15 @@ void SignalIn::_pollHidStatus() {
     int rc = read(_hidFd, buffer, sizeof(buffer));
     if (rc > 0) {
         for (unsigned i = 0; i < (unsigned)rc; i++) {
+            // NOTE ON BUFFER SAFETY: There is an assert above that checks to make
+            // sure that _hidPacketSize < MAX_HID_MESSAGE_SIZE to prevent overrun.
             _hidAcc[_hidAccPtr++] = buffer[i];
             // Full packet accumulated yet?  If so, process and reset the 
             // accumulation.
             if (_hidAccPtr == _hidPacketSize) {
                 _processHidPacket(_hidAcc, _hidPacketSize);
+                // Keep a copy of the HID message so we can track changes
+                memcpy(_previousHidAcc, _hidAcc, MAX_HID_MESSAGE_SIZE);
                 _hidAccPtr = 0;
             }
         }
@@ -97,11 +107,19 @@ void SignalIn::_pollHidStatus() {
 }
 
 void SignalIn::_processHidPacket(const uint8_t* packet, unsigned packetLen) {
+
     //_log.infoDump("HID packet", packet, packetLen);
-    bool ptt = (packet[_hidOffset] & _hidMask) != 0;
-    MessageEmpty msg = MessageEmpty::signal((ptt) ? _sigTypeOn : _sigTypeOff);
-    msg.setDest(_radioLineId, DEST_CALL_ID);
-    _bus.consume(msg);
+
+    // Note that HID messages may be generated for a number of reasons. We check
+    // to see if the current HID message differs in the way that is relevant
+    // to our signal by comparing to the last HID message.
+    bool state = (packet[_hidOffset] & _hidMask) != 0;
+    bool previousSate = (_previousHidAcc[_hidOffset] & _hidMask) != 0;
+    if (state != previousSate) {
+        MessageEmpty msg = MessageEmpty::signal((state) ? _sigTypeOn : _sigTypeOff);
+        msg.setDest(_radioLineId, DEST_CALL_ID);
+        _bus.consume(msg);
+    }
 }
 
 // ----- MessageConsumer --------------------------------------------------

@@ -159,9 +159,11 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     unsigned int periodTimeUs = 20000;
     // Request a max period
     snd_pcm_hw_params_set_period_time(playH, play_hw_params, periodTimeUs, 0);
-    // Let the buffer store 16x 20ms frames of sound
+    // Let the buffer store 16x 20ms frames of sound. 
+    // At 48K, there are 960 samples in a 20ms frame.
     unsigned int bufferTimeUs = 20000 * 16;
-    snd_pcm_hw_params_set_buffer_time(playH, play_hw_params, bufferTimeUs, 0);
+    snd_pcm_hw_params_set_buffer_time_near(playH, play_hw_params, &bufferTimeUs, 0);
+
     if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
         _log.error("Play parameters %d", err);
         return -1;
@@ -399,31 +401,6 @@ void LineUsb::_captureIfPossible() {
                 _captureAccumulator[_captureAccumulatorSize++] = unpack_int16_le(srcPtr);
 
             _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
-
-            /*
-            // The processing steps are only done if capture is enabled, otherwise
-            // the new audio data is just dropped.
-            if (audioCaptureEnabled) {
-
-                // Transition detect, the beginning of a capture "run"
-                if (!_capturing) {
-                    _capturing = true;
-                    // Force a synchronization of the actual system clock and 
-                    // the timestamps that will be put on the generated frames.
-                    _captureStartMs = nowMs;
-                    _captureCount = 0;
-                    idealNowMs = nowMs;
-                    _captureStart();
-                }
-                _lastCapturedFrameMs = _clock.time();
-
-                // Here is where statistics and possibly recording happens
-                _analyzeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
-                
-                // Here is where the actual processing of the new block happens
-                _processCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, nowMs, idealNowMs);
-            }
-            */
         }
         // If we don't have a complete block yet then just keep storing
         // the captured audio in the accumulator.
@@ -495,6 +472,25 @@ void LineUsb::_playIfPossible() {
     snd_pcm_status_alloca(&status);
     snd_pcm_status(_playH, status);
 
+    // State 2 = Prepared
+    // State 3 = Running
+    // State 4 = Underrun 
+
+    snd_pcm_state_t currentState = snd_pcm_status_get_state(status);
+    if (currentState != _lastState) {
+        //_log.info("Playback PCM state change %d -> %d", _lastState, currentState);
+        _lastState = currentState;
+    }
+
+    //_log.info("Delay %d", snd_pcm_status_get_delay(status));
+
+    // We will likely encounter the PCM in an underrun state after the previous talkspurt
+    // has ended and there is nothing left to play. It is possible that could also result 
+    // from the data falling behind the audio frame rate. Either way, we re-prepare the PCM 
+    // for a new stream of audio.
+    if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN)
+        snd_pcm_prepare(_playH);
+
     // Add the other stereo channel (interleaved) and convert to S16_LE.
     const int usbBufferSize = PLAY_ACCUMULATOR_CAPACITY * 2 * 2;
     uint8_t usbBuffer[usbBufferSize];
@@ -514,6 +510,7 @@ void LineUsb::_playIfPossible() {
         int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
         if (rc < 0) {
             if (rc == -EPIPE) {
+                _log.info("Playback underrun");
                 // This isn't really an error, it's just the sound card telling
                 // us that it was underrun prior to us starting to stream again.
                 // We recover the card and then wait for the polling loop to 
@@ -523,7 +520,12 @@ void LineUsb::_playIfPossible() {
                 if (!_startOfTs)
                     _underrunCount++;
                 snd_pcm_recover(_playH, rc, 1);
-                // Stuff some slience into the hardware since we are behind in
+                
+                /*
+                THIS STEP WAS REMOVED ON 27-Apr-2026 TO REDUCE LAG IN THE LOCAL SIDETONE 
+                FEATURE.
+
+                // Stuff some silence into the hardware since we are behind in
                 // sound production.
                 int totalUnderrunWrite = 0;
                 const unsigned stuffFrames = BLOCK_SIZE_48K;
@@ -539,11 +541,13 @@ void LineUsb::_playIfPossible() {
                 }
                 //if (!_startOfTs)
                 //    _log.info("Play underrun detected (%d)", totalUnderrunWrite);
+                */
+
             } else if (rc == -11) {
                 // This is the case that the card can't accept anything more. 
                 break;
             } else {
-                _log.error("Write failed %d", rc);
+                //_log.error("Write failed %d", rc);
                 snd_pcm_recover(_playH, rc, 1); 
                 _playErrorCount++;
                 _inError = true;
