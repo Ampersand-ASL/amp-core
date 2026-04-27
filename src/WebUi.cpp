@@ -495,6 +495,8 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         res.set_content(a.dump(), "application/json");
     });
 
+#ifndef _WIN32            
+
     // An end-point for programming SA818 radios
     svr.Post("/program-sa818", [ui, bus](const httplib::Request &, httplib::Response &res, 
         const httplib::ContentReader &content_reader) {
@@ -573,6 +575,8 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
         res.set_content(result.dump(), "application/json");
     });
+
+#endif
 
     svr.Get("/log", [](const httplib::Request &, httplib::Response &res) {
         res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
