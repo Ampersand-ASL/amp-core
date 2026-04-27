@@ -33,8 +33,8 @@ public:
      * returned then the loop exits.
      */
     static void run(Log& log, Clock& lock, 
-        Runnable** tasks, unsigned tasksLen,
-        Runnable2** tasks2, unsigned tasks2Len,
+        Runnable** tasks1, unsigned task1Count,
+        Runnable2** tasks, unsigned taskCount,
         std::function<bool(Log& log, Clock& clock)> cb = nullptr,
         bool trace = false);    
 };

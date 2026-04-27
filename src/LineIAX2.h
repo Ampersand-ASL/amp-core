@@ -304,7 +304,7 @@ public:
         fixedstring callPassword;
         fixedstring calltoken;
         // This is the ED5519 public key in binary format
-        unsigned char publicKeyBin[32];
+        unsigned char publicKeyBin[32] = {};
         sockaddr_storage peerAddr;
         uint32_t desiredCodecs = 0;
 
@@ -329,7 +329,7 @@ public:
         amp::RetransmissionBufferStd reTx;
 
         // Used to track which DNS response ID we are waiting for
-        uint16_t dnsRequestId;
+        uint16_t dnsRequestId = 0;
         uint32_t lastPingSentMs = 0;
         int32_t lastPingTimeMs = 0;
         unsigned pingCount = 0;

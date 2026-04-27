@@ -232,8 +232,8 @@ protected:
     float _injectTonePhi = 0;
 
     bool _fftEnabled = false;
-    int16_t _fftWindow[FFT_SIZE];
-    int16_t _fftBlock[FFT_SIZE];
+    int16_t _fftWindow[FFT_SIZE] = {};
+    int16_t _fftBlock[FFT_SIZE] = {};
     float _fftMaxMag = 0;
     float _fftMaxFreq = 0;
     bool _fftTrigger = false;

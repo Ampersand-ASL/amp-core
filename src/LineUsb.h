@@ -87,14 +87,14 @@ private:
 
     // Buffer used to capture a full audio block. This is 
     // a mono 48k PCM buffer.
-    int16_t _captureAccumulator[BLOCK_SIZE_48K];
+    int16_t _captureAccumulator[BLOCK_SIZE_48K] = {};
     unsigned _captureAccumulatorSize = 0;
 
     // Buffer used to play a full audio block. We leave a bit of extra
     // space in case of slight timing differences between the SequencingBuffer
     // playout clock and the USB clock.
     static const unsigned PLAY_ACCUMULATOR_CAPACITY = BLOCK_SIZE_48K * 3; 
-    int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY];
+    int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY]= {};
     unsigned _playAccumulatorSize = 0;
 
     bool _startOfTs = false;
