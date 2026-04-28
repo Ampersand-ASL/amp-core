@@ -25,6 +25,10 @@
 #define ACTIVE_TIMEOUT_MS (100)
 // The definition of "recent"
 #define RECENT_TIMEOUT_MS (2000)
+// The amount of time after an unkey that we supress interpolation in order to 
+// avoid ringing.
+// #### TODO: MAKE THIS SMARTER
+#define UNKEY_WINDOW_MS (500)
 
 namespace kc1fsz {
 
@@ -77,37 +81,12 @@ void BridgeIn::consume(const Message& frame) {
         _jitBuf.consume(*_log, frame);
     }
     else if (frame.isSignal(Message::SignalType::RADIO_UNKEY)) {
-        _lastUnkeyMs = _clock->time();
+        _lastUnkeyMs = _clock->timeMs();
     }
     else {
         assert(false);
     }
 }
-
-/** 
- * Adaptor that links the SequencingBuffer output to a sink function
- */
-class JBOutAdaptor : public amp::SequencingBufferSink<MessageCarrier> {
-public:
-
-    JBOutAdaptor(std::function<void(const MessageCarrier& msg)> sink) 
-    :   _sink(sink) { }
-
-    void play(const MessageCarrier& msg, uint32_t) {   
-        _sink(msg);
-    }
-
-    void interpolate(uint32_t origMs, uint32_t localMs, uint32_t) {
-        // Need to make a message to represent the interpolate event
-        // #### TODO: NOTE: The source/destination aren't filled in. Does this matter?
-        MessageEmpty msg(Message::Type::AUDIO_INTERPOLATE, 0, origMs, localMs);
-        _sink(msg);
-    }
-
-private:
-
-    std::function<void(const MessageCarrier& msg)> _sink = nullptr;
-};
 
 /**
  * Every tick we ask the Jitter Buffer to emit whatever it has into a temporary
@@ -115,11 +94,23 @@ private:
  */
 void BridgeIn::audioRateTick(uint32_t tickMs) {
 
-    // #### TODO: GET RID OF THIS AND SWITCH TO LAMBDA
-    JBOutAdaptor adaptor([this](const MessageCarrier& msg) { 
-        this->_handleJitBufOut(msg); 
-    });
-    _jitBuf.playOut(*_log, _clock->time(), &adaptor);
+    _jitBuf.playOut(*_log, _clock->time(), 
+        [this](const MessageCarrier& msg, uint32_t) {
+            _handleJitBufOut(msg);
+        },
+        [this](uint32_t origMs, uint32_t localMs, uint32_t) {
+            // Need to make a message to represent the interpolate event. 
+            // However, we supress this action if there has been a very 
+            // recent unkey.
+            if (_clock->isInWindow(_lastUnkeyMs, UNKEY_WINDOW_MS)) {
+            }
+            else {
+                // #### TODO: NOTE: The source/destination aren't filled in. Does this matter?
+                MessageEmpty msg(Message::Type::AUDIO_INTERPOLATE, 0, origMs, localMs);
+                _handleJitBufOut(msg);
+            }
+        }
+    );
 
     // Let the kerchunk filter contribute output if necessary
     _kerchunkFilter.audioRateTick(tickMs);

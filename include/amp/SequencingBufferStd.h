@@ -205,7 +205,8 @@ public:
     /**
      * @param localMs The local time.
      */
-    virtual void playOut(Log& log, uint32_t localMs, SequencingBufferSink<T>* sink) {     
+    virtual void playOut(Log& log, uint32_t localMs, SequencingBuffer<T>::playCb playSink, 
+        SequencingBuffer<T>::interpCb interpSink) {     
 
         _lastPlayoutTime = localMs;
 
@@ -243,7 +244,7 @@ public:
             if (!_buffer.empty()) {
                 const T& frame = _buffer.first();
                 // Just play the oldest frame, no questions asked
-                sink->play(frame, localMs);
+                playSink(frame, localMs);
                 framePlayed = true;
                 framePlayedOriginMs = frame.getOrigMs();
                 framePlayedRxMs = frame.getRxMs();
@@ -288,7 +289,7 @@ public:
                 const T& frame = _buffer.first();
                 if (LE_MOD32(_originCursor, frame.getOrigMs()) &&
                     LT_MOD32(frame.getOrigMs(), _originCursor + _voiceTickSize)) {
-                    sink->play(frame, localMs);
+                    playSink(frame, localMs);
                     framePlayed = true;
                     framePlayedOriginMs = frame.getOrigMs();
                     framePlayedRxMs = frame.getRxMs();
@@ -324,7 +325,7 @@ public:
             // Is there a gap in the talkspurt? If so, interpolate it.
             if (_inTalkspurt) {
 
-                sink->interpolate(_originCursor, localMs, _voiceTickSize);
+                interpSink(_originCursor, localMs, _voiceTickSize);
                 _interpolatedVoiceFrameCount++;
                 
                 // Is this the trailing edge of a talkspurt?

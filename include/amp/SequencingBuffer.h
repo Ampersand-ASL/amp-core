@@ -17,44 +17,13 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 namespace kc1fsz {
 
 class Log;
 
     namespace amp {
-
-/**
- * This abstract interface defines the output side of the Sequencing
- * Buffer. Whenever the SequencingBuffer is ready to emit a frame (or 
- * request an interpolation) it will do so by calling the appropriate 
- * method on this interface.
- */
-template <class T> class SequencingBufferSink {
-public:
-
-    /**
-     * Called to play a voice frame.
-     * 
-     * @param frame The voice content
-     * @param localMs The local clock that the voice frame applies to. This is 
-     * provided for reference purposes and normally would be ignored - just process 
-     * the frame immediately on this method call.
-     */
-    virtual void play(const T& frame, uint32_t localMs) = 0;
-
-    /**
-     * Called when voice interpolation is needed. 
-     * 
-     * @param origMs The start of the spot in the origin timeline
-     * that is missing and therefore needs to be interpolated.
-     * @param localMs Same as for playVoice().
-     * @param durationMs The duration of the interpolation needed 
-     * in milliseconds. This flexibility is provided in case 
-     * the stream is being slowed down/sped up.
-     */
-    virtual void interpolate(uint32_t origMs, uint32_t localMs, uint32_t durationMs) = 0;
-};
 
 /**
  * This is a C++ "concept" which will be used to place some requirements
@@ -76,10 +45,37 @@ template<HasFrameTimes T> class SequencingBuffer {
 public:
 
     /**
+     * Called to play a voice frame.
+     * 
+     * @param frame The voice content
+     * @param localMs The local clock that the voice frame applies to. This is 
+     * provided for reference purposes and normally would be ignored - just process 
+     * the frame immediately on this method call.
+     */
+    using playCb = std::function<void(const T& frame, uint32_t localMs)>;
+
+    /**
+     * Called when voice interpolation is needed. 
+     * 
+     * @param origMs The start of the spot in the origin timeline
+     * that is missing and therefore needs to be interpolated.
+     * @param localMs Same as for playVoice().
+     * @param durationMs The duration of the interpolation needed 
+     * in milliseconds. This flexibility is provided in case 
+     * the stream is being slowed down/sped up.
+     */
+    using interpCb = std::function<void(uint32_t origMs, uint32_t localMs, uint32_t durationMs)>;
+
+    /**
      * Clears all state and returns statistical parameters to initial condition.
      * This would typically be called at the beginning of a call.
      */
     virtual void reset() = 0;
+
+    /**
+     * @returns true if a talkspurt is actively being played.
+     */
+    virtual bool inTalkspurt() const = 0;
 
     /**
      * Called when a frame is received.
@@ -98,12 +94,7 @@ public:
      * @param localMs 
      * @param sink Where the frames should be sent.
      */
-    virtual void playOut(Log& log, uint32_t localMs, SequencingBufferSink<T>* sink) = 0;
-
-    /**
-     * @returns true if a talkspurt is actively being played.
-     */
-    virtual bool inTalkspurt() const = 0;
+    virtual void playOut(Log& log, uint32_t localMs, playCb p, interpCb i) = 0;
 };
     }
 }

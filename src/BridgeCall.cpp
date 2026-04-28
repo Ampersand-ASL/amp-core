@@ -103,8 +103,10 @@ BridgeCall::BridgeCall() {
         if (_mode == Mode::NORMAL) {
             if (msg.getType() == Message::Type::AUDIO)
                 _processNormalAudio(msg);
-            else 
+            else {
+                _log->info("TYPE %d", msg.getType());
                 assert(false);
+            }
         } else if (_mode == Mode::PARROT) {
             if (msg.getType() == Message::Type::AUDIO)
                 _processParrotAudio(msg);

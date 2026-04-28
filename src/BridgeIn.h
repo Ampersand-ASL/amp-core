@@ -175,7 +175,7 @@ private:
     // issues on the input side of the Bridge.
     amp::SequencingBufferStd<MessageCarrier> _jitBuf;
 
-    uint32_t _lastUnkeyMs = 0;
+    uint64_t _lastUnkeyMs = 0;
 
     Transcoder_G711_ULAW _transcoder0a;
     Transcoder_SLIN_8K _transcoder0b;
