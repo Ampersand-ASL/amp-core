@@ -1250,9 +1250,14 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
         IAX2FrameFull reTxFrame(packet, packetLen);
         bool remove = LT_MOD8(reTxFrame.getOSeqNo(), frame.getISeqNo());
-        //if (remove)
-        //    _log.info("Removing ACKd %u < %u", (unsigned)reTxFrame.getOSeqNo(),
-        //        (unsigned)frame.getISeqNo());
+        /*
+        if (remove)
+            _log.info("Removing ACKd %u < %u", (unsigned)reTxFrame.getOSeqNo(),
+                (unsigned)frame.getISeqNo());
+        else 
+            _log.info("Not removing ACKd %u >= %u", (unsigned)reTxFrame.getOSeqNo(),
+                (unsigned)frame.getISeqNo());
+        */
         return remove;
     });
 
@@ -2530,7 +2535,7 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
 
     // Save the frame into the retransmission buffer, just in case. This buffer 
     // gets popped by incoming messages with higher expected sequence numbers.
-    if (!call.reTx.push(_clock.timeMs(), 0, (const uint8_t*)frame.buf(), frame.size())) {
+    if (!call.reTx.push(_clock.time(), 0, (const uint8_t*)frame.buf(), frame.size())) {
         _log.error("Call %u/%u retx buffer full %u", call.localCallId, call.remoteCallId,
             call.reTx.getUsed());
     }
@@ -3016,6 +3021,20 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
         respFrame2.setBody((const uint8_t*)textBuffer, textBufferLen);
         line._sendFrameToPeer(respFrame2, *this);
     }
+
+    // Clear things out of the retransmit buffer that aren't being acknowledged.
+    // IMPORTANT: This shouldn't happen!
+    reTx.removeIf(
+        [this, &log, &clock]
+        (uint32_t stamp, unsigned, const uint8_t* packet, unsigned packetLen) {
+            bool remove = LT_MOD32(stamp + _inactivityTimeoutMs, clock.time());
+            if (remove) {
+                IAX2FrameFull reTxFrame(packet, packetLen);
+                log.error("Cleaning retx %u", (unsigned)reTxFrame.getOSeqNo());
+            }
+            return remove;
+        }
+    );
 }
 
 void LineIAX2::Call::logStats(Log& log) {
