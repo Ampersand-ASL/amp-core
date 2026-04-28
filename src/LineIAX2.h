@@ -26,9 +26,7 @@
 
 #include "kc1fsz-tools/fixedstring.h"
 #include "kc1fsz-tools/fixedqueue.h"
-
-#include "amp/SequencingBufferStd.h"
-#include "amp/RetransmissionBufferStd.h"
+#include "kc1fsz-tools/TaggedBuffer.h"
 
 #include "Line.h"
 #include "IAX2Util.h"
@@ -240,8 +238,6 @@ public:
 
         void init(LineIAX2* l) {
             line = l;
-            // Pass the log into the re-transmission buffer
-            reTx.init(&line->_log);
         }
 
         enum State {
@@ -326,7 +322,9 @@ public:
 
         // Here is where outbound frames are stored in case
         // they are needed for retransmission later.
-        amp::RetransmissionBufferStd reTx;
+        // #### TODO: CENTRALIZE THIS SO IT CAN BE SHARED ACROSS LINES
+        uint8_t reTxSpace[2048];
+        TaggedBuffer reTx;
 
         // Used to track which DNS response ID we are waiting for
         uint16_t dnsRequestId = 0;

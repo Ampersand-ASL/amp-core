@@ -33,6 +33,7 @@
 #include <sys/types.h>
 
 #include <cstring>
+#include <cmath>
 #include <iostream>
 #include <algorithm>
 
@@ -52,6 +53,7 @@
 #include "IAX2Util.h"
 #include "MessageConsumer.h"
 #include "Message.h"
+#include "amp/SequencingBufferStd.h"
 
 using namespace std;
 
@@ -76,6 +78,11 @@ static const char* DNS_IP_ADDR = "208.67.222.222";
 // The size of the IAX2 socket transmit buffer. This is adjusted
 // upwards to help with the large transmission case.
 #define IAX_SOCKET_SNDBUF_BYTES (512 * 1024)
+
+// Controls how quickly we start to re-transmit on missing ACK.
+// Is appears that we need to be pretty aggressive about this 
+// to keep Asterisk happy.
+#define RETRANSMIT_INTERVAL_MS (2000)
 
 namespace kc1fsz {
 
@@ -1239,11 +1246,12 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // sends back might have lower ISeqNos than expected, meaning other 
     // previous messages have acknowledge more receipts already. This 
     // condition is ignored.
-    if (!call.reTx.setExpectedSeq(frame.getISeqNo())) {
-        //_log.info("Call %d/%d not lowering expected sequence from %d to %d", 
-        //    call.localCallId, call.remoteCallId, 
-        //    (int)call.reTx.getExpectedSeq(), frame.getISeqNo());
-    }
+    call.reTx.removeIf([this, &frame]
+        (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
+        IAX2FrameFull reTxFrame(packet, packetLen);
+        bool remove = LT_MOD8(reTxFrame.getOSeqNo(), frame.getISeqNo());
+        return remove;
+    });
 
     if (frame.isACK()) {
         if (_trace)
@@ -1254,12 +1262,28 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // VNAK messages don't consume sequence numbers to take care of this
     // before checking sequence coherence.
     if (frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_VNAK)) {
-        _log.info("VNAK received, retransmitting to %d", (int)frame.getOSeqNo());
-        call.reTx.retransmitToSeq(frame.getOSeqNo(), call.expectedInSeqNo,       
-            // The callback that will be fired for anything that rxTx needs to send
-            [this, a=call.peerAddr](const IAX2FrameFull& frame) {
-                _sendFrameToPeer(frame, (const sockaddr&)a);
-            } );
+
+        _log.info("VNAK received, retransmitting from %d", (int)frame.getOSeqNo());
+
+        call.reTx.visitAll(
+            [this, targetOSeq=frame.getOSeqNo(), &call]
+            (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
+                IAX2FrameFull reTxFrame(packet, packetLen);
+                const bool shouldTx = 
+                    // Transmit anything sequentially >= the target sequence
+                    GE_MOD8(reTxFrame.getOSeqNo(), targetOSeq);
+                if (shouldTx) {
+                    _log.info("Retransmitting %u", (unsigned)reTxFrame.getOSeqNo());
+                    // Make a copy of the frame with the retransmission flag on and 
+                    // the expected sequence number adjusted to match reality
+                    IAX2FrameFull rf = reTxFrame;
+                    rf.setRetransmit();
+                    rf.setISeqNo(call.expectedInSeqNo);
+                    _sendFrameToPeer(rf, (const sockaddr&)call.peerAddr);
+                }
+            }
+        );
+
         return;
     }
 
@@ -2094,7 +2118,7 @@ bool LineIAX2::_progressCall(Call& call) {
             call.expectedInSeqNo = 0;
             call.localCallId = _localCallIdCounter++;
             call.remoteCallId = 0;
-            call.reTx.reset();
+            call.reTx.clear();
 
             // Make a NEW frame
             //
@@ -2254,7 +2278,7 @@ bool LineIAX2::_progressCall(Call& call) {
         // Calls are allowed to hangout in terminated state
         // until the retransmit buffer is clear, or until
         // a timeout has expired.
-        if (call.reTx.empty() || 
+        if (call.reTx.isEmpty() || 
             _clock.isPast(call.terminationMs + TERMINATION_TIMEOUT_MS)) {
             _log.info("Call %u/%d has ended", call.localCallId, call.remoteCallId);
             call.reset();
@@ -2501,12 +2525,13 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
         return;
     }
 
-    // Save the frame into the retransmission buffer for future use 
-    // (just in case)
-    if (!call.reTx.consume(frame)) {
-        _log.error("Call %u/%u retx buffer error", call.localCallId, call.remoteCallId);
+    // Save the frame into the retransmission buffer, just in case. This buffer 
+    // gets popped by incoming messages with higher expected sequence numbers.
+    if (!call.reTx.push(_clock.timeMs(), 0, (const uint8_t*)frame.buf(), frame.size())) {
+        _log.error("Call %u/%u retx buffer full %u", call.localCallId, call.remoteCallId,
+            call.reTx.getUsed());
     }
-    
+
     // Do the actual transmission on the socket
     _sendFrameToPeer(frame, (const sockaddr&)call.peerAddr);
 
@@ -2751,7 +2776,9 @@ void LineIAX2::_publishCallFailed(const char* localNumber, const char* remoteNum
 
 // ===== LineIAX2::Call ===================================================
 
-LineIAX2::Call::Call() { }
+LineIAX2::Call::Call()
+:   reTx(reTxSpace, sizeof(reTxSpace)) {  
+}
 
 void LineIAX2::Call::reset() {
 
@@ -2785,7 +2812,7 @@ void LineIAX2::Call::reset() {
     _ndi_1 = 0;
     _nvi = 0;
     _nvi_1 = 0;
-    reTx.reset();
+    reTx.clear();
     dnsRequestId = 0;
     lastPingSentMs = 0;
     lastPingTimeMs = 0;
@@ -2914,20 +2941,33 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
                 localCallId, remoteCallId);
             line._hangupCall(*this);
         }
-        else if (reTx.getUsed() == reTx.getCapacity()) {
-            log.info("Hanging up call with full retransmit buffer %d/%d", 
-                localCallId, remoteCallId);
-            line._hangupCall(*this);
-        }
     }
 
     // Look for things waiting to go out on the network (like retransmits)
-    reTx.retransmitIfNecessary(localElapsedMs(clock), expectedInSeqNo, 
-        // The callback that will be fired for anything that reTx needs to send
-        [this, &context=line](const IAX2FrameFull& frame) {
-            context._sendFrameToPeer(frame, (const sockaddr&)peerAddr);
-        });
+    //reTx.retransmitIfNecessary(localElapsedMs(clock), expectedInSeqNo, 
+    //    // The callback that will be fired for anything that reTx needs to send
+    //    [this, &context=line](const IAX2FrameFull& frame) {
+    //        context._sendFrameToPeer(frame, (const sockaddr&)peerAddr);
+    //    });
 
+    reTx.visitAll(
+        [this, &context=line, &log, &clock]
+        (uint32_t stamp, unsigned, const uint8_t* packet, unsigned packetLen) {
+            IAX2FrameFull reTxFrame(packet, packetLen);
+            // Retransmit anything that has been hanging around in the buffer
+            // for more than a specified period of time.
+            const bool shouldTx = GT_MOD32(clock.timeMs(), stamp + RETRANSMIT_INTERVAL_MS);
+            if (shouldTx) {
+                log.info("Retransmitting %u", (unsigned)reTxFrame.getOSeqNo());
+                // Make a copy of the frame with the retransmission flag on and 
+                // the expected sequence number adjusted to match reality.
+                IAX2FrameFull rf = reTxFrame;
+                rf.setRetransmit();
+                rf.setISeqNo(expectedInSeqNo);
+                context._sendFrameToPeer(rf, (const sockaddr&)peerAddr);
+            }
+        }
+    );
 }
 
 void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {

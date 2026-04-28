@@ -333,11 +333,12 @@ public:
                     _talkSpurtCount++;
                     int32_t avgMargin = (_talkspurtFrameCount != 0) ? 
                         _totalMargin / _talkspurtFrameCount : 0;
-                    log.info("End TS, avgM: %d, shortM: %d, OC: %u, size: %d", 
+                    log.info("End TS, avgM: %d, shortM: %d, OC: %u, size: %d, interp: %u", 
                         avgMargin, 
                         _worstMargin,
                         _originCursor, 
-                        size()); 
+                        size(),
+                        _interpolatedVoiceFrameCount); 
                     // Unlink the cursor so we can re-establish 
                     _originCursorValid = false;
                 }
