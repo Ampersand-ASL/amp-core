@@ -488,8 +488,19 @@ void LineUsb::_playIfPossible() {
     // has ended and there is nothing left to play. It is possible that could also result 
     // from the data falling behind the audio frame rate. Either way, we re-prepare the PCM 
     // for a new stream of audio.
-    if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN)
+    if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN) {
         snd_pcm_prepare(_playH);
+        // Stuff some silence into the hardware since we are behind in
+        // sound production.
+        const unsigned stuffFrames = BLOCK_SIZE_48K / 4;
+        // frames * 2 channels * 2 bytes per channel
+        const unsigned stuffBufferSize = stuffFrames * 2 * 2;
+        uint8_t stuffBuffer[stuffBufferSize] = { 0 };
+        int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
+        if (rc3 <= 0) {
+            _log.info("Frame stuff failed");
+        }
+    }
 
     // Add the other stereo channel (interleaved) and convert to S16_LE.
     const int usbBufferSize = PLAY_ACCUMULATOR_CAPACITY * 2 * 2;
