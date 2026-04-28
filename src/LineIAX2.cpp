@@ -82,7 +82,7 @@ static const char* DNS_IP_ADDR = "208.67.222.222";
 // Controls how quickly we start to re-transmit on missing ACK.
 // Is appears that we need to be pretty aggressive about this 
 // to keep Asterisk happy.
-#define RETRANSMIT_INTERVAL_MS (2000)
+#define RETRANSMIT_INTERVAL_MS (1000)
 
 namespace kc1fsz {
 
@@ -1250,6 +1250,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
         IAX2FrameFull reTxFrame(packet, packetLen);
         bool remove = LT_MOD8(reTxFrame.getOSeqNo(), frame.getISeqNo());
+        //if (remove)
+        //    _log.info("Removing ACKd %u < %u", (unsigned)reTxFrame.getOSeqNo(),
+        //        (unsigned)frame.getISeqNo());
         return remove;
     });
 
@@ -2958,7 +2961,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             // for more than a specified period of time.
             const bool shouldTx = GT_MOD32(clock.timeMs(), stamp + RETRANSMIT_INTERVAL_MS);
             if (shouldTx) {
-                log.info("Retransmitting %u", (unsigned)reTxFrame.getOSeqNo());
+                log.info("Timer-driven retransmit %u", (unsigned)reTxFrame.getOSeqNo());
                 // Make a copy of the frame with the retransmission flag on and 
                 // the expected sequence number adjusted to match reality.
                 IAX2FrameFull rf = reTxFrame;
