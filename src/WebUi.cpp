@@ -319,7 +319,6 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             body.append(data, data_length);
             return true;
         });
-        ui->_log.info("Saving configuration");
         json jBody = json::parse(body);
         jBody["lastUpdateMs"] = ui->_clock.timeUs() / 1000;
         jBody["version"] = ui->_version;
@@ -386,7 +385,6 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
         // The menu that shows the list of USB sound devices
         else if (menuName == "aslAudioDevice") {
-
 #ifndef _WIN32            
             json o;
             o["value"] = "";
@@ -396,21 +394,16 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             visitUSBDevices2([&a](
                 const char* vendorName, const char* productName, 
                 const char* vendorId, const char* productId,                 
-                const char* busId, const char* portId) {
-                    // Only doing C-Media
+                const char* portPath) {
+                    // Only doing C-Media devices at the moment
                     if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
-                        // Make the value
+                        // Make the internal value
                         string val("usb ");
-                        val += "bus:";
-                        val += busId;
-                        val += ",";
                         val += "port:";
-                        val += portId;
-                        // Make the description
-                        string desc("USB bus");
-                        desc += busId;
-                        desc += "/port";
-                        desc += portId;
+                        val += portPath;
+                        // Make the display description
+                        string desc("USB port ");
+                        desc += portPath;
                         desc += " ";
                         desc += vendorName;
                         desc += " ";
@@ -433,13 +426,13 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             a.push_back(o);
             // Traverse the USB serial devices
             visitUSBSerialDevices(
-                [&a](const char* dev, unsigned busId, unsigned portId) {
+                [&a](const char* dev, const char* portPath) {
                     // Make the value
                     char value[32];
-                    snprintf(value, sizeof(value), "usb bus:%u,port:%u", busId, portId);
+                    snprintf(value, sizeof(value), "usb port:%s", portPath);
                     // Make the description
                     char desc[64];
-                    snprintf(desc, sizeof(desc), "%s (bus %u, port %u)", dev, busId, portId);
+                    snprintf(desc, sizeof(desc), "%s (port %s)", dev, portPath);
                     json o;
                     o["value"] = value;
                     o["desc"] = desc;
@@ -464,23 +457,18 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         a.push_back(o);
 
         visitUSBDevices2([&a](const char* vendorName, const char* productName, 
-            const char* vendorId, const char* productId,             
-            const char* busId, const char* portId) {
+            const char* vendorId, const char* productId, 
+            const char* portPath) {
                 // Skip some things that aren't relevant
                 if (strstr(vendorName, "Linux Foundation") != 0)
                     return;
                 // Make the value
                 string val("usb ");
-                val += "bus:";
-                val += busId;
-                val += ",";
                 val += "port:";
-                val += portId;
+                val += portPath;
                 // Make the description
                 string desc("USB ");
-                desc += busId;
-                desc += "/";
-                desc += portId;
+                desc += portPath;
                 desc += " ";
                 desc += vendorName;
                 desc += " ";

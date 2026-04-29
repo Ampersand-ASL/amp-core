@@ -87,15 +87,11 @@ void ConfigPoller::_populateDefaults(json& j) {
 #ifndef _WIN32        
         visitUSBDevices2([&j](
             const char*, const char*, 
-            const char* vendorId, const char*,                 
-            const char* busId, const char* portId) {
+            const char* vendorId, const char*, const char* portPath) {
                 if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
                     string val("usb ");
-                    val += "bus:";
-                    val += busId;
-                    val += ",";
                     val += "port:";
-                    val += portId;
+                    val += portPath;
                     j["aslAudioDevice"] = val;
                 }
             });
