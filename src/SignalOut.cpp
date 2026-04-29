@@ -45,10 +45,13 @@ int SignalOut::openHid(const char* hidName) {
     close();
 
     if ((_hidFd = ::open(hidName, O_RDWR | O_NONBLOCK)) < 0) {
-        _log.error("Cannot open HID device %d", errno);
+        _log.error("Cannot open HID device %s %d", hidName, errno);
         _hidFd = 0;
         _hidFailed = true;
         return -1;
+    }
+    else {
+        _log.info("OPEN");
     }
 
     _hidPacketSize = 4;
