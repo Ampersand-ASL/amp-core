@@ -168,7 +168,7 @@ void LineRadio::consume(const Message& msg) {
 
         // Call down to do the actual play on the hardware
         if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) == false) {
-            _log.error("USB play buffer overflow");
+            _log.error("Play buffer overflow");
         }
 
         _lastPlayedFrameMs = _clock.time();

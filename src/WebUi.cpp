@@ -95,6 +95,13 @@ namespace kc1fsz {
 
     namespace amp {
 
+json enumAudioDevice();
+json enumMixSet(const string& menuName, const string& arg);
+json enumIODevice();
+json enumInputSignal(const string& device);
+json enumOutputSignal(const string& device);
+json enumSerialDevice();
+
 static void checkJSON(json j, const char* name) {
     if (!j[name].is_string()) {
         string msg = name;
@@ -331,116 +338,25 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     svr.Get("/config-select-options", 
         [](const httplib::Request& req, httplib::Response &res) {
 
-        auto a = json::array();
+        json a;
         const string menuName = req.get_param_value("name");      
+        const string arg = req.get_param_value("arg");      
 
-        // The menus that show a list of allowable dB values for USB mixers.
-        if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet" || menuName == "aslRxMixerSet") {
-            string arg = req.get_param_value("arg");      
-#ifndef _WIN32            
-            if (arg.starts_with("usb ")) {
-                // Try to locate that sound device and get its volume range
-                int alsaDev;
-                string ossDev;
-                int rc = querySoundMap(arg.substr(4).c_str(), alsaDev, ossDev);
-                if (rc == 0) {
-                    // Get range, first in units and then convert to dB
-                    char name[32];
-                    snprintf(name, 32, "hw:%d", alsaDev);
-                    int rc2, minV, maxV;
-                    // The parameter name depends on whether we are talking about play or capture
-                    if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
-                        rc2 = getMixerRange(name, "Speaker Playback Volume", &minV, &maxV);
-                    }
-                    else if (menuName == "aslRxMixerSet") {
-                        rc2 = getMixerRange(name, "Mic Capture Volume", &minV, &maxV);
-                    }
-                    else {
-                        rc2 = -1;
-                    }
-                    if (rc2 == 0) {
-                        int minDb = 0, maxDb = 0;
-                        if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
-                            convertMixerValueToDb(name, "Speaker Playback Volume", minV, &minDb);
-                            convertMixerValueToDb(name, "Speaker Playback Volume", maxV, &maxDb);
-                        }
-                        else if (menuName == "aslRxMixerSet") {
-                            convertMixerValueToDb(name, "Mic Capture Volume", minV, &minDb);
-                            convertMixerValueToDb(name, "Mic Capture Volume", maxV, &maxDb);
-                        }
-                        for (int g = maxDb; g >= minDb; g--) {
-                            json o;
-                            char t[32];
-                            snprintf(t, 32, "%d", g);
-                            o["value"] = t;
-                            snprintf(t, 32, "%ddB", g);
-                            o["desc"] = t;
-                            a.push_back(o);
-                        }
-                    }
-                }
-            }
-#endif            
-        }
-
-        // The menu that shows the list of USB sound devices
-        else if (menuName == "aslAudioDevice") {
-#ifndef _WIN32            
-            json o;
-            o["value"] = "";
-            o["desc"] = "None";
-            a.push_back(o);
-
-            visitUSBDevices2([&a](
-                const char* vendorName, const char* productName, 
-                const char* vendorId, const char* productId,                 
-                const char* portPath) {
-                    // Only doing C-Media devices at the moment
-                    if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
-                        // Make the internal value
-                        string val("usb ");
-                        val += "port:";
-                        val += portPath;
-                        // Make the display description
-                        string desc("USB port ");
-                        desc += portPath;
-                        desc += " ";
-                        desc += vendorName;
-                        desc += " ";
-                        desc += productName;
-                        json o;
-                        o["value"] = val;
-                        o["desc"] = desc;
-                        a.push_back(o);                
-                    }
-                }
-            );
-#endif  
-        }          
-        // The menu that shows the list of USB serial devices
-        else if (menuName == "sa818port" || menuName == "sa818port_1") {
-#ifndef _WIN32            
-            json o;
-            o["value"] = "";
-            o["desc"] = "None";
-            a.push_back(o);
-            // Traverse the USB serial devices
-            visitUSBSerialDevices(
-                [&a](const char* dev, const char* portPath) {
-                    // Make the value
-                    char value[32];
-                    snprintf(value, sizeof(value), "usb port:%s", portPath);
-                    // Make the description
-                    char desc[64];
-                    snprintf(desc, sizeof(desc), "%s (port %s)", dev, portPath);
-                    json o;
-                    o["value"] = value;
-                    o["desc"] = desc;
-                    a.push_back(o);
-                }
-            );
-#endif
-        }
+        if (menuName == "aslTxMixASet" || 
+            menuName == "aslTxMixBSet" || 
+            menuName == "aslRxMixerSet")
+            a = enumMixSet(menuName, arg);
+        else if (menuName == "aslAudioDevice")
+            a = enumAudioDevice();
+        else if (menuName == "aslCosDevice" || menuName == "aslCtcssDevice" ||
+            menuName == "aslPttDevice")
+            a = enumIODevice();
+        else if (menuName == "aslCosSignal" || menuName == "aslCtcssSignal") 
+            a = enumInputSignal(arg);
+        else if (menuName == "aslPttSignal")
+            a = enumOutputSignal(arg);
+        else if (menuName == "sa818port" || menuName == "sa818port_1")
+            a = enumSerialDevice();
 
         res.set_content(a.dump(), "application/json");
     });
@@ -458,7 +374,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
         visitUSBDevices2([&a](const char* vendorName, const char* productName, 
             const char* vendorId, const char* productId, 
-            const char* portPath) {
+            const char* portPath, int, int) {
                 // Skip some things that aren't relevant
                 if (strstr(vendorName, "Linux Foundation") != 0)
                     return;
@@ -508,7 +424,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
                 string sa818Device;
                 ui->_log.info("SA818 port config [%s]", sa818portQuery.c_str());
-                if (querySerialDevices(sa818portQuery.c_str(), sa818Device) == 0) {
+                if (resolveUSBSerialDevice(sa818portQuery.c_str(), sa818Device) == 0) {
 
                     ui->_log.info("Resolved to SA818 device %s", sa818Device.c_str());
 
@@ -584,6 +500,225 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     }
 
     ui->_log.info("ui_thread end");
+}
+
+// ----- Menu Choice Generators -----------------------------------------------
+
+json enumAudioDevice() {
+
+    auto a = json::array();
+
+    json o;
+    o["value"] = "";
+    o["desc"] = "None";
+    a.push_back(o);
+
+#ifndef _WIN32        
+    visitUSBDevices2([&a](
+        const char* vendorName, const char* productName, 
+        const char* vendorId, const char* productId,                 
+        const char* portPath, int, int) {
+            // Only doing C-Media devices at the moment
+            if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
+                // Make the internal value
+                string val("usbaud ");
+                val += portPath;
+                // Make the display description
+                string desc("USB Audio ");
+                desc += portPath;
+                desc += " ";
+                desc += vendorName;
+                desc += " ";
+                desc += productName;
+                json o;
+                o["value"] = val;
+                o["desc"] = desc;
+                a.push_back(o);                
+            }
+        }
+    );
+#endif
+    return a;
+}
+
+json enumMixSet(const string& menuName, const string& arg) {
+    auto a = json::array();
+#ifndef _WIN32            
+    if (arg.starts_with("usbaud ")) {
+        // Try to locate that sound device and get its volume range
+        int alsaDev;
+        string ossDev;
+        int rc = resolveUSBSoundDevice(arg.substr(7).c_str(), alsaDev, ossDev);
+        if (rc == 0) {
+            // Get range, first in units and then convert to dB
+            char name[32];
+            snprintf(name, 32, "hw:%d", alsaDev);
+            int rc2, minV, maxV;
+            // The parameter name depends on whether we are talking about play or capture
+            if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
+                rc2 = getMixerRange(name, "Speaker Playback Volume", &minV, &maxV);
+            }
+            else if (menuName == "aslRxMixerSet") {
+                rc2 = getMixerRange(name, "Mic Capture Volume", &minV, &maxV);
+            }
+            else {
+                rc2 = -1;
+            }
+            if (rc2 == 0) {
+                int minDb = 0, maxDb = 0;
+                if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
+                    convertMixerValueToDb(name, "Speaker Playback Volume", minV, &minDb);
+                    convertMixerValueToDb(name, "Speaker Playback Volume", maxV, &maxDb);
+                }
+                else if (menuName == "aslRxMixerSet") {
+                    convertMixerValueToDb(name, "Mic Capture Volume", minV, &minDb);
+                    convertMixerValueToDb(name, "Mic Capture Volume", maxV, &maxDb);
+                }
+                for (int g = maxDb; g >= minDb; g--) {
+                    json o;
+                    char t[32];
+                    snprintf(t, 32, "%d", g);
+                    o["value"] = t;
+                    snprintf(t, 32, "%ddB", g);
+                    o["desc"] = t;
+                    a.push_back(o);
+                }
+            }
+        }
+    }
+#endif            
+    return a;
+}
+
+json enumIODevice() {
+    auto a = json::array();
+#ifndef _WIN32     
+    json o;
+    o["value"] = "";
+    o["desc"] = "None";
+    a.push_back(o);
+
+    // Look for the CM108s
+    visitUSBDevices2([&a](
+        const char* vendorName, const char* productName, 
+        const char* vendorId, const char* productId,                 
+        const char* portPath, int, int) {
+        // Only doing C-Media devices at the moment
+        if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
+            // Make the internal value
+            string val("usbaud ");
+            val += portPath;
+            // Make the display description
+            string desc("USB Audio ");
+            desc += portPath;
+            desc += " ";
+            desc += vendorName;
+            desc += " ";
+            desc += productName;
+            json o;
+            o["value"] = val;
+            o["desc"] = desc;
+            a.push_back(o);                
+        }
+    }
+    );
+
+    // Look for the serial UARTS
+    visitUSBSerialDevices([&a](const char* dev, const char* portPath) {
+        // Make the internal value
+        string val("usbser ");
+        val += portPath;
+        // Make the display description
+        string desc("USB Serial [");
+        desc += portPath;
+        desc += "] ";
+        desc += dev;
+        json o;
+        o["value"] = val;
+        o["desc"] = desc;
+        a.push_back(o);                
+    }
+    );
+
+    // #### TODO: GPIOS
+
+#endif
+    return a;
+}
+
+json enumInputSignal(const string& device) {
+    auto a = json::array();
+    if (device.starts_with("usbaud ")) {
+        json o1;
+        o1["value"] = "default";
+        o1["desc"] = "Default (Volume Down)";
+        a.push_back(o1);
+    }
+    else if (device.starts_with("usbser ")) {
+        json o1;
+        o1["value"] = "cts";
+        o1["desc"] = "CTS";
+        a.push_back(o1);
+        json o2;
+        o2["value"] = "dcd";
+        o2["desc"] = "DCD";
+        a.push_back(o2);
+    }
+    return a;
+}
+
+json enumOutputSignal(const string& device) {
+
+    auto a = json::array();
+
+    if (device.starts_with("usbaud ")) {
+        json o1;
+        o1["value"] = "default";
+        o1["desc"] = "Default (GPIO3)";
+        a.push_back(o1);
+    }
+    else if (device.starts_with("usbser ")) {
+        json o1;
+        o1["value"] = "rts";
+        o1["desc"] = "RTS";
+        a.push_back(o1);
+        json o2;
+        o2["value"] = "dtr";
+        o2["desc"] = "DTR";
+        a.push_back(o2);
+    }
+    return a;
+}
+
+json enumSerialDevice() {
+
+    auto a = json::array();
+
+    json o;
+    o["value"] = "";
+    o["desc"] = "None";
+    a.push_back(o);
+
+#ifndef _WIN32            
+    // Traverse the USB serial devices
+    visitUSBSerialDevices(
+        [&a](const char* dev, const char* portPath) {
+            // Make the value
+            char value[32];
+            snprintf(value, sizeof(value), "usbser %s", portPath);
+            // Make the description
+            string desc("USB Serial [");
+            desc += portPath;
+            desc += "] ";
+            desc += dev;
+            json o;
+            o["value"] = value;
+            o["desc"] = desc;
+            a.push_back(o);
+        }
+    );
+#endif
+    return a;
 }
 
     }

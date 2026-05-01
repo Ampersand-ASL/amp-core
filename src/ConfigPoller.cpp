@@ -35,8 +35,6 @@ using json = nlohmann::json;
 namespace kc1fsz {
     namespace amp {
 
-const char* ConfigPoller::DEFAULT_CONFIG = "{ \"favorites\": \"2002:ASL Parrot\", \"setupMode\":\"0\", \"aslHdwType\":\"0\", \"aslAudioDevice\":\"\", \"aslCosFrom\":\"usb\", \"aslPttTo\":\"usb\", \"aslCtcssFrom\":\"none\", \"aslInvertPtt\":\"no\", \"aslTxMixASet\":\"-10\", \"aslTxMixBSet\":\"-10\", \"aslRxMixerSet\":\"0\",\"aslDnsRoot\":\"nodes.allstarlink.org\",\"aslRegUrl\":\"https://register.allstarlink.org\", \"aslStatUrl\":\"http://stats.allstarlink.org/uhandler.php\", \"call\":\"\", \"iaxPort\":\"4569\", \"lastUpdateMs\":0, \"node\":\"\", \"password\":\"\", \"privateKey\":\"\" }";
-
 ConfigPoller::ConfigPoller(Log& log, const char* cfgFileName, 
     std::function<void(const json& cfg)> cb,
     std::function<void(const json& cfg)> startupCb) 
@@ -79,46 +77,89 @@ void ConfigPoller::oneSecTick() {
     }
 }
 
+static void setDefault(json& j, const char* name, const char* value) {
+    if (!j.contains(name))
+        j[name] = value;
+}
+
 void ConfigPoller::_populateDefaults(json& j) {
+
+    setDefault(j, "node", "");
+    setDefault(j, "password", "");
+    setDefault(j, "privateKey", "");
+    setDefault(j, "callsign", "");
+    setDefault(j, "iaxPort", "4569");
+    setDefault(j, "setupMode", "0");
+    setDefault(j, "aslTxMixASet", "");
+    setDefault(j, "aslTxMixBSet", "");
+    setDefault(j, "aslRxMixerSet", "");
+    setDefault(j, "aslStatUrl", "http://stats.allstarlink.org/uhandler.php");
+    setDefault(j, "aslRegUrl", "https://register.allstarlink.org");
+    setDefault(j, "aslDnsRoot", "nodes.allstarlink.org");
 
     // If there is no USB sound device selected, default to the first C-Media 
     // device we can find.
-    if (j["aslAudioDevice"].get<std::string>().empty()) {
+    if (!j.contains("aslAudioDevice") || j["aslAudioDevice"].get<std::string>().empty()) {
 #ifndef _WIN32        
         visitUSBDevices2([&j](
             const char*, const char*, 
-            const char* vendorId, const char*, const char* portPath) {
+            const char* vendorId, const char*, const char* portPath, int, int) {
                 if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
-                    string val("usb ");
-                    val += "port:";
+                    string val("usbaud ");
                     val += portPath;
                     j["aslAudioDevice"] = val;
                 }
             });
 #endif            
     }
-    if (!j.contains("favorites")) {
+
+    if (!j.contains("aslCosDevice") || j["aslCosDevice"].get<std::string>().empty()) {
+#ifndef _WIN32        
+        visitUSBDevices2([&j](
+            const char*, const char*, 
+            const char* vendorId, const char*, const char* portPath, int, int) {
+                if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
+                    string val("usbaud ");
+                    val += portPath;
+                    j["aslCosDevice"] = val;
+                }
+            });
+#endif            
+    }
+    setDefault(j, "aslCosSignal", "default");
+    setDefault(j, "aslCosInvert", "0");
+
+    setDefault(j, "aslCtcssDevice", "");
+    setDefault(j, "aslCtcssSignal", "");
+    setDefault(j, "aslCtcssInvert", "0");
+
+    if (!j.contains("aslPttDevice") || j["aslPttDevice"].get<std::string>().empty()) {
+#ifndef _WIN32        
+        visitUSBDevices2([&j](
+            const char*, const char*, 
+            const char* vendorId, const char*, const char* portPath, int, int) {
+                if (strcasecmp(vendorId, CMEDIA_VENDOR_ID) == 0) {
+                    string val("usbaud ");
+                    val += portPath;
+                    j["aslPttDevice"] = val;
+                }
+            });
+#endif            
+    }
+    setDefault(j, "aslPttSignal", "default");
+    setDefault(j, "aslPttInvert", "0");
+
+    if (!j.contains("favorites"))
         j["favorites"] = "2002:ASL Parrot";
-    }
-    if (!j.contains("kfnodes")) {
-        j["kfnodes"] = "";
-    }
-    if (!j.contains("kfdelay")) {
+    setDefault(j, "kfnodes", "");
+    if (!j.contains("kfdelay"))
         j["kfdelay"] = "2000";
-    }
-    if (!j.contains("callsign")) {
+    if (!j.contains("callsign"))
         j["callsign"] = "";
-    }
     if (j.contains("aslStatUrl")) {
         // Correct a mistake
         if (j["aslStatUrl"] == "http://stats.allstarlink.org/uhandler")
             j["aslStatUrl"] = "http://stats.allstarlink.org/uhandler.php";
-    }
-    if (!j.contains("aslCosFrom")) {
-        j["aslCosFrom"] = "usb";
-    }
-    if (!j.contains("aslPttTo")) {
-        j["aslPttTo"] = "usb";
     }
 
     // SA818 defaults

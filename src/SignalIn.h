@@ -35,7 +35,8 @@ public:
     SignalIn(Log& log, Clock& clock, MessageConsumer& bus, unsigned radioLineId,
          Message::SignalType sigTypeOn, Message::SignalType sigTypeOff);
 
-    int openHid(const char* hidName);
+    int openHid(const char* hidDeviceName, const char* signal);
+    int openSerial(const char* serialDeviceName, const char* signal);
 
     void close();
 
@@ -50,8 +51,11 @@ public:
 
 private:
 
-    void _pollHidStatus();
-    void _processHidPacket(const uint8_t* packet, unsigned packetLen);
+    enum Mode {
+        MODE_NONE,
+        MODE_HID,
+        MODE_SERIAL
+    };
 
     Log& _log;
     Clock& _clock;
@@ -59,8 +63,16 @@ private:
     unsigned _radioLineId;
     Message::SignalType _sigTypeOn;
     Message::SignalType _sigTypeOff;
+    Mode _mode = Mode::MODE_NONE;
+    int _fd = 0;
+
+    void _generateEvent(bool status);
+
+    // ----- HID Related -----------------------------------------------------
+
+    void _pollHidStatus();
+    void _processHidPacket(const uint8_t* packet, unsigned packetLen);
     
-    int _hidFd = 0;
     bool _hidFailed = false;
     static const unsigned MAX_HID_MESSAGE_SIZE = 8;
     uint8_t _hidAcc[MAX_HID_MESSAGE_SIZE] = {};
@@ -72,6 +84,13 @@ private:
     // CM108 Volume Down button is register 0, bit 0x02.
     unsigned _hidOffset = 0;
     uint8_t _hidMask = 0x02;
+
+    // ----- Serial Related ---------------------------------------------------
+
+    int _ticomStatus;
+    int _ticomMask;
+
+    void _pollSerialStatus();
 };
 
     }

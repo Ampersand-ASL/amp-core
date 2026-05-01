@@ -39,8 +39,6 @@ class Log;
 class ConfigPoller : public Runnable2 {
 public:
 
-    static const char* DEFAULT_CONFIG;
-
     /**
      * @param configChangeCb Called every time the configuration document changes.
      * @param startupCb Called on first startup only, but after configChangeCb.

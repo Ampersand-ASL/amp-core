@@ -20,7 +20,7 @@ input[type="submit"]:active {
 }
 
 input[type="text"] {
-    padding: 5px;
+    xpadding: 5px;
 }
 
 h1 {

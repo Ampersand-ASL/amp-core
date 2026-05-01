@@ -46,69 +46,83 @@
         <div class="content-row" role="tabpanel">
             <form id="config-form">
                 <div class="form2">
+
                     <label for="node">Node Number:</label>
-                    <input type="text" id="node" name="node"/>
+                    <input type="text" name="node"/>
+
                     <label for="password">Password:</label>
-                    <input type="text" id="password" name="password"/>
+                    <input type="text" name="password"/>
+
                     <label for="callsign">Callsign:</label>
-                    <input type="text" id="callsign" name="callsign" maxlength="32"/>
+                    <input type="text" name="callsign" maxlength="32"/>
+
                     <label for="iaxPort">IAX Port:</label>
-                    <input type="text" id="iaxPort" name="iaxPort"/>
+                    <input type="text" name="iaxPort"/>
+
                     <label for="favorites">Favorites:</label>
-                    <textarea name="favorites" id="favorites" rows="4"></textarea>
+                    <textarea name="favorites" rows="4"></textarea>
                 </div>
                 <div class="form2">
+
                     <div>Radio 0:</div><div></div>
-                    <label for="setupMode">Setup Mode:</label>
-                    <select id="setupMode" name="setupMode">
-                        <option value="0">C-Media CM1xx URI/UCI</option>
-                        <!--
-                        <option value="1">Ampersand Mode</option>
-                        -->
-                    </select>
-                    
-                    <label for="aslHdwType">Hardware Type:</label>
-                    <select id="aslHdwType" name="aslHdwType">
-                        <option value="0">0: USB radio interfaces designed for app_rpt</option>
-                        <!--
-                        <option value="1">1: Dingotel/Sph interfaces</option>
-                        <option value="2">2: NHC (N1KDO) interfaces</option>
-                        <option value="3">3: Custom</option>
-                    -->
-                    </select>
+
                     <label for="aslAudioDevice">Audio Device:</label>
-                    <select id="aslAudioDevice" name="aslAudioDevice">
-                    </select>
-                    <label for="aslCosFrom">Carrier From:</label>
-                    <select id="aslCosFrom" name="aslCosFrom">
-                        <option value="none">None</option>
-                        <option value="usb">USB</option>
-                        <option value="usbinvert">USB Inverted (Active Low)</option>
-                    </select>
-
-                    <label for="aslCtcssFrom">CTCSS From:</label>
-                    <select id="aslCtcssFrom" name="aslCtcssFrom" disabled>
-                        <option value="none">None</option>
-                        <option value="usb">USB</option>
-                        <option value="usbinvert">USB Inverted (Active Low)</option>
-                    </select>
-
-                    <label for="aslPttTo">PTT To:</label>
-                    <select id="aslPttTo" name="aslPttTo">
-                        <option value="none">None</option>
-                        <option value="usb">USB</option>
-                        <option value="usbinvert">USB Inverted (Active Low)</option>
+                    <select name="aslAudioDevice" data-listdependson="/">
                     </select>
 
                     <label for="aslTxMixASet">Transmit Mixer A:</label>
-                    <select id="aslTxMixASet" name="aslTxMixASet">
+                    <select name="aslTxMixASet" data-listdependson="aslAudioDevice">
                     </select>
+
                     <label for="aslTxMixBSet">Transmit Mixer B:</label>
-                    <select id="aslTxMixBSet" name="aslTxMixBSet">
+                    <select name="aslTxMixBSet" data-listdependson="aslAudioDevice">
                     </select>
                     <label for="aslRxMixerSet">Receive Mixer:</label>
-                    <select id="aslRxMixerSet" name="aslRxMixerSet">
+                    <select name="aslRxMixerSet" data-listdependson="aslAudioDevice">
                     </select>
+
+                    <label for="aslCosDevice">Carrier Detect Device:</label>
+                    <select name="aslCosDevice" data-listdependson="/">
+                    </select>
+
+                    <label for="aslCosSignal">Carrier Detect Signal:</label>
+                    <select name="aslCosSignal" data-listdependson="aslCosDevice">
+                    </select>
+
+                    <label for="aslCosInvert">Carrier Detect Invert:</label>
+                    <select name="aslCosInvert">
+                        <option value="0">No (Active High)</option>
+                        <option value="1">Yes (Active Low)</option>
+                    </select>
+
+                    <label for="aslCtcssDevice">CTCSS Detect Device:</label>
+                    <select name="aslCtcssDevice" data-listdependson="/">
+                    </select>
+
+                    <label for="aslCtcssSignal">CTCSS Detect Signal:</label>
+                    <select name="aslCtcssSignal" data-listdependson="aslCtcssDevice">
+                    </select>
+
+                    <label for="aslCtcssInvert">CTCSS Detect Invert:</label>
+                    <select name="aslCtcssInvert">
+                        <option value="0">No (Active High)</option>
+                        <option value="1">Yes (Active Low)</option>
+                    </select>
+
+                    <label for="aslPttDevice">PTT Device:</label>
+                    <select name="aslPttDevice" data-listdependson="/">
+                    </select>
+
+                    <label for="aslPtSignal">PTT Signal:</label>
+                    <select name="aslPttSignal" data-listdependson="aslPttDevice">
+                    </select>
+
+                    <label for="aslPttInvert">PTT Invert:</label>
+                    <select name="aslPttInvert">
+                        <option value="0">No (Active Low)</option>
+                        <option value="1">Yes (Active High)</option>
+                    </select>
+
                 </div>
                 <div class="form2">
                     <div>Advanced Settings:</div><div></div>
@@ -127,18 +141,22 @@
                 <!-- SA818 Radio 1-->
                 <div class="form2">
                     <div>SA818 Settings (Radio 0):</div><div></div>
+
                     <label for="sa818port">Command Port:</label>
-                    <select id="sa818port" name="sa818port">
+                    <select name="sa818port" data-listdependson="/">
                     </select>
+
                     <label for="sa818bw">Bandwidth:</label>
-                    <select id="sa818bw" name="sa818bw">
+                    <select name="sa818bw">
                         <option value="1">Wide (25kHz)</option>
                         <option value="0">Narrow (12.5kHz)</option>
                     </select>
+
                     <label for="sa818txf">Transmit Frequency:</label>
-                    <input type="number" step="0.0001" id="sa818txf" name="sa818txf"/>
+                    <input type="number" step="0.0001" name="sa818txf"/>
+
                     <label for="sa818txpl">Transmit Tone:</label>
-                    <select id="sa818txpl" name="sa818txpl">
+                    <select name="sa818txpl">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -179,10 +197,12 @@
                         <option value="0037">241.8</option>
                         <option value="0038">250.3</option>
                     </select>
+
                     <label for="sa818rxf">Receive Frequency:</label>
-                    <input type="number" step="0.0001" id="sa818rxf" name="sa818rxf"/>
+                    <input type="number" step="0.0001" name="sa818rxf"/>
+
                     <label for="sa818rxpl">Receive Tone:</label>
-                    <select id="sa818rxpl" name="sa818rxpl">
+                    <select name="sa818rxpl">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -223,8 +243,9 @@
                         <option value="0037">241.8</option>
                         <option value="0038">250.3</option>
                     </select>
+
                     <label for="sa818sq">Squelch Level:</label>
-                    <select id="sa818sq" name="sa818sq">
+                    <select name="sa818sq">
                         <option value="0">Open</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -235,8 +256,9 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+
                     <label for="sa818vol">Volume:</label>
-                    <select id="sa818vol" name="sa818vol">
+                    <select name="sa818vol">
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
@@ -246,44 +268,56 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+
                     <label for="sa818emp">Pre/Deemphasis:</label>
-                    <select id="sa818emp" name="sa818emp">
+                    <select name="sa818emp">
                         <option value="0">On</option>
                         <option value="1">Off</option>
                     </select>
+
                     <label for="sa818lpf">Low-Pass Filter:</label>
-                    <select id="sa818lpf" name="sa818lpf">
+                    <select name="sa818lpf">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
+
                     <label for="sa818hpf">High-Pass Filter:</label>
-                    <select id="sa818hpf" name="sa818hpf">
+                    <select name="sa818hpf">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
+
                     <div></div>
+
                     <input type="submit"  name="action" value="Program Radio 0" class="green-button save-button"/>
+
                     <!-- Message Area -->
                     <div></div>
                     <div id="program-0-message-div">
                         <span id="program-0-message"></span> 
                     </div>
                 </div>
+
                 <!-- SA818 Radio 1-->
+
                 <div class="form2">
                     <div>SA818 Settings (Radio 1):</div><div></div>
+
                     <label for="sa818port_1">Command Port:</label>
-                    <select id="sa818port_1" name="sa818port_1">
+                    <select name="sa818port_1" data-listdependson="/">
                     </select>
+
                     <label for="sa818bw_1">Bandwidth:</label>
-                    <select id="sa818bw_1" name="sa818bw_1">
+                    <select name="sa818bw_1">
                         <option value="1">Wide (25kHz)</option>
                         <option value="0">Narrow (12.5kHz)</option>
                     </select>
+
                     <label for="sa818txf_1">Transmit Frequency:</label>
-                    <input type="number" step="0.0001" id="sa818txf_1" name="sa818txf_1"/>
+                    <input type="number" step="0.0001" name="sa818txf_1"/>
+
                     <label for="sa818txpl_1">Transmit Tone:</label>
-                    <select id="sa818txpl_1" name="sa818txpl_1">
+                    <select name="sa818txpl_1">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -324,10 +358,12 @@
                         <option value="0037">241.8</option>
                         <option value="0038">250.3</option>
                     </select>
+
                     <label for="sa818rxf_1">Receive Frequency:</label>
-                    <input type="number" step="0.0001" id="sa818rxf_1" name="sa818rxf_1"/>
+                    <input type="number" step="0.0001" name="sa818rxf_1"/>
+
                     <label for="sa818rxpl_1">Receive Tone:</label>
-                    <select id="sa818rxpl_1" name="sa818rxpl_1">
+                    <select name="sa818rxpl_1">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -368,8 +404,9 @@
                         <option value="0037">241.8</option>
                         <option value="0038">250.3</option>
                     </select>
+
                     <label for="sa818sq_1">Squelch Level:</label>
-                    <select id="sa818sq_1" name="sa818sq_1">
+                    <select name="sa818sq_1">
                         <option value="0">Open</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -380,8 +417,9 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+
                     <label for="sa818vol_1">Volume:</label>
-                    <select id="sa818vol_1" name="sa818vol_1">
+                    <select name="sa818vol_1">
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
@@ -391,22 +429,27 @@
                         <option value="7">7</option>
                         <option value="8">8</option>
                     </select>
+
                     <label for="sa818emp_1">Pre/Deemphasis:</label>
-                    <select id="sa818emp_1" name="sa818emp_1">
+                    <select name="sa818emp_1">
                         <option value="0">On</option>
                         <option value="1">Off</option>
                     </select>
+
                     <label for="sa818lpf_1">Low-Pass Filter:</label>
-                    <select id="sa818lpf_1" name="sa818lpf_1">
+                    <select name="sa818lpf_1">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
+
                     <label for="sa818hpf_1">High-Pass Filter:</label>
-                    <select id="sa818hpf_1" name="sa818hpf_1">
+                    <select name="sa818hpf_1">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
+
                     <div></div>
+
                     <input type="submit"  name="action" value="Program Radio 1" class="green-button save-button"/>
                     <!-- Message Area -->
                     <div></div>
@@ -422,29 +465,89 @@
         <div class="footer-row">
             <span><i><a href="https://www.qrz.com/db/KC1FSZ">Bruce MacKinnon KC1FSZ bruce@mackinnon.com</a></i></span>
         </div> <!-- /footer-row -->
-    </body>
+    <!-- <script src="form-utils.js"></script> -->
     <script>
+// ====== FORM FUNCTIONS ========================================================
+function visitFormElements(node, visitor) {
+    // Only consider the elements that accept user input and have a name.
+    if (node.nodeType == 1 && node.name && 
+        (node.type == "text" || node.type == "textarea" || node.type == "select-one" || 
+         node.type == "number"))
+        visitor(node)
+    // Recurse ...
+    const children = node.children;
+    for (let child of children)
+        visitFormElements(child, visitor);
+}
+
+// Takes a JSON object and populates the form field values. If the 
+// form contains an element that is not in the JSON object that element
+// is disabled.
+function setFormFromData(rootNode, data) {
+    visitFormElements(rootNode, el => {
+        if (el.name in data) {
+            el.value = data[el.name];
+        } else {
+            el.value = null;
+            el.disabled = true;
+        }
+        // Manually fire the change event in case there are any dependencies
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+}
+
+// Scans the form and moves the value of any named input element into the data object
+function getDataFromForm(rootNode, data) {
+    const formData = new FormData(rootNode);
+    const formObject = Object.fromEntries(formData.entries());
+    for (name in formObject)
+        data[name] = formObject[name].trim();
+}
+
+async function setupForm(rootNode) {
+    
+    loadPromises = []
+
+    // Scan through the form and get setup. This includes:
+    // 1. Fetching choices for any top-level menus
+    // 2. Installing the necessary change callbacks to deal with dependencies
+    visitFormElements(rootNode, el => {
+        // Does the element point to a dependent?
+        if (el.dataset.listdependson) {
+            // If the list doesn't depend on anything then force a load
+            // immediately.
+            if (el.dataset.listdependson == "/") 
+                loadPromises.push(loadSelectOptions(el, el.name));
+            // If the list depends on something else then search for the dependency 
+            // and install a change callback
+            else {
+                visitFormElements(rootNode, el2 => {
+                    if (el2.name == el.dataset.listdependson) {
+                        el2.addEventListener("change", event => {
+                            loadSelectOptions(el, el.name, el2.value);
+                        });
+                    }
+                });
+            }
+        }
+    });
+    // Don't return until all of the immediate loads have completed
+    return await Promise.allSettled(loadPromises);
+}
 
 /**
  * A utility function for populating the options on a select menu
  * using choices provided by the back-end.
  * 
- * @param baseElId The ID of the base element, usually the form that contains
- * the select menu.
+ * @param selectEl The element being configured. Usually a <select>
  * @param selectName The ID of the select menu and also the name argument 
  * sent to the server.
  * @param args Optional arguments that can influence the list
  */
-async function loadSelectOptions(baseElId, selectId, arg) {
+async function loadSelectOptions(selectEl, selectName, arg) {
 
-    // Get the starting value
-    const baseEl = document.getElementById(baseElId);
-    const sel = baseEl.querySelector("#" + selectId);
-    const initialValue = sel.value
-
-    // Pull up the choices from the server
     try {
-        u = "config-select-options?name=" + selectId;
+        u = "config-select-options?name=" + selectName;
         if (arg)
             u += "&arg=" + arg
         const response = await fetch(u);
@@ -453,62 +556,36 @@ async function loadSelectOptions(baseElId, selectId, arg) {
         }
         const data = await response.json();
         // Clear existing options
-        sel.replaceChildren();
+        selectEl.replaceChildren();
+        // Add new options 
         if (data.length > 0) {
-            sel.disabled = false;
+            selectEl.disabled = false;
             for (const i of data) {
                 var opt = document.createElement('option');
                 opt.value = i["value"]
                 opt.innerHTML = i["desc"]
-                sel.appendChild(opt);
+                selectEl.appendChild(opt);
             }
-            // Get the item selected again
-            if (initialValue && initialValue != "") {
-                sel.value = initialValue
-            }
+            // Since the menu has undergone a re-build we need to restore the value 
+            // to what we received last.
+            fullConfig = JSON.parse(sessionStorage.getItem("config"));
+            if (selectEl.name in fullConfig)
+                selectEl.value = fullConfig[selectEl.name];
         }
         else {
-            sel.disabled = true;
+            selectEl.disabled = true;
+            selectEl.value = null;
         }
-
     } catch (error) {
         console.error('Error fetching data:', error.message);
     }
 }
 
-function loadUi(name, data, doc) {
-    el = doc.getElementById(name);
-    if (el) {
-        if (name in data) {
-            el.value = data[name];
-        } else {
-            el.value = null;
-            el.disabled = true;
-        }
-    }
-}
+// ====== FORM FUNCTIONS ========================================================
 
-function storeUi(name, formObject, data) {
-    if (name in formObject)
-        data[name] = formObject[name].trim();
-}
-
-// Call this whenever the audio device selection changes so that 
-// the mixer ranges are appropriate for that device.
-async function fixMixerRanges() {
-    // Get the value of the audio device selected
-    sel = document.getElementById("aslAudioDevice");
-    await Promise.all([
-        loadSelectOptions("config-form", "aslTxMixASet", sel.value),
-        loadSelectOptions("config-form", "aslTxMixBSet", sel.value),
-        loadSelectOptions("config-form", "aslRxMixerSet", sel.value)
-    ]);
-}
-
-const RadioControls = [ 
-    [ "sa818port", "sa818bw", "sa818txf", "sa818txpl", "sa818rxf", "sa818rxpl", "sa818sq", "sa818vol", "sa818emp", "sa818lpf", "sa818hpf" ],
-    [ "sa818port_1", "sa818bw_1", "sa818txf_1", "sa818txpl_1", "sa818rxf_1", "sa818rxpl_1", "sa818sq_1", "sa818vol_1", "sa818emp_1", "sa818lpf_1", "sa818hpf_1" ]
-];
+//const form = document.getElementById('config-form');
+//setupForm(form);
+//setFormFromData(form, { "node": "xxx", "aslAudioDevice": "0", "aslCosDevice": "0" });
 
 // Loads data into the configuration screen
 async function configLoad() {
@@ -518,42 +595,12 @@ async function configLoad() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
+
         // Store the entire config document so that we can merge later
         sessionStorage.setItem("config", JSON.stringify(data))
 
-        // ----- Top Section -----------------------------------------------------
-
-        loadUi("node", data, document)
-        loadUi("password", data, document)
-        loadUi("callsign", data, document)
-        loadUi("iaxPort", data, document)
-        loadUi("favorites", data, document)
-
-        // ----- Radio 0 Section --------------------------------------------------
-
-        loadUi("setupMode", data, document)
-        loadUi("aslHdwType", data, document)
-        loadUi("aslAudioDevice", data, document)
-        loadUi("aslCosFrom", data, document)
-        loadUi("aslCtcssFrom", data, document)
-        loadUi("aslPttTo", data, document)
-        loadUi("aslTxMixASet", data, document)
-        loadUi("aslTxMixBSet", data, document)
-        loadUi("aslRxMixerSet", data, document)
-
-        // ----- Advanced Section --------------------------------------------------
-
-        loadUi("kfnodes", data, document);
-        loadUi("kfdelay", data, document);
-        loadUi("duplexmode", data, document);
-        loadUi("echogain", data, document);
-
-        // ------ SA8181 Section -----------------------------------------------------
-
-        for (const field of RadioControls[0])
-            loadUi(field, data, document)
-        for (const field of RadioControls[1])
-            loadUi(field, data, document)
+        // Here is where the JSON data gets moved into the form DOM
+        setFormFromData(document.getElementById('config-form'), data);
 
     } catch (error) {
         console.error('Error fetching configuration data:', error.message);
@@ -562,52 +609,13 @@ async function configLoad() {
 
 function configStore() {
 
-    const form = document.getElementById('config-form');
-    const formData = new FormData(form);
-    const formObject = Object.fromEntries(formData.entries());
-
     // Make a deep copy of the existing config state
     fullConfig = JSON.parse(sessionStorage.getItem("config"))
 
-    // Move across a few specific things 
+    // Augment with whatever is in the screen
+    const form = document.getElementById('config-form');
+    getDataFromForm(form, fullConfig)
 
-    // #### TODO: USE THIS FOR EVERYTHING
-    const storeFields = [ "duplexmode", "echogain" ];
-    for (const storeField of storeFields)
-        storeUi(storeField, formObject, fullConfig)
-
-    // ----- Top Section -----------------------------------------------------
-
-    storeUi("node", formObject, fullConfig)
-    storeUi("password", formObject, fullConfig)
-    storeUi("callsign", formObject, fullConfig)
-    storeUi("iaxPort", formObject, fullConfig)
-    storeUi("favorites", formObject, fullConfig)
-
-    // ----- Radio 0 Section --------------------------------------------------
-
-    storeUi("setupMode", formObject, fullConfig)
-    storeUi("aslHdwType", formObject, fullConfig)
-    storeUi("aslAudioDevice", formObject, fullConfig)
-    storeUi("aslCosFrom", formObject, fullConfig)
-    storeUi("aslCtcssFrom", formObject, fullConfig)
-    storeUi("aslPttTo", formObject, fullConfig)
-    storeUi("aslTxMixASet", formObject, fullConfig)
-    storeUi("aslTxMixBSet", formObject, fullConfig)
-    storeUi("aslRxMixerSet", formObject, fullConfig)
-
-    // ----- Advanced Section --------------------------------------------------
-
-    storeUi("kfnodes", formObject, fullConfig);
-    storeUi("kfdelay", formObject, fullConfig);
-
-    // ------ SA8181 Section -----------------------------------------------------
-
-    for (const field of RadioControls[0])
-        storeUi(field, formObject, fullConfig)
-    for (const field of RadioControls[1])
-        storeUi(field, formObject, fullConfig)
-   
     // Push back to the server
     fetch('/config-save', {
         method: 'POST',
@@ -677,22 +685,12 @@ document.addEventListener('DOMContentLoaded', async() => {
             programSA818(1);
     });   
 
-    // Since the mixer menus depend on the selected audio device we need to attach 
-    // a change notification callback
-    document.getElementById("aslAudioDevice").addEventListener("change", function(event) {
-        fixMixerRanges();
-    });
-
-    // Important that these steps are serialized
-    await loadSelectOptions("config-form", "aslAudioDevice");
-    await loadSelectOptions("config-form", "sa818port");
-    await loadSelectOptions("config-form", "sa818port_1");
-    await configLoad();
-    // This depends on which option was chosen on the sound device
-    await fixMixerRanges();
-    // A second load to get the mixer level menus loaded properly
-    // #### TODO: Clean up this hack
+    const form = document.getElementById('config-form');
+    // Important that these steps are serialized since the setup call 
+    // is populating menu choices.
+    await setupForm(form);
     await configLoad();
 });
     </script>
+    </body>
 </html>
