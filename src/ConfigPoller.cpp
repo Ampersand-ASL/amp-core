@@ -126,7 +126,7 @@ void ConfigPoller::_populateDefaults(json& j) {
             });
 #endif            
     }
-    setDefault(j, "aslCosSignal", "default");
+    setDefault(j, "aslCosSignal", "voldn");
     setDefault(j, "aslCosInvert", "0");
 
     setDefault(j, "aslCtcssDevice", "");
@@ -146,7 +146,7 @@ void ConfigPoller::_populateDefaults(json& j) {
             });
 #endif            
     }
-    setDefault(j, "aslPttSignal", "default");
+    setDefault(j, "aslPttSignal", "gpio3");
     setDefault(j, "aslPttInvert", "0");
 
     if (!j.contains("favorites"))

@@ -23,6 +23,8 @@
 #endif 
 
 #include <functional>
+// ### TEMP
+#include <fstream>
 
 #include "kc1fsz-tools/fixedstring.h"
 #include "kc1fsz-tools/fixedqueue.h"
@@ -99,6 +101,7 @@ public:
         NumberAuthorizer* destAuthorizer, NumberAuthorizer* sourceAuthorizer, 
         LocalRegistry* locReg, unsigned destLineId, const char* publicUser,
         LineIAX2::Call* callSpace, unsigned callSpaceLen);
+    ~LineIAX2();
 
     /**
      * Controls the root of the DNS queries that are used to resolve IP addresses
@@ -532,6 +535,17 @@ private:
         std::function<bool(const LineIAX2::Call& call)> predicate);
     void _visitActiveCallsIf(std::function<void(const LineIAX2::Call& call)> visitor, 
         std::function<bool(const LineIAX2::Call& call)> predicate) const;
+
+    void _openCapture();
+    void _closeCapture();
+    void _captureTxPacket(const uint8_t* b, unsigned len, const sockaddr& peerAddr);
+    void _captureRxPacket(const uint8_t* b, unsigned len, const sockaddr& peerAddr);
+    void _capturePacket(uint32_t ts, uint32_t tus, const uint8_t* b, unsigned len, 
+        const sockaddr& fromAddr, const sockaddr& toAddr);
+
+    bool _captureEnabled = true;
+    // #### TEMP
+    std::ofstream _captureFile;
 };
 
 }

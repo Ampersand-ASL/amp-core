@@ -35,7 +35,9 @@ public:
     SignalOut(Log& log, Clock& clock, MessageConsumer& bus, 
          Message::SignalType sigTypeOn, Message::SignalType sigTypeOff);
 
-    int openHid(const char* hidName);
+    int openHid(const char* deviceName, const char* signalName);
+
+    int openSerial(const char* deviceName, const char* signalName);
 
     void close();
 
@@ -45,20 +47,32 @@ public:
 
 private:
 
+    enum Mode {
+        MODE_NONE,
+        MODE_HID,
+        MODE_SERIAL
+    };
+
     Log& _log;
     Clock& _clock;
     MessageConsumer& _bus;
     Message::SignalType _sigTypeOn;
     Message::SignalType _sigTypeOff;
-    
-    int _hidFd = 0;
+    int _fd = 0;
+    Mode _mode = Mode::MODE_NONE;
+
+    // ------ HID Related ----------------------------------------------------
+
     bool _hidFailed = false;
     static const unsigned MAX_HID_SIZE = 16;
     uint8_t _hidAcc[MAX_HID_SIZE];
     unsigned _hidPacketSize = 4;
-
     unsigned _hidOffset = 1;
     uint8_t _hidMask = 0x04;
+
+    // ----- Serial Related --------------------------------------------------
+
+    int _ticomMask;
 };
 
     }

@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <linux/sockios.h> // Required for SIOCOUTQ
+#include <netinet/udp.h>
 #endif
 
 #include <sys/types.h>
@@ -114,6 +115,14 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _pokeAddr[0] = 0;
     _pokeNodeNumber[0] = 0;
     strcpyLimited(_dnsRoot, "allstarlink.org", sizeof(_dnsRoot));
+
+    if (_captureEnabled)    
+        _openCapture();
+}
+
+LineIAX2::~LineIAX2() {
+    if (_captureEnabled)    
+        _closeCapture();
 }
 
 void LineIAX2::setDNSRoot(const char* dnsRoot) {
@@ -586,6 +595,9 @@ bool LineIAX2::_processInboundIAXData() {
     } 
 #endif
     else if (rc > 0) {
+        // Capture/trace
+        _captureRxPacket(readBuffer, rc, (const sockaddr&)peerAddr);
+        // The actual processing of the received packet
         _processReceivedIAXPacket(readBuffer, rc, (const sockaddr&)peerAddr, _clock.time());
         // Return back to be nice, but indicate that there might be more
         return true;
@@ -1250,14 +1262,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
         IAX2FrameFull reTxFrame(packet, packetLen);
         bool remove = LT_MOD8(reTxFrame.getOSeqNo(), frame.getISeqNo());
-        /*
-        if (remove)
-            _log.info("Removing ACKd %u < %u", (unsigned)reTxFrame.getOSeqNo(),
-                (unsigned)frame.getISeqNo());
-        else 
-            _log.info("Not removing ACKd %u >= %u", (unsigned)reTxFrame.getOSeqNo(),
-                (unsigned)frame.getISeqNo());
-        */
         return remove;
     });
 
@@ -1271,10 +1275,15 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // before checking sequence coherence.
     if (frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_VNAK)) {
 
-        _log.info("VNAK received, retransmitting from %d", (int)frame.getOSeqNo());
+        // From RFC section 6.9.3:
+        // 
+        // "On receipt of a VNAK, a peer MUST retransmit all frames with a higher sequence 
+        // number than the VNAK message's iseqno."
+
+        _log.info("VNAK received, retransmitting from %d", (int)frame.getISeqNo());
 
         call.reTx.visitAll(
-            [this, targetOSeq=frame.getOSeqNo(), &call]
+            [this, targetOSeq=frame.getISeqNo(), &call]
             (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
                 IAX2FrameFull reTxFrame(packet, packetLen);
                 const bool shouldTx = 
@@ -1303,7 +1312,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // incrementally as Full Frames are sent.  When the counter
     // overflows, it silently resets to 0.
 
-
+    /*
     // On 26-Feb-2026 Frank KG9M was testing with an M1KE and saw some strange
     // behavior with PING messages. The OSeqNo on the inbound PING messages 
     // appears to be zero, which can confuse the sequence number tracking. So
@@ -1312,9 +1321,10 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_PING)) {
         // Do nothing, let the message in without a sequence number validation
     }
+    */
     // Make sure the sequence number is correct. If so, move the expected 
     // sequence number forward and generate the ACK.
-    else if (frame.getOSeqNo() == call.expectedInSeqNo) {
+    if (frame.getOSeqNo() == call.expectedInSeqNo) {
         call.incrementExpectedInSeqNo();
         // Generate an ACK in most cases
         //
@@ -1325,7 +1335,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         if (frame.isACKRequired())
             _sendACK(frame.getTimeStamp(), call);
     }
-    else if (compareSeqWrap(frame.getOSeqNo(), call.expectedInSeqNo) < 0) {
+    // Check for a message with a lower sequence number than expected. Presumably
+    // this is a re-transmit.
+    else if (LT_MOD8(frame.getOSeqNo(), call.expectedInSeqNo)) {
 
         // A re-transmit is a legit reason to have a low sequence number
         if (frame.isRetransmit()) {
@@ -1550,7 +1562,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // the peer sending the LAGRQ by comparing the time-stamp of the LAGRQ
     // and the time the LAGRP was received.
     // This message does not require any IEs.
-    else if (frame.isTypeClass(6, 0x0b)) {
+    else if (frame.isTypeClass(IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_LAGRQ)) {
         IAX2FrameFull respFrame;
         respFrame.setHeader(call.localCallId, call.remoteCallId, 
             // In this case we echo back the timestamp that we got.
@@ -2567,7 +2579,7 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame,
     _sendFrameToPeer(frame.buf(), frame.size(), peerAddr);
 }
 
-// NOTE: This is the ONLY place where IAX transmissions happen.
+// NOTE: This is the ONLY place where IAX socket transmissions happen.
 
 void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
@@ -2596,6 +2608,9 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
             _log.error("Network is unreachable to %s", temp);
         } else 
             _log.error("Send error %d", errno);
+    }
+    else {
+        _captureTxPacket(b, len, peerAddr);
     }
 
 #ifndef _WIN32
@@ -2782,6 +2797,119 @@ void LineIAX2::_publishCallFailed(const char* localNumber, const char* remoteNum
     _bus.consume(msg);
 }
 
+void LineIAX2::_openCapture() {  
+    // Create some uniqueness in the filename
+    char fn[64];
+    snprintf(fn, sizeof(fn), "./capture-%lu.pcap", _clock.timeMs() / 1000);
+    _captureFile.open(fn, std::ios::binary);
+    // See https://www.ietf.org/archive/id/draft-gharris-opsawg-pcap-01.html
+    // for information about the PCAP file format. 
+    // Write the file header
+    uint8_t header[24] = { 0 };
+    // This magic number indicates that the time is in microseconds
+    pack_uint32_be(0xA1B2C3D4, header);
+    pack_uint16_be(2, header + 4);
+    pack_uint16_be(4, header + 6);
+    pack_uint32_be(2048, header + 16);
+    // Packets are in IP format
+    pack_uint16_be(101, header + 22);
+    _captureFile.write((const char*)header, 24);
+}
+
+void LineIAX2::_closeCapture() {
+    _captureFile.close();
+}
+
+void LineIAX2::_captureTxPacket(const uint8_t* b, unsigned len, const sockaddr& toAddr) {
+    if (_captureEnabled) {
+        if (_addrFamily == AF_INET) {
+            sockaddr_storage fromAddr;
+            ((sockaddr_in&)fromAddr).sin_addr.s_addr = INADDR_ANY;
+            ((sockaddr_in&)fromAddr).sin_port = htons(_iaxListenPort);
+            _capturePacket(_clock.timeMs() / (uint64_t)1000, _clock.timeUs() % (uint64_t)1000000, 
+                b, len, (const sockaddr&)fromAddr, (const sockaddr&)toAddr);
+        }
+    }
+}
+
+void LineIAX2::_captureRxPacket(const uint8_t* b, unsigned len, const sockaddr& fromAddr) {
+    if (_captureEnabled) {
+        if (_addrFamily == AF_INET) {
+            sockaddr_storage toAddr;
+            ((sockaddr_in&)toAddr).sin_addr.s_addr = INADDR_ANY;
+            ((sockaddr_in&)toAddr).sin_port = htons(_iaxListenPort);
+            _capturePacket(_clock.timeMs() / (uint64_t)1000, _clock.timeUs() % (uint64_t)1000000, 
+                b, len, (const sockaddr&)fromAddr, (const sockaddr&)toAddr);
+        }
+    }
+}
+
+void LineIAX2::_capturePacket(uint32_t ts, uint32_t tus, const uint8_t* b, unsigned len, 
+    const sockaddr& fromAddr, const sockaddr& toAddr) {
+    if (_captureFile.is_open()) {
+
+        // See https://www.ietf.org/archive/id/draft-gharris-opsawg-pcap-01.html
+        // for information about the PCAP file format. 
+        // Write the file header
+        uint8_t header[16] = { 0 };
+        pack_uint32_be(ts, header);
+        pack_uint32_be(tus, header + 4);
+        pack_uint32_be(20 + 8 + len, header + 8);
+        pack_uint32_be(20 + 8 + len, header + 12);
+        _captureFile.write((const char*)header, 16);
+
+        struct iphdr {
+            uint8_t version_and_ihl; 
+            uint8_t tos;
+            uint16_t tot_len;
+            uint16_t id;
+            uint8_t flags_and_frag_off_0;
+            uint8_t flags_and_frag_off_1;
+            uint8_t ttl;
+            uint8_t protocol;
+            uint16_t check;
+            uint32_t saddr;
+            uint32_t daddr;
+        };
+
+        // Create the IP and UDP headers
+        struct iphdr ip_hdr;
+        struct udphdr udp_hdr;
+
+        // IP HEADER
+
+        ip_hdr.version_and_ihl = 0x45;    
+        ip_hdr.tos = 0;
+        // NOTICE: sizeof(hdr) covers both the IP and UDP headers
+        ip_hdr.tot_len = htons(20 + 8 + len);
+        ip_hdr.id = 0;
+        // Don't fragment
+        ip_hdr.flags_and_frag_off_0 = 0x40;
+        ip_hdr.flags_and_frag_off_1 = 0;
+        ip_hdr.ttl = 64;
+        // UDP
+        ip_hdr.protocol = 0x11;
+        // MUST START WITH ZERO TO GET THE CHECKSUM RIGHT
+        ip_hdr.check = 0;
+        // This is already in network order
+        ip_hdr.saddr = ((struct sockaddr_in&)fromAddr).sin_addr.s_addr;
+        ip_hdr.daddr = ((struct sockaddr_in&)toAddr).sin_addr.s_addr;
+
+        // UDP HEADER
+
+        // This is already in network order
+        udp_hdr.uh_sport = ((struct sockaddr_in&)fromAddr).sin_port; 
+        udp_hdr.uh_dport = ((struct sockaddr_in&)toAddr).sin_port; 
+        udp_hdr.uh_ulen = htons(8 + len);
+        udp_hdr.uh_sum = 0;
+
+        _captureFile.write((const char*)&ip_hdr, 20);
+        _captureFile.write((const char*)&udp_hdr, 8);
+        _captureFile.write((const char*)b, len);
+        _captureFile.flush();
+    }
+}
+
 // ===== LineIAX2::Call ===================================================
 
 LineIAX2::Call::Call()
@@ -2951,13 +3079,6 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
         }
     }
 
-    // Look for things waiting to go out on the network (like retransmits)
-    //reTx.retransmitIfNecessary(localElapsedMs(clock), expectedInSeqNo, 
-    //    // The callback that will be fired for anything that reTx needs to send
-    //    [this, &context=line](const IAX2FrameFull& frame) {
-    //        context._sendFrameToPeer(frame, (const sockaddr&)peerAddr);
-    //    });
-
     reTx.visitAll(
         [this, &context=line, &log, &clock]
         (uint32_t stamp, unsigned, const uint8_t* packet, unsigned packetLen) {
@@ -3048,5 +3169,7 @@ void LineIAX2::Call::dtmfGen(Log& log, Clock& clock, LineIAX2& line, char symbol
         outSeqNo, expectedInSeqNo, FrameType::IAX2_TYPE_DTMF2, symbol);
     line._sendFrameToPeer(frame, *this);
 }
+
+
 
 }

@@ -650,9 +650,13 @@ json enumInputSignal(const string& device) {
     auto a = json::array();
     if (device.starts_with("usbaud ")) {
         json o1;
-        o1["value"] = "default";
-        o1["desc"] = "Default (Volume Down)";
+        o1["value"] = "voldn";
+        o1["desc"] = "Volume Down (Default for COS)";
         a.push_back(o1);
+        json o2;
+        o2["value"] = "volup";
+        o2["desc"] = "Volume Down (Default for CTCSS)";
+        a.push_back(o2);
     }
     else if (device.starts_with("usbser ")) {
         json o1;
@@ -673,8 +677,8 @@ json enumOutputSignal(const string& device) {
 
     if (device.starts_with("usbaud ")) {
         json o1;
-        o1["value"] = "default";
-        o1["desc"] = "Default (GPIO3)";
+        o1["value"] = "gpio3";
+        o1["desc"] = "GPIO3 (Default for PTT)";
         a.push_back(o1);
     }
     else if (device.starts_with("usbser ")) {

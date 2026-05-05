@@ -51,11 +51,13 @@ int SignalIn::openHid(const char* hidName, const char* serial) {
 
     close();
 
-    if (strcmp(serial, "default") == 0) {
+    if (strcmp(serial, "voldn") == 0) {
         _hidOffset = 0;
         _hidMask = 0x02;
-    }
-    else
+    } else if (strcmp(serial, "volup") == 0) {
+        _hidOffset = 0;
+        _hidMask = 0x01;
+    } else
         return -1;
 
     if ((_fd = ::open(hidName, O_RDWR | O_NONBLOCK)) < 0) {
@@ -96,8 +98,6 @@ int SignalIn::openSerial(const char* deviceName, const char* signal) {
     }
 
     _mode = Mode::MODE_SERIAL;
-
-    _log.info("Opened serial");
 
     return 0;
 }
@@ -166,7 +166,6 @@ void SignalIn::_pollSerialStatus() {
     status &= _ticomMask;
     // If something changed then generate an event
     if (status != _ticomStatus) {
-        _log.info("Serial status changed");
         _generateEvent(status != 0);
         _ticomStatus = status;
     }
