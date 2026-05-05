@@ -41,6 +41,8 @@ public:
 
     void close();
 
+    void setInvert(bool b) { _invert = b; }
+
     // ----- MessageConsumer --------------------------------------------------
 
     virtual void consume(const Message& frame);
@@ -60,6 +62,9 @@ private:
     Message::SignalType _sigTypeOff;
     int _fd = 0;
     Mode _mode = Mode::MODE_NONE;
+    bool _invert = false;
+
+    void _set(bool s);
 
     // ------ HID Related ----------------------------------------------------
 

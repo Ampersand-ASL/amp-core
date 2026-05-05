@@ -37,8 +37,9 @@ public:
 
     int openHid(const char* hidDeviceName, const char* signal);
     int openSerial(const char* serialDeviceName, const char* signal);
-
     void close();
+
+    void setInvert(bool b) { _invert = b; }
 
     // ----- MessageConsumer --------------------------------------------------
 
@@ -65,6 +66,7 @@ private:
     Message::SignalType _sigTypeOff;
     Mode _mode = Mode::MODE_NONE;
     int _fd = 0;
+    bool _invert = false;
 
     void _generateEvent(bool status);
 

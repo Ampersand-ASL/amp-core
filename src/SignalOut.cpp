@@ -60,6 +60,9 @@ int SignalOut::openHid(const char* hidName, const char* signalName) {
     _hidFailed = false;
     _mode = Mode::MODE_HID;
 
+    // Set initial state
+    _set(false);
+
     return 0;
 }
 
@@ -86,6 +89,9 @@ int SignalOut::openSerial(const char* deviceName, const char* signal) {
 
     _mode = Mode::MODE_SERIAL;
 
+    // Set initial state
+    _set(false);
+
     return 0;
 }
 
@@ -99,40 +105,49 @@ void SignalOut::close() {
 // ----- MessageConsumer --------------------------------------------------
 
 void SignalOut::consume(const Message& msg) {
-    if (_mode == Mode::MODE_HID) {
-        if (msg.isSignal(_sigTypeOn)) {
-            // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
-            // #### TODO: GENERALIZE
-            char msg[5] = { 0 };
-            // GPIO3
-            msg[2] = _hidMask;
-            msg[3] = _hidMask;
-            int rc = write(_fd, msg, 5);
-            if (rc != 5)
-                _log.info("Signal out write error %d %d", rc, errno);
-        }
-        else if (msg.isSignal(_sigTypeOff)) {
-            // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
-            // #### TODO: GENERALIZE
-            char msg[5] = { 0 };
-            // GPIO3
-            msg[2] = _hidMask;
-            msg[3] = 0;
-            int rc = write(_fd, msg, 5);
-            if (rc != 5)
-                _log.info("Signal out write error %d %d", rc, errno);
-        }
+    if (msg.isSignal(_sigTypeOn)) {
+        _set(true);
+    } else if (msg.isSignal(_sigTypeOff)) {
+        _set(false);
     }
-    else if (_mode == Mode::MODE_SERIAL) {
-        // Get existing status
-        int status;
-        ioctl(_fd, TIOCMGET, &status);
-        if (msg.isSignal(_sigTypeOn)) {
-            status |= _ticomMask;
-        } else if (msg.isSignal(_sigTypeOff)) {
-            status &= ~_ticomMask;
+}
+
+void SignalOut::_set(bool s) {
+    if (_fd != -1) {
+        if (_mode == Mode::MODE_HID) {
+            if ((!_invert && s) || (_invert && !s)) {
+                // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
+                // #### TODO: GENERALIZE
+                char msg[5] = { 0 };
+                // GPIO3
+                msg[2] = _hidMask;
+                msg[3] = _hidMask;
+                int rc = write(_fd, msg, 5);
+                if (rc != 5)
+                    _log.info("Signal out write error %d %d", rc, errno);
+            }
+            else {
+                // RELEVANT: https://github.com/twilly/cm108/blob/master/cm108.c
+                // #### TODO: GENERALIZE
+                char msg[5] = { 0 };
+                // GPIO3
+                msg[2] = _hidMask;
+                msg[3] = 0;
+                int rc = write(_fd, msg, 5);
+                if (rc != 5)
+                    _log.info("Signal out write error %d %d", rc, errno);
+            }
         }
-        ioctl(_fd, TIOCMSET, &status);
+        else if (_mode == Mode::MODE_SERIAL) {
+            int status = 0;
+            if (ioctl(_fd, TIOCMGET, &status) != 0)
+                return;
+            if ((!_invert && s) || (_invert && !s))
+                status |= _ticomMask;
+            else
+                status &= ~_ticomMask;
+            ioctl(_fd, TIOCMSET, &status);
+        }
     }
 }
 

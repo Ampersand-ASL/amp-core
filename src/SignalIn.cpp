@@ -172,6 +172,8 @@ void SignalIn::_pollSerialStatus() {
 }
 
 void SignalIn::_generateEvent(bool status) {
+    if (_invert)
+        status = !status;
     MessageEmpty msg = MessageEmpty::signal((status) ? _sigTypeOn : _sigTypeOff);
     msg.setDest(_radioLineId, DEST_CALL_ID);
     _bus.consume(msg);
