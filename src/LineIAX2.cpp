@@ -39,7 +39,7 @@
 #include <algorithm>
 
 // Crypto not supported on microcontroller
-#ifndef PICO_BOARD
+#if !(defined(PICO_BOARD) || defined(MICROAMP_BOARD))
 #include "ed25519.h"
 #endif
 
@@ -1188,7 +1188,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 unsigned char sigBin[64];
                 asciiHexToBin(sigHex, 128, sigBin, 64);
 
-#ifndef PICO_BOARD                
+#if !(defined(PICO_BOARD) || defined(MICROAMP_BOARD))
                 // Do the actual public key validation 
                 if (ed25519_verify(sigBin, 
                     (const uint8_t*)challengeTxt, strlen(challengeTxt), 
@@ -1420,10 +1420,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             return;
         }
 
-#ifdef PICO_BOARD
-        _log.error("Token type not supported");
-        return;
-#else 
+#if !(defined(PICO_BOARD) || defined(MICROAMP_BOARD))
         // Sign the challenge token using our private key
         uint8_t seedBin[32];
         asciiHexToBin(_privateKeyHex, 64, seedBin, 32);
@@ -1445,6 +1442,9 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
 
         _sendFrameToPeer(authrepFrame, call);
+#else 
+        _log.error("Token type not supported");
+        return;
 #endif 
     } 
     // REJECT
