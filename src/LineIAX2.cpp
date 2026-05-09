@@ -388,7 +388,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     int callIx = _allocateCallIx();
     if (callIx == -1) 
         return -2; 
-    assert(callIx < _maxCalls);
+    assert((unsigned)callIx < _maxCalls);
     Call& call = _calls[callIx];
 
     call.reset();
@@ -720,7 +720,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                 // Create a token relevant to this NEW request
                 char tokenClear[128];
-                snprintf(tokenClear, 128, "T:%s:%X", ipStr, _startTime);
+                snprintf(tokenClear, 128, "T:%s:%lX", ipStr, _startTime);
                 MD5_CTX md5Ctx;
                 MD5Init(&md5Ctx);
                 MD5Update(&md5Ctx, (unsigned char*)tokenClear, strlen(tokenClear));
@@ -912,7 +912,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
-            assert(callIx < _maxCalls);
+            assert((unsigned)callIx < _maxCalls);
             Call& call = _calls[callIx];
             call.reset();
             call.side = Call::Side::SIDE_CALLED;
@@ -1172,7 +1172,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                 // Make a challenge that uses some things that are unique to the call
                 char challengeTxt[32];
-                snprintf(challengeTxt, 31, "%u%u", 
+                snprintf(challengeTxt, 31, "%u%lu", 
                     untrustedCall.localCallId, untrustedCall.localStartMs);
 
                 // Only supporting ED25519 challenge, which is found in the 0x20 IE.
@@ -2066,7 +2066,7 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
 
     // Make a challenge that uses some things that are unique to the call
     char challenge[32];
-    snprintf(challenge, 31, "%u%u", call.localCallId, call.localStartMs);
+    snprintf(challenge, 31, "%u%lu", call.localCallId, call.localStartMs);
 
     IAX2FrameFull authreqFrame;
     authreqFrame.setHeader(call.localCallId, call.remoteCallId, 
@@ -2803,7 +2803,7 @@ void LineIAX2::_publishCallFailed(const char* localNumber, const char* remoteNum
 void LineIAX2::_openCapture() {  
     // Create some uniqueness in the filename
     char fn[64];
-    snprintf(fn, sizeof(fn), "./capture-%lu.pcap", _clock.timeMs() / 1000);
+    snprintf(fn, sizeof(fn), "./capture-%lu.pcap", (uint32_t)(_clock.timeMs() / 1000));
     _captureFile.open(fn, std::ios::binary);
     // See https://www.ietf.org/archive/id/draft-gharris-opsawg-pcap-01.html
     // for information about the PCAP file format. 
