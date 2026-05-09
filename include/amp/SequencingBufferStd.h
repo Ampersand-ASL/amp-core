@@ -110,18 +110,6 @@ public:
     unsigned maxSize() const { return MAX_BUFFER_SIZE; }
     void setStartMs(uint32_t ms) { _startMs = ms; }
     
-    void debug() const {
-        if (!empty()) {
-            printf("----- SequencingBufferStd --------------------\n");
-            printf("lastplayout %d, cursor %d, idealdelay %f\n", _lastPlayoutTime, _originCursor, _idealDelay);
-            _buffer.visitAll([this](const T& frame) {
-                printf("  orig=%6d rx=%6d margin=%ld\n", frame.getOrigMs(), frame.getRxMs(),
-                (long)((int64_t)_lastPlayoutTime - (int64_t)frame.getRxMs()));
-                return true;
-            });
-        }
-    }
-
     /**
      * Used to "extend" a 16-bit time (from a voice mini-frame) to a full
      * 32-bit representation if necessary. Assumes that both times are 
@@ -178,9 +166,6 @@ public:
         if (!_buffer.hasCapacity()) {
             _overflowCount++;
             log.info("OF orig=%6d cursor=%6d", payload.getOrigMs(), _originCursor);
-            if (_overflowCount % 25 == 0) {
-                debug();
-            }
             return false;
         }
 
