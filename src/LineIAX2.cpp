@@ -174,8 +174,8 @@ int LineIAX2::open(short addrFamily, int listenPort) {
     // If the configuration is changing then ignore the request
     if (addrFamily == _addrFamily &&
         _iaxListenPort == listenPort &&
-        _iaxSockFd != 0 &&
-        _dnsSockFd != 0) {
+        _iaxSockFd != -1 &&
+        _dnsSockFd != -1) {
         return 0;
     }
 
@@ -305,8 +305,8 @@ void LineIAX2::close() {
         ::close(_iaxSockFd);
     if (_dnsSockFd) 
         ::close(_dnsSockFd);
-    _iaxSockFd = 0;
-    _dnsSockFd = 0;
+    _iaxSockFd = -1;
+    _dnsSockFd = -1;
     _iaxListenPort = 0;
     _addrFamily = 0;
 } 
@@ -388,6 +388,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     int callIx = _allocateCallIx();
     if (callIx == -1) 
         return -2; 
+    assert(callIx < _maxCalls);
     Call& call = _calls[callIx];
 
     call.reset();
@@ -544,13 +545,13 @@ int LineIAX2::getPolls(pollfd* fds, unsigned fdsCapacity) {
     if (fdsCapacity < 2) 
         return -1;
     int used = 0;
-    if (_iaxSockFd) {
+    if (_iaxSockFd != -1) {
         // We're only watching for receive events
         fds[used].fd = _iaxSockFd;
         fds[used].events = POLLIN;
         used++;
     }
-    if (_dnsSockFd > 0) {
+    if (_dnsSockFd != -1) {
         fds[used].fd = _dnsSockFd;
         fds[used].events = POLLIN;
         used++;
@@ -567,7 +568,7 @@ bool LineIAX2::run2() {
 
 bool LineIAX2::_processInboundIAXData() {
 
-    if (!_iaxSockFd)
+    if (_iaxSockFd == -1)
         return false;
 
     // Check for new data on the socket
@@ -610,7 +611,7 @@ bool LineIAX2::_processInboundIAXData() {
 
 bool LineIAX2::_processInboundDNSData() {
 
-    if (!_dnsSockFd)
+    if (_dnsSockFd == -1)
         return false;
 
     // Check for new data on the socket
@@ -911,6 +912,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 return;
             }
 
+            assert(callIx < _maxCalls);
             Call& call = _calls[callIx];
             call.reset();
             call.side = Call::Side::SIDE_CALLED;
@@ -1127,6 +1129,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             return;
         }
 
+        assert(recognizedCallIx < _maxCalls);
         Call& untrustedCall = _calls[recognizedCallIx];
 
         // Validation check - make sure the source IP is still right. 
@@ -2584,7 +2587,7 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame,
 void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
 
-    if (!_iaxSockFd)
+    if (_iaxSockFd == -1)
         return;
 
     int rc = ::sendto(_iaxSockFd, 

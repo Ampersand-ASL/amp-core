@@ -428,7 +428,7 @@ private:
     // The UDP port number used to receive IAX packet
     int _iaxListenPort = 0;
     // The UDP socket on which IAX messages are received/sent
-    int _iaxSockFd = 0;
+    int _iaxSockFd = -1;
     // The size of the transmit buffer as reported by the kernel
     unsigned _txSocketBufferSize = 0;
 
@@ -443,7 +443,7 @@ private:
     // Enables detailed network tracing
     bool _trace = false;
     // The UDP socket with which DNS calls are made
-    int _dnsSockFd = 0;
+    int _dnsSockFd = -1;
     // Used for generating unique IDs for DNS requests
     unsigned int _dnsRequestIdCounter = 1;
     // Diagnostics    
@@ -543,8 +543,7 @@ private:
     void _capturePacket(uint32_t ts, uint32_t tus, const uint8_t* b, unsigned len, 
         const sockaddr& fromAddr, const sockaddr& toAddr);
 
-    bool _captureEnabled = true;
-    // #### TEMP
+    bool _captureEnabled = false;
     std::ofstream _captureFile;
 };
 
