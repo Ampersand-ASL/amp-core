@@ -609,9 +609,9 @@ json enumIODevice() {
             string val("usbaud ");
             val += portPath;
             // Make the display description
-            string desc("USB Audio ");
+            string desc("USB Audio [");
             desc += portPath;
-            desc += " ";
+            desc += "] ";
             desc += vendorName;
             desc += " ";
             desc += productName;
@@ -655,7 +655,7 @@ json enumInputSignal(const string& device) {
         a.push_back(o1);
         json o2;
         o2["value"] = "volup";
-        o2["desc"] = "Volume Down (Default for CTCSS)";
+        o2["desc"] = "Volume Up (Default for CTCSS)";
         a.push_back(o2);
     }
     else if (device.starts_with("usbser ")) {
