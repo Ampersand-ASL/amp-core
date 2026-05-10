@@ -161,13 +161,22 @@ void SignalIn::_pollSerialStatus() {
         return;
 
     int status = 0;
-    ioctl(_fd, TIOCMGET, &status);
-    // Mask off the bit we care about
-    status &= _ticomMask;
-    // If something changed then generate an event
-    if (status != _ticomStatus) {
-        _generateEvent(status != 0);
-        _ticomStatus = status;
+    int rc = ioctl(_fd, TIOCMGET, &status);
+    if (rc == 0) {
+
+        //static int last = 0;
+        //if (status != last) {
+        //    _log.info("New %08X", status);
+        //    last = status;
+        //}
+
+        // Mask off the bit we care about
+        status &= _ticomMask;
+        // If something changed then generate an event
+        if (status != _ticomStatus) {
+            _generateEvent(status != 0);
+            _ticomStatus = status;
+        }
     }
 }
 

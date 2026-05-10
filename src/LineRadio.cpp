@@ -224,9 +224,11 @@ void LineRadio::oneSecTick() {
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
         float magDb = 20.0 * std::log10(2.0f * _fftMaxMag / 32767.0f);
-        _log.info("RXLEVEL %6u %5.1f %5.1f %6.0f at %4.0f Hz", 
-            _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg),
-            magDb, _fftMaxFreq);
+        //_log.info("RXLEVEL %6u %5.1f %5.1f %6.0f at %4.0f Hz", 
+        //    _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg),
+        //    magDb, _fftMaxFreq);
+        _log.info("RXLEVEL %6u %5.1f %5.1f", 
+            _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg));
     }
 
     if (_playPcmValueCount) {
