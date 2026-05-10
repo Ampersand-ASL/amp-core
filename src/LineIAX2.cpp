@@ -2647,8 +2647,10 @@ int LineIAX2::_sendDNSRequest(const uint8_t* dnsPacket, unsigned dnsPacketLen) {
         dnsPacket, 
 #endif
         dnsPacketLen, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-    if (rc < 0)
+    if (rc < 0) {
+        _log.info("Failed to send DNS request %d %d", rc, errno);
         return rc;
+    }
     return 0;
 }
 
