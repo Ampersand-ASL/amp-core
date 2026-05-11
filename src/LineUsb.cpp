@@ -50,6 +50,26 @@ Useful: https://unix.stackexchange.com/questions/561725/disable-volume-controls-
 
 Edited /usr/share/pulseaudio/alsa-mixer/paths/analog-output.conf.common
 [PCM] section, volume=ignore
+
+An article on USB timing:
+
+https://audiophilestyle.com/ca/bits-and-bytes/Asynchronicity-USB-Audio-Primer/
+
+There are two options: Adapative and Asynchronous. The CM108 uses Adaptive, which is the most
+common mode.
+
+"In Adaptive mode the computer controls the audio transfer rate, and the USB device has to follow 
+along updating the Master Clock (MCLK) every one millisecond. The USB bus runs at 12MHz, which is 
+unrelated to the audio sample rate of any digital audio format (i.e. 44.1K requires a MCLK = 11.2896MHz). 
+Therefore Adaptive Mode USB DACs must derive the critical master audio clock by use of a complex 
+Frequency Synthesizer. Since the computer is handling many tasks at once, the timing of the USB audio 
+transfers has variations. This leads to jitter in the derived clock." Says Wavelength Audio's Gordon 
+Rankin.
+
+vs:
+
+"Asynchronous USB essentially turns the computer into a slave device as opposed to adaptive USB which 
+does the opposite. Thus, an asynchronous USB DAC has total control over the timing of the audio"
 */
 
 /*
