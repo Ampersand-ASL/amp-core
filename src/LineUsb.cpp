@@ -163,8 +163,8 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // Make sure this handle gets closed if we fail during the setup process
     raiiholder<snd_pcm_t> captureHolder(captureH, _sndCloser);
 
-    unsigned int audioRate = AUDIO_RATE;
-    unsigned int channels = 2;
+    const unsigned int audioRate = AUDIO_RATE;
+    const unsigned int channels = 2;
 
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* play_hw_params;
@@ -172,22 +172,30 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     snd_pcm_hw_params_any(playH, play_hw_params);
     snd_pcm_hw_params_set_access(playH, play_hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
     snd_pcm_hw_params_set_format(playH, play_hw_params, SND_PCM_FORMAT_S16_LE);
-    snd_pcm_hw_params_set_rate_near(playH, play_hw_params, &audioRate, 0);
-    snd_pcm_hw_params_set_channels_near(playH, play_hw_params, &channels);
+    snd_pcm_hw_params_set_rate(playH, play_hw_params, audioRate, 0);
+    snd_pcm_hw_params_set_channels(playH, play_hw_params, channels);
     // With this setting we're getting around 480 audio samples per
     // period, which leads to a good range of jitters.
     unsigned int periodTimeUs = 20000;
-    // Request a max period
-    snd_pcm_hw_params_set_period_time(playH, play_hw_params, periodTimeUs, 0);
-    // Let the buffer store 16x 20ms frames of sound. 
+    snd_pcm_hw_params_set_period_time_near(playH, play_hw_params, &periodTimeUs, 0);
+    // Let the buffer store 4x 20ms frames of sound. 
     // At 48K, there are 960 samples in a 20ms frame.
-    unsigned int bufferTimeUs = 20000 * 16;
+    unsigned int bufferTimeUs = 20000 * 4;
     snd_pcm_hw_params_set_buffer_time_near(playH, play_hw_params, &bufferTimeUs, 0);
 
     if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
         _log.error("Play parameters %d", err);
         return -1;
     }
+
+    // ALSA software parameters
+    snd_pcm_sw_params_t* play_sw_params;
+    snd_pcm_sw_params_alloca(&play_sw_params);
+    snd_pcm_sw_params_current(playH, play_sw_params);
+    const unsigned bufferMs = 5;
+    unsigned int startThreshold = 960 + ((960 * bufferMs) / 20);
+    snd_pcm_sw_params_set_start_threshold(playH, play_sw_params, startThreshold);
+    _log.info("Start threshold %u (frames)", startThreshold);
 
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
@@ -199,8 +207,7 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // The last parameter (sub unit direction) is for near calls. Use 1 to request a rate 
     // greater than the specified value, -1 for a rate less than the value, and 0 for a 
     // rate that is exactly the value. 
-    audioRate = AUDIO_RATE;
-    snd_pcm_hw_params_set_rate_near(captureH, capture_hw_params, &audioRate, 0);
+    snd_pcm_hw_params_set_rate(captureH, capture_hw_params, audioRate, 0);
     //channels = 2;
     snd_pcm_hw_params_set_channels(captureH, capture_hw_params, 2);
     // With this setting we're getting around 480 audio samples per
@@ -340,14 +347,6 @@ void LineUsb::tenSecTick() {
 }
 
 void LineUsb::consume(const Message& frame) {
-    /*
-    if (frame.isSignal(Message::SignalType::COS_ON)) {
-        _setCosStatus(true);
-    } else if (frame.isSignal(Message::SignalType::COS_OFF)) {
-        _setCosStatus(false);
-    }
-    */
-
     // Then go through the normal consume process
     LineRadio::consume(frame);
 }
@@ -380,10 +379,6 @@ void LineUsb::_captureIfPossible() {
         // Do we have a full audio block available yet?
         if (_captureAccumulatorSize + samplesRead >= BLOCK_SIZE_48K) {
 
-            //uint32_t nowMs = _clock.time();
-            //uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
-            //_captureCount++;
-           
             // Form a complete block of mono 16-bit PCM by joining what
             // we had already accumulated previously with the new samples 
             // we just received.
@@ -456,6 +451,8 @@ void LineUsb::_playStart() {
  */
 bool LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
+    assert(blockSize == BLOCK_SIZE_48K);
+
     if (_inError)
         return false;
 
@@ -487,42 +484,30 @@ void LineUsb::_playIfPossible() {
     if (_playAccumulatorSize == 0)
         return;
 
-    // Look at the status of the PCM, might be useful for underrun?
+    // Look at the status of the PCM
     snd_pcm_status_t *status;
     snd_pcm_status_alloca(&status);
     snd_pcm_status(_playH, status);
-
     // State 2 = Prepared
     // State 3 = Running
     // State 4 = Underrun 
-
     snd_pcm_state_t currentState = snd_pcm_status_get_state(status);
     if (currentState != _lastState) {
         //_log.info("Playback PCM state change %d -> %d", _lastState, currentState);
         _lastState = currentState;
     }
 
-    //_log.info("Delay %d", snd_pcm_status_get_delay(status));
+    _log.info("Delay %d", snd_pcm_status_get_delay(status));
 
     // We will likely encounter the PCM in an underrun state after the previous talkspurt
     // has ended and there is nothing left to play. It is possible that could also result 
     // from the data falling behind the audio frame rate. Either way, we re-prepare the PCM 
     // for a new stream of audio.
-    if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN) {
+    if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN)
         snd_pcm_prepare(_playH);
-        // Stuff some silence into the hardware since we are behind in
-        // sound production.
-        const unsigned stuffFrames = BLOCK_SIZE_48K / 4;
-        // frames * 2 channels * 2 bytes per channel
-        const unsigned stuffBufferSize = stuffFrames * 2 * 2;
-        uint8_t stuffBuffer[stuffBufferSize] = { 0 };
-        int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
-        if (rc3 <= 0) {
-            _log.info("Frame stuff failed");
-        }
-    }
 
     // Add the other stereo channel (interleaved) and convert to S16_LE.
+    // There is no guarantee how much of this buffer will actually be accepted by the USB driver
     const int usbBufferSize = PLAY_ACCUMULATOR_CAPACITY * 2 * 2;
     uint8_t usbBuffer[usbBufferSize];
     uint8_t* p2 = usbBuffer;
@@ -533,69 +518,37 @@ void LineUsb::_playIfPossible() {
         pack_int16_le(_playAccumulator[i], p2 + 2);
     }
 
-    // This is a loop so that we push as much as possible into the sound buffer
-    while (_playAccumulatorSize) {
-        // Here is where we send the audio to the hardware. We attempt to write 
-        // everything in the buffer knowing that the hardware might not accept all
-        // of it.
-        int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
-        if (rc < 0) {
-            if (rc == -EPIPE) {
-                _log.info("Playback underrun");
-                // This isn't really an error, it's just the sound card telling
-                // us that it was underrun prior to us starting to stream again.
-                // We recover the card and then wait for the polling loop to 
-                // come back to get things rolling with a re-write.
-                // We expect an underrun at the very beginning of a talkspurt
-                // so there is a flag to supress the message in that case.
-                if (!_startOfTs)
-                    _underrunCount++;
-                snd_pcm_recover(_playH, rc, 1);
-                
-                /*
-                THIS STEP WAS REMOVED ON 27-Apr-2026 TO REDUCE LAG IN THE LOCAL SIDETONE 
-                FEATURE.
-
-                // Stuff some silence into the hardware since we are behind in
-                // sound production.
-                int totalUnderrunWrite = 0;
-                const unsigned stuffFrames = BLOCK_SIZE_48K;
-                // frames * 2 channels * 2 bytes per channel
-                const unsigned stuffBufferSize = stuffFrames * 2 * 2;
-                uint8_t stuffBuffer[stuffBufferSize];
-                memset(stuffBuffer, 0, stuffBufferSize);
-                for (unsigned i = 0; i < 8; i++) {
-                    int rc3 = snd_pcm_writei(_playH, stuffBuffer, stuffFrames);
-                    if (rc3 <= 0)
-                        break;
-                    totalUnderrunWrite += rc3;
-                }
-                //if (!_startOfTs)
-                //    _log.info("Play underrun detected (%d)", totalUnderrunWrite);
-                */
-
-            } else if (rc == -11) {
-                // This is the case that the card can't accept anything more. 
-                break;
-            } else {
-                //_log.error("Write failed %d", rc);
-                snd_pcm_recover(_playH, rc, 1); 
-                _playErrorCount++;
-                _inError = true;
-                break;
-            }
-        } else if (rc > 0) {            
-            _startOfTs = false;
-            if ((unsigned)rc == _playAccumulatorSize) {
-                _playAccumulatorSize = 0;
-            } else {
-                // Shift left to get rid of the frames that were written 
-                memmove(_playAccumulator, &(_playAccumulator[rc]),
-                    (_playAccumulatorSize - rc) * sizeof(int16_t));
-                _playAccumulatorSize -= rc;
-            }
-            break;
+    // Here is where we send the audio to the hardware. We attempt to write 
+    // everything in the accumulator knowing that the hardware might not accept all
+    // of it.
+    int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
+    if (rc < 0) {
+        if (rc == -EPIPE) {
+            _log.info("Playback underrun");
+            // This isn't really an error, it's just the sound card telling
+            // us that it was underrun prior to us starting to stream again.
+            // We recover the card and then wait for the polling loop to 
+            // come back to get things rolling with a re-write.
+            // We expect an underrun at the very beginning of a talkspurt
+            // so there is a flag to supress the message in that case.
+            if (!_startOfTs)
+                _underrunCount++;
+        } else if (rc == -11) {
+            // This is the case that the card can't accept anything more. 
+        } else {
+            //_log.error("Write failed %d", rc);
+            snd_pcm_recover(_playH, rc, 1); 
+            _playErrorCount++;
+            _inError = true;
         }
+    } 
+    else if (rc > 0) {            
+        _startOfTs = false;
+        // Shift left to get rid of the frames that were accepted into the driver
+        if ((unsigned)rc < _playAccumulatorSize)
+            memmove(_playAccumulator, &(_playAccumulator[rc]),
+                (_playAccumulatorSize - rc) * sizeof(int16_t));
+        _playAccumulatorSize -= rc;
     }
 }
 
