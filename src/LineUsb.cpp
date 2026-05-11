@@ -497,8 +497,6 @@ void LineUsb::_playIfPossible() {
         _lastState = currentState;
     }
 
-    _log.info("Delay %d", snd_pcm_status_get_delay(status));
-
     // We will likely encounter the PCM in an underrun state after the previous talkspurt
     // has ended and there is nothing left to play. It is possible that could also result 
     // from the data falling behind the audio frame rate. Either way, we re-prepare the PCM 

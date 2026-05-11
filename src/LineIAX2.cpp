@@ -2548,11 +2548,23 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
         return;
     }
 
-    // Save the frame into the retransmission buffer, just in case. This buffer 
-    // gets popped by incoming messages with higher expected sequence numbers.
-    if (!call.reTx.push(_clock.time(), 0, (const uint8_t*)frame.buf(), frame.size())) {
-        _log.error("Call %u/%u retx buffer full %u", call.localCallId, call.remoteCallId,
-            call.reTx.getUsed());
+    // There are a few types that don't go on the RETX queue
+    if (frame.isTypeClass(6, 2) || frame.isTypeClass(6, 11)) {
+        // Do nothing
+    }
+    else {
+        if (!frame.isACKRequired()) {
+            _log.info("WARNING: Something is going onto the retransmit buffer that doesn't require an ACK %u %u",
+                frame.getType(), frame.getSubclass());
+            _log.infoDump("DUMP", (const uint8_t*)frame.buf(), frame.size());
+        }
+
+        // Save the frame into the retransmission buffer, just in case. This buffer 
+        // gets popped by incoming messages with higher expected sequence numbers.
+        if (!call.reTx.push(_clock.time(), 0, (const uint8_t*)frame.buf(), frame.size())) {
+            _log.error("Call %u/%u retx buffer full %u", call.localCallId, call.remoteCallId,
+                call.reTx.getUsed());
+        }
     }
 
     // Do the actual transmission on the socket
@@ -3098,6 +3110,8 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
                 IAX2FrameFull rf = reTxFrame;
                 rf.setRetransmit();
                 rf.setISeqNo(expectedInSeqNo);
+                log.infoDump("DUMP", (const uint8_t*)rf.buf(), rf.size());
+                // This does a send without putting anything onto the RETX queue
                 context._sendFrameToPeer(rf, (const sockaddr&)peerAddr);
             }
         }
