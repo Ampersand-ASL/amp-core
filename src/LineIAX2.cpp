@@ -2549,7 +2549,9 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
     }
 
     // There are a few types that don't go on the RETX queue
-    if (frame.isTypeClass(6, 2) || frame.isTypeClass(6, 11)) {
+    if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PING) || 
+        frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_LAGRQ) || 
+        frame.getType() == FrameType::IAX2_TYPE_VOICE) {
         // Do nothing
     }
     else {

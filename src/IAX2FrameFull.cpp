@@ -99,7 +99,7 @@ bool IAX2FrameFull::isACKRequired() const {
         // COMFORT
         (getType() == 10 ) ||
         // VOICE
-        (getType() == 2 && getSubclass() == 4) ||
+        (getType() == 2) ||
         // DTMF
         (getType() == 1) ||
         (getType() == 12);
