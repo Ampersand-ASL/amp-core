@@ -90,9 +90,9 @@ void ConfigPoller::_populateDefaults(json& j) {
     setDefault(j, "callsign", "");
     setDefault(j, "iaxPort", "4569");
     setDefault(j, "setupMode", "0");
-    setDefault(j, "aslTxMixASet", "");
-    setDefault(j, "aslTxMixBSet", "");
-    setDefault(j, "aslRxMixerSet", "");
+    setDefault(j, "aslTxMixASet", "0");
+    setDefault(j, "aslTxMixBSet", "0");
+    setDefault(j, "aslRxMixerSet", "0");
     setDefault(j, "aslStatUrl", "http://stats.allstarlink.org/uhandler.php");
     setDefault(j, "aslRegUrl", "https://register.allstarlink.org");
     setDefault(j, "aslDnsRoot", "nodes.allstarlink.org");
