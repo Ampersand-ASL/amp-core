@@ -179,9 +179,9 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // period, which leads to a good range of jitters.
     unsigned int periodTimeUs = 20000;
     snd_pcm_hw_params_set_period_time_near(playH, play_hw_params, &periodTimeUs, 0);
-    // Let the buffer store 4x 20ms frames of sound. 
+    // Let the buffer store 16x 20ms frames of sound. 
     // At 48K, there are 960 samples in a 20ms frame.
-    unsigned int bufferTimeUs = 20000 * 4;
+    unsigned int bufferTimeUs = 20000 * 16;
     snd_pcm_hw_params_set_buffer_time_near(playH, play_hw_params, &bufferTimeUs, 0);
 
     if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
@@ -193,11 +193,18 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     snd_pcm_sw_params_t* play_sw_params;
     snd_pcm_sw_params_alloca(&play_sw_params);
     snd_pcm_sw_params_current(playH, play_sw_params);
-    const unsigned bufferMs = 30;
-    unsigned int startThreshold = ((960 * bufferMs) / 20);
+    const unsigned bufferMs = 40;
+    snd_pcm_uframes_t startThreshold = ((960 * bufferMs) / 20);
     snd_pcm_sw_params_set_start_threshold(playH, play_sw_params, startThreshold);
 
-    _log.info("Start threshold %u (frames)", startThreshold);
+    if ((err = snd_pcm_sw_params(playH, play_sw_params)) < 0) {
+        _log.error("Unable to configure play SW parameters %d", err);
+        return -1;
+    }
+
+    snd_pcm_uframes_t t = 0;
+    snd_pcm_sw_params_get_start_threshold(play_sw_params, &t);
+    _log.info("Start threshold %d (frames)", t);
 
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
@@ -490,12 +497,16 @@ void LineUsb::_playIfPossible() {
     snd_pcm_status_t *status;
     snd_pcm_status_alloca(&status);
     snd_pcm_status(_playH, status);
+    // Delay is distance between current application frame position and sound frame position. 
+    // It's positive and less than buffer size in normal situation, negative on playback underrun 
+    // and greater than buffer size on capture overrun.
+    unsigned delayFrames = snd_pcm_status_get_delay(status);
     // State 2 = Prepared
     // State 3 = Running
     // State 4 = Underrun 
     snd_pcm_state_t currentState = snd_pcm_status_get_state(status);
     if (currentState != _lastState) {
-        //_log.info("Playback PCM state change %d -> %d", _lastState, currentState);
+        _log.info("Playback PCM state change %d -> %d [%u]", _lastState, currentState, delayFrames);
         _lastState = currentState;
     }
 
@@ -506,10 +517,6 @@ void LineUsb::_playIfPossible() {
     if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN)
         snd_pcm_prepare(_playH);
 
-    // Delay is distance between current application frame position and sound frame position. 
-    // It's positive and less than buffer size in normal situation, negative on playback underrun 
-    // and greater than buffer size on capture overrun.
-    unsigned delayFrames = snd_pcm_status_get_delay(status);
     if (delayFrames != _lastDelayFrames) {
         //_log.info("Delay %u frames", delayFrames);
         _lastDelayFrames = delayFrames;
@@ -545,13 +552,13 @@ void LineUsb::_playIfPossible() {
         } else if (rc == -11) {
             // This is the case that the card can't accept anything more. 
         } else {
-            //_log.error("Write failed %d", rc);
+            _log.error("Write failed %d", rc);
             snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
             _inError = true;
         }
     } 
-    else if (rc > 0) {            
+    else if (rc > 0) {     
         _startOfTs = false;
         // Shift left to get rid of the frames that were accepted into the driver
         if ((unsigned)rc < _playAccumulatorSize)
