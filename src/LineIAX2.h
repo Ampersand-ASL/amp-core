@@ -197,6 +197,7 @@ public:
     void dropAllOutbound();
 
     void setTrace(bool a) { _trace = a; }
+    void setCapture(bool a) { _captureEnabled = a; }
 
     unsigned getActiveCalls() const;
 

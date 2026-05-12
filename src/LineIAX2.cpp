@@ -61,12 +61,12 @@ using namespace std;
 #define MAX_TEXT_MESSAGE_SIZE (160 * 6 * 2)
 
 static unsigned AUDIO_TICK_MS = 20;
-static const uint32_t NORMAL_PING_INTERVAL_MS = 10 * 1000;
+static const uint32_t NORMAL_PING_INTERVAL_MS = 21 * 1000;
 static const uint32_t FAST_PING_INTERVAL_MS = 2 * 1000;
 // #### TODO: CLEAN UP
 // How long can the call go without receiving any messages before 
 // a hangup is generated.
-static const uint32_t _inactivityTimeoutMs = 40 * 1000;
+#define INACTIVITY_TIMEOUT_MS (60 * 1000)
 // How long we will wait around before cleaning up a terminated call. 
 // This window is used to allow time to re-transmit and unacknowledged messages.
 static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
@@ -2818,6 +2818,7 @@ void LineIAX2::_openCapture() {
     // Create some uniqueness in the filename
     char fn[64];
     snprintf(fn, sizeof(fn), "./capture-%lu.pcap", (uint32_t)(_clock.timeMs() / 1000));
+    _log.info("Opening capture file %s", fn);
     _captureFile.open(fn, std::ios::binary);
     // See https://www.ietf.org/archive/id/draft-gharris-opsawg-pcap-01.html
     // for information about the PCAP file format. 
@@ -3089,12 +3090,16 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     // Inactive call?
     if (state != Call::State::STATE_TERMINATED &&
         state != Call::State::STATE_TERMINATE_WAITING) {
-        if (clock.isPast(lastFrameRxMs + _inactivityTimeoutMs)) {
+        if (clock.isPast(lastFrameRxMs + INACTIVITY_TIMEOUT_MS)) {
             log.info("Hanging up inactive call %d/%d", 
                 localCallId, remoteCallId);
             line._hangupCall(*this);
         }
     }
+
+    // Reviewing for defect reported by N2DYI
+    // https://github.com/asterisk/asterisk/blob/master/channels/chan_iax2.c#L10651
+
 
     reTx.visitAll(
         [this, &context=line, &log, &clock]
@@ -3167,7 +3172,7 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
     reTx.removeIf(
         [this, &log, &clock]
         (uint32_t stamp, unsigned, const uint8_t* packet, unsigned packetLen) {
-            bool remove = LT_MOD32(stamp + _inactivityTimeoutMs, clock.time());
+            bool remove = LT_MOD32(stamp + INACTIVITY_TIMEOUT_MS, clock.time());
             if (remove) {
                 IAX2FrameFull reTxFrame(packet, packetLen);
                 log.error("Cleaning retx %u", (unsigned)reTxFrame.getOSeqNo());
