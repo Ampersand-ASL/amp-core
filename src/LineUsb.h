@@ -38,7 +38,8 @@ class LineUsb : public LineRadio {
 public:
 
     LineUsb(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
-        unsigned audioDestLineId, unsigned audioDestCallId, unsigned signalDestLineId);
+        unsigned audioDestLineId, unsigned audioDestCallId, unsigned signalDestLineId,
+        unsigned networkDestLineId);
 
     /**
      * @param cardNumber The ALSA card number. So the device name is hd:<cardNumber>.
@@ -53,7 +54,7 @@ public:
         bool echo = false, float echoGainDb = 0.0);
 
     void close();
-
+        
     unsigned getUnderrunCount() const { return _underrunCount; }
 
     // ----- MessageConsumer --------------------------------------------------
@@ -108,6 +109,7 @@ private:
     unsigned _captureErrorCount = 0;
     unsigned _playErrorCount = 0;
     snd_pcm_state_t _lastState = snd_pcm_state_t::SND_PCM_STATE_DISCONNECTED;
+    unsigned _lastDelayFrames = 0;
 };
 
 // ====== Utility Functions ======================================================

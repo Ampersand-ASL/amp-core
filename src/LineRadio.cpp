@@ -26,6 +26,8 @@
 #include "Transcoder_SLIN_48K.h"
 #include "LineRadio.h"
 
+#define DEST_CALL_ID (1)
+
 using namespace std;
 
 namespace kc1fsz {
@@ -88,7 +90,7 @@ static void simpleDFT(cf32* in, cf32* out, uint16_t n) {
 LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
     unsigned destBusId, unsigned destCallId, 
-    unsigned signalDestLineId) 
+    unsigned signalDestLineId, unsigned networkDestLineId) 
 :   _log(log),
     _clock(clock),
     _captureConsumer(captureConsumer),
@@ -97,6 +99,7 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _destBusId(destBusId), 
     _destCallId(destCallId),
     _signalDestLineId(signalDestLineId),
+    _networkDestLineId(networkDestLineId),
     _startTimeMs(_clock.time()),
     _dtmfDetector(clock, BLOCK_SIZE_8K / 2),
     _tonePhi(0),
@@ -250,6 +253,26 @@ void LineRadio::oneSecTick() {
     // Send the talker ID if we are actively capturing audio
     if (_clock.isInWindow(_lastCaptureMs, 2000))
         _sendTalkerId();
+
+    // DTMF command?
+    if (_clock.isPastWindow(_lastDtmfDetectionMs, 2000) && !_dtmfAccumulator.empty()) {
+        if (_dtmfAccumulator.starts_with("*3") && !_localNode.empty()) {
+
+            string targetNode = _dtmfAccumulator.substr(2);
+            _log.info("DTMF command: connect to node [%s]", targetNode.c_str());
+
+            PayloadCall payload;
+            strcpyLimited(payload.localNumber, _localNode.c_str(), sizeof(payload.localNumber));
+            strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
+            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
+                sizeof(payload), (const uint8_t*)&payload, 0, 0);
+            msg.setDest(_networkDestLineId, DEST_CALL_ID);
+            _captureConsumer.consume(msg);
+        }
+
+        // Clear no matter what
+        _dtmfAccumulator.clear();
+    }
 }
 
 void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len) {
@@ -423,7 +446,11 @@ void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen
 
     // TODO: SIGNALING
     if (_dtmfDetector.isDetectionPending()) {
-        _log.info("DTMF %c", _dtmfDetector.popDetection());
+        char c = _dtmfDetector.popDetection();
+        //_log.info("DTMF %c [%s]", c, _dtmfAccumulator.c_str());
+        _log.info("DTMF %c", c);
+        _lastDtmfDetectionMs = _clock.timeMs();
+        _dtmfAccumulator += c;
     }
 
     // Make an SLIN_48K buffer in CODEC format.5

@@ -127,9 +127,10 @@ sudo udevadmin trigger
 */
 LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
-    unsigned destBusId, unsigned destCallId, unsigned signalDestLineId) 
+    unsigned destBusId, unsigned destCallId, unsigned signalDestLineId, 
+    unsigned networkDestLineId) 
 :   LineRadio(log, clock, captureConsumer, busId, callId, destBusId, destCallId,
-        signalDestLineId) {
+        signalDestLineId, networkDestLineId) {
 }
 
 int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, 
@@ -192,9 +193,10 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     snd_pcm_sw_params_t* play_sw_params;
     snd_pcm_sw_params_alloca(&play_sw_params);
     snd_pcm_sw_params_current(playH, play_sw_params);
-    const unsigned bufferMs = 5;
-    unsigned int startThreshold = 960 + ((960 * bufferMs) / 20);
+    const unsigned bufferMs = 30;
+    unsigned int startThreshold = ((960 * bufferMs) / 20);
     snd_pcm_sw_params_set_start_threshold(playH, play_sw_params, startThreshold);
+
     _log.info("Start threshold %u (frames)", startThreshold);
 
     // No free needed, alloca() frees memory one function exit
@@ -503,6 +505,15 @@ void LineUsb::_playIfPossible() {
     // for a new stream of audio.
     if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN)
         snd_pcm_prepare(_playH);
+
+    // Delay is distance between current application frame position and sound frame position. 
+    // It's positive and less than buffer size in normal situation, negative on playback underrun 
+    // and greater than buffer size on capture overrun.
+    unsigned delayFrames = snd_pcm_status_get_delay(status);
+    if (delayFrames != _lastDelayFrames) {
+        //_log.info("Delay %u frames", delayFrames);
+        _lastDelayFrames = delayFrames;
+    }
 
     // Add the other stereo channel (interleaved) and convert to S16_LE.
     // There is no guarantee how much of this buffer will actually be accepted by the USB driver

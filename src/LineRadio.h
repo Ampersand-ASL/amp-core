@@ -62,7 +62,7 @@ public:
 
     LineRadio(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
         unsigned audioDestLineId, unsigned audioDestCallId, 
-        unsigned signalDestLineId);
+        unsigned signalDestLineId, unsigned networkDestLineId);
 
     void resetStatistics();
 
@@ -71,6 +71,8 @@ public:
      * radio.
      */
     void setCallsign(const char* c) { _callsign = c; }
+
+    void setLocalNode(const char* localNode) { _localNode = localNode; }
 
     // ----- MessageConsumer -------------------------------------------------
     
@@ -168,6 +170,7 @@ protected:
     const unsigned _busId, _callId;
     const unsigned _destBusId, _destCallId;
     const unsigned _signalDestLineId;
+    const unsigned _networkDestLineId;
     const uint32_t _startTimeMs;
 
     uint32_t _captureStartMs = 0;
@@ -175,10 +178,15 @@ protected:
 
     // Primarily used for setting the talker ID
     std::string _callsign;
+    // Primarily used for initiating calls via DTMF
+    std::string _localNode;
 
     // This resampler is configured to go from 48K->8K ahead of the DTMF detection
     amp::Resampler _resampler;
     DTMFDetector2 _dtmfDetector;
+
+    std::string _dtmfAccumulator;
+    uint64_t _lastDtmfDetectionMs = 0;
 
     bool _cosActive = false;
     bool _ctcssActive = true;
