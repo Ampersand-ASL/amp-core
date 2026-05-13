@@ -115,14 +115,9 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _pokeAddr[0] = 0;
     _pokeNodeNumber[0] = 0;
     strcpyLimited(_dnsRoot, "allstarlink.org", sizeof(_dnsRoot));
-
-    if (_captureEnabled)    
-        _openCapture();
 }
 
 LineIAX2::~LineIAX2() {
-    if (_captureEnabled)    
-        _closeCapture();
 }
 
 void LineIAX2::setDNSRoot(const char* dnsRoot) {
@@ -292,10 +287,16 @@ int LineIAX2::open(short addrFamily, int listenPort) {
     _iaxSockFd = iaxSockFd;
     _dnsSockFd = dnsSockFd;
 
+    if (_captureEnabled)    
+        _openCapture();
+
     return 0;
 }
 
 void LineIAX2::close() {   
+
+    if (_captureEnabled)    
+        _closeCapture();
 
     // Clean up all of the calls
     for (unsigned i = 0; i < _maxCalls; i++)
