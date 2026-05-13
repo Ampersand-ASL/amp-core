@@ -16,10 +16,19 @@
  */
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdint.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+struct udphdr {
+    int16_t uh_sport;
+    int16_t uh_dport;
+    int16_t uh_ulen;
+    int16_t uh_sum;
+};
+
 #else
 #include <errno.h>
 #include <sys/socket.h>
