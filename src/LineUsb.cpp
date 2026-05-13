@@ -173,6 +173,8 @@ int LineUsb::_open() {
     char alsaDeviceName[16];
     // Using hardware directly
     snprintf(alsaDeviceName, 16, "hw:%d,0", _openCardNumber);
+    char alsaDeviceNameC[16];
+    snprintf(alsaDeviceNameC, 16, "plughw:%d,0", _openCardNumber);
     char alsaDeviceName2[16];
     // Using hardware directly
     snprintf(alsaDeviceName2, 16, "hw:%d", _openCardNumber);
@@ -193,7 +195,7 @@ int LineUsb::_open() {
     // Make sure this handle gets closed if we fail during the setup process
     raiiholder<snd_pcm_t> playHolder(playH, _sndCloser);
 
-    if ((err = snd_pcm_open(&captureH, alsaDeviceName, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
+    if ((err = snd_pcm_open(&captureH, alsaDeviceNameC, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
         _log.error("Cannot open capture device %s %d", alsaDeviceName, err);
         return -10;
     }
