@@ -39,8 +39,20 @@ namespace kc1fsz {
 
 SignalOut::SignalOut(Log& log, Clock& clock, MessageConsumer& bus, 
     Message::SignalType sigTypeOn, Message::SignalType sigTypeOff) 
-:   _log(log), _clock(clock), _bus(bus),  _sigTypeOn(sigTypeOn),
-    _sigTypeOff(sigTypeOff) {
+:   _log(log), 
+    _clock(clock), 
+    _bus(bus),  
+    _sigTypeOn(sigTypeOn),
+    _sigTypeOff(sigTypeOff),
+    // The debouncer is looking at the last raw value received from the message bus
+    _debouncedState(clock, [this]() {
+        return _rawValue;
+    }) {
+    // Attack is immediate
+    _debouncedState.setActiveTime(0);
+    // Release has some delay
+    // ### TODO: MAKE THIS CONFIGURABLE
+    _debouncedState.setInactiveTime(100);
 }
 
 int SignalOut::openHid(const char* hidName, const char* signalName) {
@@ -113,6 +125,18 @@ void SignalOut::consume(const Message& msg) {
 }
 
 void SignalOut::_set(bool s) {
+    _rawValue = s;
+}
+
+void SignalOut::audioRateTick(uint32_t tickMs) {
+    // Look for the transition of the debounced state
+    if (_debouncedState.get() != _officialValue) {        
+        _officialValue = _debouncedState.get();
+        _setDebounced(_officialValue);
+    }
+}
+
+void SignalOut::_setDebounced(bool s) {
     if (_fd != -1) {
         if (_mode == Mode::MODE_HID) {
             if ((!_invert && s) || (_invert && !s)) {

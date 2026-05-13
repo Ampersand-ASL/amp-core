@@ -18,6 +18,8 @@
 
 #include <cstdint>
 
+#include "kc1fsz-tools/TimeDebouncer2.h"
+
 #include "Message.h"
 #include "Runnable2.h"
 
@@ -47,6 +49,10 @@ public:
 
     virtual void consume(const Message& frame);
 
+    // ------ Runnable2 --------------------------------------------------------
+
+    virtual void audioRateTick(uint32_t tickMs);
+
 private:
 
     enum Mode {
@@ -63,8 +69,12 @@ private:
     int _fd = 0;
     Mode _mode = Mode::MODE_NONE;
     bool _invert = false;
+    bool _rawValue = false;
+    bool _officialValue = false;
+    TimeDebouncer2 _debouncedState;
 
     void _set(bool s);
+    void _setDebounced(bool s);
 
     // ------ HID Related ----------------------------------------------------
 
