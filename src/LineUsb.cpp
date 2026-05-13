@@ -392,6 +392,9 @@ bool LineUsb::run2() {
 }
 
 void LineUsb::oneSecTick() {
+    
+    LineRadio::oneSecTick();
+
     if (_fatalError) {
         _log.info("LineUsb error reported, attempting to re-open interface");
         _open();

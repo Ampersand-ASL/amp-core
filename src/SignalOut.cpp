@@ -74,6 +74,7 @@ int SignalOut::openHid(const char* hidName, const char* signalName) {
 
     // Set initial state
     _set(false);
+    _setDebounced(false);
 
     return 0;
 }
@@ -103,6 +104,7 @@ int SignalOut::openSerial(const char* deviceName, const char* signal) {
 
     // Set initial state
     _set(false);
+    _setDebounced(false);
 
     return 0;
 }
