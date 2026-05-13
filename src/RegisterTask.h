@@ -66,10 +66,9 @@ private:
     char _resultArea[RESULT_AREA_SIZE];
 
     uint32_t _regIntervalMs;
-    uint32_t _nextRegisterMs = 0;
-    uint32_t _lastGoodRegistrationMs = 0;
+    uint64_t _lastGoodRegistrationMs = 0;
 
-    static const unsigned JSON_DATA_SIZE = 128;
+    static const unsigned JSON_DATA_SIZE = 512;
     char _jsonData[JSON_DATA_SIZE];
 };
 

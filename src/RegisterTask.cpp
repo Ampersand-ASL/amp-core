@@ -46,20 +46,25 @@ RegisterTask::RegisterTask(Log& log, Clock& clock)
     _clock(clock),
     // Interval recommended by Jason N8EI on 20-Nov-2025
     _regIntervalMs(180 * 1000),
-    _nextRegisterMs(_clock.time() + 5 * 1000) { 
+    _lastGoodRegistrationMs(0) { 
 }
 
 void RegisterTask::configure(const char* regServerUrl, 
     const char* nodeNumber, const char* password, unsigned iaxPort) {
+
     _regServerUrl = regServerUrl;
     _nodeNumber = nodeNumber;
     _password = password;    
     _iaxPort = iaxPort;
 
     _log.info("RegisterTask %s, %s, %d", _regServerUrl.c_str(), _nodeNumber.c_str(), _iaxPort);
+    _doRegister();
 }
 
 void RegisterTask::_doRegister() {     
+
+    if (_regServerUrl.empty() || _nodeNumber.empty() || _password.empty())
+        return;
 
     CURL* curl = curl_easy_init();
     // Responsible for freeing resource on exit
@@ -121,7 +126,7 @@ void RegisterTask::_doRegister() {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         char* r0 = strstr(_resultArea, "successfully registered");
         if (http_code == 200 && r0 != 0) {
-            _lastGoodRegistrationMs = _clock.time();
+            _lastGoodRegistrationMs = _clock.timeMs();
         } else {
             _log.error("ASL node registration failed for %s", _nodeNumber.c_str());
             _log.error("  HTTP code: %d", http_code);
@@ -131,11 +136,8 @@ void RegisterTask::_doRegister() {
 }
 
 void RegisterTask::tenSecTick() {
-    if (_clock.time() >= _nextRegisterMs) {
-        _nextRegisterMs = _clock.time() + _regIntervalMs;
-        if (!_regServerUrl.empty() && !_nodeNumber.empty() && !_password.empty())
-            _doRegister();
-    }
+    if (_clock.isPastWindow(_lastGoodRegistrationMs, _regIntervalMs))
+        _doRegister();
 }
 
 // Callback function to handle received data
