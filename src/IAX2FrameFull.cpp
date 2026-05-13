@@ -85,24 +85,24 @@ bool IAX2FrameFull::isACKRequired() const {
         // PONG
         (getType() == 6 && getSubclass() == 3) ||
         // AUTHREP
-        (getType() == 6 && getSubclass() == 9) ||
+        (getType() == 6 && getSubclass() == 9);
         // ANSWER
-        (getType() == 4 && getSubclass() == 4) ||
+        //(getType() == 4 && getSubclass() == 4) ||
         // KEY
-        (getType() == 4 && getSubclass() == 12) ||
+        //(getType() == 4 && getSubclass() == 12) ||
         // UNKEY
-        (getType() == 4 && getSubclass() == 13) ||
+        //(getType() == 4 && getSubclass() == 13) ||
         // STOP_SOUNDS
-        (getType() == 4 && getSubclass() == 255) ||
+        //(getType() == 4 && getSubclass() == 255) ||
         // TEXT
-        (getType() == 7 && getSubclass() == 0) ||
+        //(getType() == 7 && getSubclass() == 0) ||
         // COMFORT
-        (getType() == 10 ) ||
+        //(getType() == 10 ) ||
         // VOICE
-        (getType() == 2) ||
+        //(getType() == 2) ||
         // DTMF
-        (getType() == 1) ||
-        (getType() == 12);
+        //(getType() == 1) ||
+        //(getType() == 12);
 }
 
 // See RFC Section 7
