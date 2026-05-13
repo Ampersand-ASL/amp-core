@@ -116,6 +116,12 @@ protected:
     void _sendSignal(Message::SignalType type, void* body, unsigned len,
         unsigned destLineId, unsigned destCallId);
 
+    enum PlayStatus {
+        STATUS_OK,
+        STATUS_FULL,
+        STATUS_ERROR
+    };
+
     /**
      * This function is called to do the actual playing of the 48K PCM.
      * Since it possible that the underlying hardware may have a finite
@@ -123,10 +129,8 @@ protected:
      * require the block to be re-attempted later.
      *
      * This must be all or nothing!
-     * 
-     * @return True if accepted, false if not accepted.
      */
-    virtual bool _playPCM48k(int16_t* pcm48k_2, unsigned blockSize) = 0;
+    virtual PlayStatus _playPCM48k(int16_t* pcm48k_2, unsigned blockSize) = 0;
 
     void _checkTimeouts();
 
@@ -161,8 +165,8 @@ protected:
 
     void _setCosStatus(bool cos);
 
-    void _open(bool echo, float echoGainDb);
-    void _close();
+    void _signalOpen(bool echo, float echoGainDb);
+    void _signalClose();
 
     Log& _log;
     Clock& _clock;

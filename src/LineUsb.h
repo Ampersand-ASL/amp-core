@@ -65,6 +65,7 @@ public:
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
+    virtual void oneSecTick();
     virtual void tenSecTick();
 
 protected:
@@ -74,10 +75,12 @@ protected:
     /**
      * This function is called to do the actual playing of the 48K PCM.
      */
-    virtual bool _playPCM48k(int16_t* pcm48k_2, unsigned blockSize);
+    virtual PlayStatus _playPCM48k(int16_t* pcm48k_2, unsigned blockSize);
 
 private:
 
+    int _open();
+    void _close();
     void _captureIfPossible();
     void _playIfPossible();
 
@@ -99,7 +102,18 @@ private:
     unsigned _playAccumulatorSize = 0;
 
     bool _startOfTs = false;
-    bool _inError = false;
+
+    bool _openRequested = false;
+    bool _isOpen = false;
+    bool _fatalError = false;
+
+    // All of the parameters sent to the original open call, saved for re-open.
+    int _openCardNumber = 0;
+    int _openPlayLevelL = 0;
+    int _openPlayLevelR = 0;
+    int _openCaptureLevel = 0;
+    bool _openEcho = false;
+    float _openEchoGainDb = 0;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 

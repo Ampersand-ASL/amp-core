@@ -170,9 +170,11 @@ void LineRadio::consume(const Message& msg) {
         _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
 
         // Call down to do the actual play on the hardware
-        if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) == false) {
+        PlayStatus ps = _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
+        if (ps == PlayStatus::STATUS_ERROR)
+            _log.error("USB audio interface error");
+        else if (ps == PlayStatus::STATUS_FULL)
             _log.error("Play buffer overflow");
-        }
 
         _lastPlayedFrameMs = _clock.time();
         _playing = true;
@@ -326,7 +328,7 @@ void LineRadio::_sendTalkerId() {
     _sendSignal(Message::SignalType::CALL_TALKERID, talkerId, strlen(talkerId) + 1);
 }
 
-void LineRadio::_open(bool echo, float echoGainDb) {    
+void LineRadio::_signalOpen(bool echo, float echoGainDb) {    
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
     PayloadCallStart payload;
@@ -342,7 +344,7 @@ void LineRadio::_open(bool echo, float echoGainDb) {
     _sendSignal(Message::SignalType::CALL_START, &payload, sizeof(payload));
 }
 
-void LineRadio::_close() {
+void LineRadio::_signalClose() {
     PayloadCallEnd payload;
     payload.localNumber[0] = 0;
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio");

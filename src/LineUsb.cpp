@@ -143,7 +143,27 @@ LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer,
 int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, 
     bool echo, float echoGainDb) {
 
-    close();
+    _openCardNumber = cardNumber;
+    _openPlayLevelL = playLevelL;
+    _openPlayLevelR = playLevelR;
+    _openCaptureLevel = captureLevel;
+    _openEcho = echo;
+    _openEchoGainDb = echoGainDb;
+    _openRequested = true;
+
+    return _open();
+}
+
+void LineUsb::close() {
+    _openRequested = false;
+    _close();
+}
+
+int LineUsb::_open() {
+
+    // Always clear up existing state first
+    if (_isOpen)
+        _close();
 
     // In ALSA (Advanced Linux Sound Architecture), plughw is a virtual plugin device 
     // that acts as an abstraction layer over raw hardware (hw). It automatically handles 
@@ -151,9 +171,11 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     // mapping (e.g., mono to stereo), and bit depth (e.g., 16-bit to 32-bit) if the 
     // hardware does not support the format directly.
     char alsaDeviceName[16];
-    //snprintf(alsaDeviceName, 16, "plughw:%d,0", cardNumber);
     // Using hardware directly
-    snprintf(alsaDeviceName, 16, "hw:%d,0", cardNumber);
+    snprintf(alsaDeviceName, 16, "hw:%d,0", _openCardNumber);
+    char alsaDeviceName2[16];
+    // Using hardware directly
+    snprintf(alsaDeviceName2, 16, "hw:%d", _openCardNumber);
 
     snd_pcm_t* playH = 0;
     snd_pcm_t* captureH = 0;
@@ -263,37 +285,36 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     }
 
     // Set the mixer levevels
-    char alsaDeviceName2[16];
-    snprintf(alsaDeviceName2, 16, "hw:%d", cardNumber);
     const char* playMixerName = "Speaker Playback Volume";
-    const char* captureMixerName = "Mic Capture Volume";
 
     int valueL, valueR;
-    int rc6 = convertMixerDbToValue(alsaDeviceName2, playMixerName, playLevelL, &valueL);
+    int rc6 = convertMixerDbToValue(alsaDeviceName2, playMixerName, _openPlayLevelL, &valueL);
     if (rc6 != 0) {
-        _log.error("Failed to convert mixer play value from %d dB", playLevelL);
+        _log.error("Failed to convert mixer play value from %d dB", _openPlayLevelL);
         return -6;
     }
-    int rc7 = convertMixerDbToValue(alsaDeviceName2, playMixerName, playLevelR, &valueR);
+    int rc7 = convertMixerDbToValue(alsaDeviceName2, playMixerName, _openPlayLevelR, &valueR);
     if (rc7 != 0) {
-        _log.error("Failed to convert mixer play value from %d dB", playLevelR);
+        _log.error("Failed to convert mixer play value from %d dB", _openPlayLevelR);
         return -7;
     }
     _log.info("Setting playback mixer level to %d/%d dB (%d/%d)", 
-        playLevelL, playLevelR, valueL, valueR);
+        _openPlayLevelL, _openPlayLevelR, valueL, valueR);
     int rc1 = setMixer2(alsaDeviceName2, playMixerName, valueL, valueR);
     if (rc1 != 0) {
         _log.error("Failed to set playback mixer level");
         return -8;
     }
 
+    const char* captureMixerName = "Mic Capture Volume";
+
     int valueM;
-    int rc8 = convertMixerDbToValue(alsaDeviceName2, captureMixerName, captureLevel, &valueM);
+    int rc8 = convertMixerDbToValue(alsaDeviceName2, captureMixerName, _openCaptureLevel, &valueM);
     if (rc8 != 0) {
-        _log.error("Failed to convert mixer capture value from %d dB", captureLevel);
+        _log.error("Failed to convert mixer capture value from %d dB", _openCaptureLevel);
         return -9;
     }
-    _log.info("Setting capture mixer level to %d dB (%d)", captureLevel, valueM);
+    _log.info("Setting capture mixer level to %d dB (%d)", _openCaptureLevel, valueM);
     int rc2 = setMixer1(alsaDeviceName2, captureMixerName, valueM);
     if (rc2 != 0) {
         _log.error("Failed to set capture mixer level");
@@ -310,31 +331,35 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
     _captureCount = 0;
     _captureErrorCount = 0;
     _playErrorCount = 0;
-    _inError = false;
-
+    
     // Call up to the base for signaling
-    _open(echo, echoGainDb);
+    _signalOpen(_openEcho, _openEchoGainDb);
+
+    _isOpen = true;
+    _fatalError = false;
 
     return 0;
 }
 
-void LineUsb::close() {
-    if (_playH || _captureH) {
-        _close();
-        if (_playH)
-            snd_pcm_close(_playH);
-        _playH = 0;
-        if (_captureH)
-            snd_pcm_close(_captureH);
-        _captureH = 0;
-    }
+void LineUsb::_close() {
+
+    _signalClose();
+
+    _isOpen = false;
+
+    if (_playH)
+        snd_pcm_close(_playH);
+    _playH = 0;
+    if (_captureH)
+        snd_pcm_close(_captureH);
+    _captureH = 0;
 }
 
 int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
     int used = 0, rc;    
 
-    if (!_inError && _captureH) {
+    if (_isOpen && _captureH) {
         // We always want to be alerted about capture
         rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
         if (rc < 0) {
@@ -347,7 +372,7 @@ int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
     // Alerts about playing are only needed when there is something 
     // in the accumulator that needs to be swept out.
-    if (!_inError && _playH && _playAccumulatorSize > 0) {
+    if (_isOpen && _playH && _playAccumulatorSize > 0) {
         rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
         if (rc < 0) {
             _log.error("FD problem 3");
@@ -364,6 +389,13 @@ bool LineUsb::run2() {
     _captureIfPossible();
     _playIfPossible();
     return false;
+}
+
+void LineUsb::oneSecTick() {
+    if (_fatalError) {
+        _log.info("LineUsb error reported, attempting to re-open interface");
+        _open();
+    }
 }
 
 void LineUsb::tenSecTick() {
@@ -384,7 +416,7 @@ void LineUsb::consume(const Message& frame) {
 // 
 void LineUsb::_captureIfPossible() {  
    
-    if (!_captureH || _inError)
+    if (!_isOpen || !_captureH || _fatalError)
         return;
 
     //bool audioCaptureEnabled = (_cosActive && _ctcssActive);
@@ -462,7 +494,7 @@ void LineUsb::_captureIfPossible() {
         _log.error("Audio capture error %s", snd_strerror(samplesRead));
         snd_pcm_recover(_captureH, samplesRead, 0); 
         _captureErrorCount++;
-        _inError = true;
+        _fatalError = true;
     }
 }
 
@@ -476,23 +508,21 @@ void LineUsb::_playStart() {
 /**
  * This will be called by the base class after all decoding has happened.
  */
-bool LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
+LineRadio::PlayStatus LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
     assert(blockSize == BLOCK_SIZE_48K);
 
-    if (_inError)
-        return false;
+    if (!_isOpen || _fatalError)
+        return PlayStatus::STATUS_ERROR;
 
     // Check to make sure we actually have room in the accumulator
-    if (_playAccumulatorSize + BLOCK_SIZE_48K > PLAY_ACCUMULATOR_CAPACITY) {
-        return false;
-    }
-    else {
-        // Move new audio block into the play accumulator 
-        memcpy(&(_playAccumulator[_playAccumulatorSize]), pcm48k_2,
-            BLOCK_SIZE_48K * sizeof(int16_t));
-        _playAccumulatorSize += BLOCK_SIZE_48K;
-    }
+    if (_playAccumulatorSize + BLOCK_SIZE_48K > PLAY_ACCUMULATOR_CAPACITY)
+        return PlayStatus::STATUS_FULL;
+
+    // Move new audio block into the play accumulator 
+    memcpy(&(_playAccumulator[_playAccumulatorSize]), pcm48k_2,
+        BLOCK_SIZE_48K * sizeof(int16_t));
+    _playAccumulatorSize += BLOCK_SIZE_48K;
 
     _playFrameCount++;
 
@@ -500,15 +530,12 @@ bool LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
     _playIfPossible();
 
     // At this point at least the frame has been accepted into the _playAccumulator.
-    return true;
+    return PlayStatus::STATUS_OK;
 }
 
 void LineUsb::_playIfPossible() {
 
-    if (!_playH || _inError)
-        return;
-
-    if (_playAccumulatorSize == 0)
+    if (!_isOpen || !_playH || _fatalError || _playAccumulatorSize == 0)
         return;
 
     // Look at the status of the PCM
@@ -573,7 +600,7 @@ void LineUsb::_playIfPossible() {
             _log.error("Write failed %d", rc);
             snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
-            _inError = true;
+            _fatalError = true;
         }
     } 
     else if (rc > 0) {     
