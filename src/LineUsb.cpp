@@ -70,6 +70,13 @@ vs:
 
 "Asynchronous USB essentially turns the computer into a slave device as opposed to adaptive USB which 
 does the opposite. Thus, an asynchronous USB DAC has total control over the timing of the audio"
+
+
+An article on timing for full-duplex:
+
+https://nyanpasu64.gitlab.io/blog/low-latency-audio-output-duplex-alsa/
+
+A reference: https://www.volkerschatz.com/noise/alsa.html
 */
 
 /*
@@ -138,8 +145,15 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
 
     close();
 
+    // In ALSA (Advanced Linux Sound Architecture), plughw is a virtual plugin device 
+    // that acts as an abstraction layer over raw hardware (hw). It automatically handles 
+    // audio format conversions—such as sample rate (e.g., 44.1kHz to 48kHz, channel 
+    // mapping (e.g., mono to stereo), and bit depth (e.g., 16-bit to 32-bit) if the 
+    // hardware does not support the format directly.
     char alsaDeviceName[16];
-    snprintf(alsaDeviceName, 16, "plughw:%d,0", cardNumber);
+    //snprintf(alsaDeviceName, 16, "plughw:%d,0", cardNumber);
+    // Using hardware directly
+    snprintf(alsaDeviceName, 16, "hw:%d,0", cardNumber);
 
     snd_pcm_t* playH = 0;
     snd_pcm_t* captureH = 0;
@@ -202,9 +216,13 @@ int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLev
         return -1;
     }
 
-    snd_pcm_uframes_t t = 0;
-    snd_pcm_sw_params_get_start_threshold(play_sw_params, &t);
-    _log.info("Start threshold %d (frames)", t);
+    snd_pcm_uframes_t t0 = 0;
+    snd_pcm_sw_params_get_start_threshold(play_sw_params, &t0);
+    _log.info("Start threshold %d (frames)", t0);
+
+    snd_pcm_uframes_t t1 = 0;
+    snd_pcm_sw_params_get_start_threshold(play_sw_params, &t1);
+    _log.info("Stop threshold %d (frames)", t1);
 
     // No free needed, alloca() frees memory one function exit
     snd_pcm_hw_params_t* capture_hw_params;
