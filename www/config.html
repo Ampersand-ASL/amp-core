@@ -47,78 +47,79 @@
             <form id="config-form">
                 <div class="form2">
 
-                    <label for="node">Node Number:</label>
-                    <input type="text" name="node"/>
+                    <label for="config_node">Node Number:</label>
+                    <input type="text" name="node" id="config_node"/>
 
-                    <label for="password">Password:</label>
-                    <input type="text" name="password"/>
+                    <label for="config_password">Password:</label>
+                    <input type="text" name="password" id="config_password"/>
 
-                    <label for="callsign">Callsign:</label>
-                    <input type="text" name="callsign" maxlength="32"/>
+                    <label for="config_callsign">Callsign:</label>
+                    <input type="text" name="callsign" maxlength="32" id="config_callsign"/>
 
-                    <label for="iaxPort">IAX Port:</label>
-                    <input type="text" name="iaxPort"/>
+                    <label for="config_iaxPort">IAX Port:</label>
+                    <input type="text" name="iaxPort" id="config_iaxPort"/>
 
-                    <label for="favorites">Favorites:</label>
-                    <textarea name="favorites" rows="4"></textarea>
+                    <label for="config_favorites">Favorites:</label>
+                    <textarea name="favorites" rows="4" id="config_favorites"></textarea>
                 </div>
                 <div class="form2">
 
                     <div>Radio 0:</div><div></div>
 
-                    <label for="aslAudioDevice">Audio Device:</label>
-                    <select name="aslAudioDevice" data-listdependson="/">
+                    <label for="config_aslAudioDevice">Audio Device:</label>
+                    <select name="aslAudioDevice" data-listdependson="/" id="config_aslAudioDevice">
                     </select>
 
-                    <label for="aslTxMixASet">Transmit Mixer A:</label>
-                    <select name="aslTxMixASet" data-listdependson="aslAudioDevice">
+                    <label for="config_aslTxMixASet">Transmit Mixer A:</label>
+                    <select name="aslTxMixASet" data-listdependson="aslAudioDevice" id="config_aslTxMixASet">
                     </select>
 
-                    <label for="aslTxMixBSet">Transmit Mixer B:</label>
-                    <select name="aslTxMixBSet" data-listdependson="aslAudioDevice">
-                    </select>
-                    <label for="aslRxMixerSet">Receive Mixer:</label>
-                    <select name="aslRxMixerSet" data-listdependson="aslAudioDevice">
+                    <label for="config_aslTxMixBSet">Transmit Mixer B:</label>
+                    <select name="aslTxMixBSet" data-listdependson="aslAudioDevice" id="config_aslTxMixBSet">
                     </select>
 
-                    <label for="aslCosDevice">Carrier Detect Device:</label>
-                    <select name="aslCosDevice" data-listdependson="/">
+                    <label for="config_aslRxMixerSet">Receive Mixer:</label>
+                    <select name="aslRxMixerSet" data-listdependson="aslAudioDevice" id="config_aslRxMixerSet">
                     </select>
 
-                    <label for="aslCosSignal">Carrier Detect Signal:</label>
-                    <select name="aslCosSignal" data-listdependson="aslCosDevice">
+                    <label for="config_aslCosDevice">Carrier Detect Device:</label>
+                    <select name="aslCosDevice" data-listdependson="/" id="config_aslCosDevice">
                     </select>
 
-                    <label for="aslCosInvert">Carrier Detect Invert:</label>
-                    <select name="aslCosInvert">
+                    <label for="config_aslCosSignal">Carrier Detect Signal:</label>
+                    <select name="aslCosSignal" data-listdependson="aslCosDevice" id="config_aslCosSignal">
+                    </select>
+
+                    <label for="config_aslCosInvert">Carrier Detect Invert:</label>
+                    <select name="aslCosInvert" id="config_aslCosInvert">
                         <option value="0">No (Active High)</option>
                         <option value="1">Yes (Active Low)</option>
                     </select>
 
-                    <label for="aslCtcssDevice">CTCSS Detect Device:</label>
-                    <select name="aslCtcssDevice" data-listdependson="/">
+                    <label for="config_aslCtcssDevice">CTCSS Detect Device:</label>
+                    <select name="aslCtcssDevice" data-listdependson="/" id="config_aslCtcssDevice">
                     </select>
 
-                    <label for="aslCtcssSignal">CTCSS Detect Signal:</label>
-                    <select name="aslCtcssSignal" data-listdependson="aslCtcssDevice">
+                    <label for="config_aslCtcssSignal">CTCSS Detect Signal:</label>
+                    <select name="aslCtcssSignal" data-listdependson="aslCtcssDevice" id="config_aslCtcssSignal">
                     </select>
 
-                    <label for="aslCtcssInvert">CTCSS Detect Invert:</label>
-                    <select name="aslCtcssInvert">
+                    <label for="config_aslCtcssInvert">CTCSS Detect Invert:</label>
+                    <select name="aslCtcssInvert" id="config_aslCtcssInvert">
                         <option value="0">No (Active High)</option>
                         <option value="1">Yes (Active Low)</option>
                     </select>
 
-                    <label for="aslPttDevice">PTT Device:</label>
-                    <select name="aslPttDevice" data-listdependson="/">
+                    <label for="config_aslPttDevice">PTT Device:</label>
+                    <select name="aslPttDevice" data-listdependson="/" id="config_aslPttDevice">
                     </select>
 
-                    <label for="aslPtSignal">PTT Signal:</label>
-                    <select name="aslPttSignal" data-listdependson="aslPttDevice">
+                    <label for="config_aslPtSignal">PTT Signal:</label>
+                    <select name="aslPttSignal" data-listdependson="aslPttDevice" id="config_aslPtSignal">
                     </select>
 
-                    <label for="aslPttInvert">PTT Invert:</label>
-                    <select name="aslPttInvert">
+                    <label for="config_aslPttInvert">PTT Invert:</label>
+                    <select name="aslPttInvert" id="config_aslPttInvert">
                         <option value="0">No (Active Low)</option>
                         <option value="1">Yes (Active High)</option>
                     </select>
@@ -126,37 +127,41 @@
                 </div>
                 <div class="form2">
                     <div>Advanced Settings:</div><div></div>
-                    <label for="kfnodes">Kerchunk Filter Nodes:</label>
-                    <textarea name="kfnodes" id="kfnodes" rows="2"></textarea>
-                    <label for="kfdelay">Kerchunk Filter Delay (ms):</label>
-                    <input type="number" id="kfdelay" name="kfdelay"/>
-                    <label for="duplexmode">Sidetone:</label>
-                    <select id="duplexmode" name="duplexmode">
+
+                    <label for="config_kfnodes">Kerchunk Filter Nodes:</label>
+                    <textarea name="kfnodes" id="config_kfnodes" rows="2"></textarea>
+
+                    <label for="config_kfdelay">Kerchunk Filter Delay (ms):</label>
+                    <input type="number" name="kfdelay" id="config_kfdelay"/>
+
+                    <label for="config_duplexmode">Sidetone:</label>
+                    <select id="config_duplexmode" name="duplexmode">
                         <option value="0">Disabled</option>
                         <option value="1">Enabled</option>
                     </select>
-                    <label for="echogain">Sidetone Gain (dB):</label>
-                    <input type="number" id="echogain" name="echogain"/>
+
+                    <label for="config_echogain">Sidetone Gain (dB):</label>
+                    <input type="number" id="config_echogain" name="echogain"/>
                 </div>
                 <!-- SA818 Radio 1-->
                 <div class="form2">
                     <div>SA818 Settings (Radio 0):</div><div></div>
 
-                    <label for="sa818port">Command Port:</label>
-                    <select name="sa818port" data-listdependson="/">
+                    <label for="config_sa818port">Command Port:</label>
+                    <select name="sa818port" data-listdependson="/" id="config_sa818port">
                     </select>
 
-                    <label for="sa818bw">Bandwidth:</label>
-                    <select name="sa818bw">
+                    <label for="config_sa818bw">Bandwidth:</label>
+                    <select name="sa818bw" id="config_sa818bw">
                         <option value="1">Wide (25kHz)</option>
                         <option value="0">Narrow (12.5kHz)</option>
                     </select>
 
-                    <label for="sa818txf">Transmit Frequency:</label>
-                    <input type="number" step="0.0001" name="sa818txf"/>
+                    <label for="config_sa818txf">Transmit Frequency:</label>
+                    <input type="number" step="0.0001" name="sa818txf" id="config_sa818txf"/>
 
-                    <label for="sa818txpl">Transmit Tone:</label>
-                    <select name="sa818txpl">
+                    <label for="config_sa818txpl">Transmit Tone:</label>
+                    <select name="sa818txpl" id="config_sa818txpl">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -198,11 +203,11 @@
                         <option value="0038">250.3</option>
                     </select>
 
-                    <label for="sa818rxf">Receive Frequency:</label>
-                    <input type="number" step="0.0001" name="sa818rxf"/>
+                    <label for="config_sa818rxf">Receive Frequency:</label>
+                    <input type="number" step="0.0001" name="sa818rxf" id="config_sa818rxf"/>
 
-                    <label for="sa818rxpl">Receive Tone:</label>
-                    <select name="sa818rxpl">
+                    <label for="config_sa818rxpl">Receive Tone:</label>
+                    <select name="sa818rxpl" id="config_sa818rxpl">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -244,8 +249,8 @@
                         <option value="0038">250.3</option>
                     </select>
 
-                    <label for="sa818sq">Squelch Level:</label>
-                    <select name="sa818sq">
+                    <label for="config_sa818sq">Squelch Level:</label>
+                    <select name="sa818sq" id="config_sa818sq">
                         <option value="0">Open</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -257,8 +262,8 @@
                         <option value="8">8</option>
                     </select>
 
-                    <label for="sa818vol">Volume:</label>
-                    <select name="sa818vol">
+                    <label for="config_sa818vol">Volume:</label>
+                    <select name="sa818vol" id="config_sa818vol">
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
@@ -269,20 +274,20 @@
                         <option value="8">8</option>
                     </select>
 
-                    <label for="sa818emp">Pre/Deemphasis:</label>
-                    <select name="sa818emp">
+                    <label for="config_sa818emp">Pre/Deemphasis:</label>
+                    <select name="sa818emp" id="config_sa818emp">
                         <option value="0">On</option>
                         <option value="1">Off</option>
                     </select>
 
-                    <label for="sa818lpf">Low-Pass Filter:</label>
-                    <select name="sa818lpf">
+                    <label for="config_sa818lpf">Low-Pass Filter:</label>
+                    <select name="sa818lpf" id="config_sa818lpf">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
 
-                    <label for="sa818hpf">High-Pass Filter:</label>
-                    <select name="sa818hpf">
+                    <label for="config_sa818hpf">High-Pass Filter:</label>
+                    <select name="sa818hpf" id="config_sa818hpf">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
@@ -303,21 +308,21 @@
                 <div class="form2">
                     <div>SA818 Settings (Radio 1):</div><div></div>
 
-                    <label for="sa818port_1">Command Port:</label>
-                    <select name="sa818port_1" data-listdependson="/">
+                    <label for="config_sa818port_1">Command Port:</label>
+                    <select name="sa818port_1" data-listdependson="/" id="config_sa818port_1">
                     </select>
 
-                    <label for="sa818bw_1">Bandwidth:</label>
-                    <select name="sa818bw_1">
+                    <label for="config_sa818bw_1">Bandwidth:</label>
+                    <select name="sa818bw_1" id="config_sa818bw_1">
                         <option value="1">Wide (25kHz)</option>
                         <option value="0">Narrow (12.5kHz)</option>
                     </select>
 
-                    <label for="sa818txf_1">Transmit Frequency:</label>
-                    <input type="number" step="0.0001" name="sa818txf_1"/>
+                    <label for="config_sa818txf_1">Transmit Frequency:</label>
+                    <input type="number" step="0.0001" name="sa818txf_1" id="config_sa818txf_1"/>
 
-                    <label for="sa818txpl_1">Transmit Tone:</label>
-                    <select name="sa818txpl_1">
+                    <label for="config_sa818txpl_1">Transmit Tone:</label>
+                    <select name="sa818txpl_1" id="config_sa818txpl_1">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -359,11 +364,11 @@
                         <option value="0038">250.3</option>
                     </select>
 
-                    <label for="sa818rxf_1">Receive Frequency:</label>
-                    <input type="number" step="0.0001" name="sa818rxf_1"/>
+                    <label for="config_sa818rxf_1">Receive Frequency:</label>
+                    <input type="number" step="0.0001" name="sa818rxf_1" id="config_sa818rxf_1"/>
 
-                    <label for="sa818rxpl_1">Receive Tone:</label>
-                    <select name="sa818rxpl_1">
+                    <label for="config_sa818rxpl_1">Receive Tone:</label>
+                    <select name="sa818rxpl_1" id="config_sa818rxpl_1">
                         <option value="0000">None</option>
                         <option value="0001">67.0</option>
                         <option value="0002">71.9</option>
@@ -405,8 +410,8 @@
                         <option value="0038">250.3</option>
                     </select>
 
-                    <label for="sa818sq_1">Squelch Level:</label>
-                    <select name="sa818sq_1">
+                    <label for="config_sa818sq_1">Squelch Level:</label>
+                    <select name="sa818sq_1" id="config_sa818sq_1">
                         <option value="0">Open</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -418,8 +423,8 @@
                         <option value="8">8</option>
                     </select>
 
-                    <label for="sa818vol_1">Volume:</label>
-                    <select name="sa818vol_1">
+                    <label for="config_sa818vol_1">Volume:</label>
+                    <select name="sa818vol_1" id="config_sa818vol_1">
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
@@ -430,20 +435,20 @@
                         <option value="8">8</option>
                     </select>
 
-                    <label for="sa818emp_1">Pre/Deemphasis:</label>
-                    <select name="sa818emp_1">
+                    <label for="config_sa818emp_1">Pre/Deemphasis:</label>
+                    <select name="sa818emp_1" id="config_sa818emp_1">
                         <option value="0">On</option>
                         <option value="1">Off</option>
                     </select>
 
-                    <label for="sa818lpf_1">Low-Pass Filter:</label>
-                    <select name="sa818lpf_1">
+                    <label for="config_sa818lpf_1">Low-Pass Filter:</label>
+                    <select name="sa818lpf_1" id="config_sa818lpf_1">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
 
-                    <label for="sa818hpf_1">High-Pass Filter:</label>
-                    <select name="sa818hpf_1">
+                    <label for="config_sa818hpf_1">High-Pass Filter:</label>
+                    <select name="sa818hpf_1" id="config_sa818hpf_1">
                         <option value="0">Off</option>
                         <option value="1">On</option>
                     </select>
