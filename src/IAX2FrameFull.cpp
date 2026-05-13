@@ -84,6 +84,8 @@ bool IAX2FrameFull::isACKRequired() const {
         (getType() == 6 && getSubclass() == 12) ||
         // PONG
         (getType() == 6 && getSubclass() == 3) ||
+        // AUTHREP
+        (getType() == 6 && getSubclass() == 9) ||
         // ANSWER
         (getType() == 4 && getSubclass() == 4) ||
         // KEY
@@ -92,8 +94,6 @@ bool IAX2FrameFull::isACKRequired() const {
         (getType() == 4 && getSubclass() == 13) ||
         // STOP_SOUNDS
         (getType() == 4 && getSubclass() == 255) ||
-        // AUTHREP
-        (getType() == 6 && getSubclass() == 9) ||
         // TEXT
         (getType() == 7 && getSubclass() == 0) ||
         // COMFORT

@@ -2549,25 +2549,11 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame, Call& call) {
         return;
     }
 
-    // There are a few types that don't go on the RETX queue
-    if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PING) || 
-        frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_LAGRQ) || 
-        frame.getType() == FrameType::IAX2_TYPE_VOICE) {
-        // Do nothing
-    }
-    else {
-        if (!frame.isACKRequired()) {
-            _log.info("WARNING: Something is going onto the retransmit buffer that doesn't require an ACK %u %u",
-                frame.getType(), frame.getSubclass());
-            _log.infoDump("DUMP", (const uint8_t*)frame.buf(), frame.size());
-        }
-
-        // Save the frame into the retransmission buffer, just in case. This buffer 
-        // gets popped by incoming messages with higher expected sequence numbers.
-        if (!call.reTx.push(_clock.time(), 0, (const uint8_t*)frame.buf(), frame.size())) {
-            _log.error("Call %u/%u retx buffer full %u", call.localCallId, call.remoteCallId,
-                call.reTx.getUsed());
-        }
+    // Save the frame into the retransmission buffer, just in case. This buffer 
+    // gets popped by incoming messages with higher expected sequence numbers.
+    if (!call.reTx.push(_clock.time(), 0, (const uint8_t*)frame.buf(), frame.size())) {
+        _log.error("Call %u/%u retx buffer full %u", call.localCallId, call.remoteCallId,
+            call.reTx.getUsed());
     }
 
     // Do the actual transmission on the socket
