@@ -185,7 +185,7 @@ void LineRadio::consume(const Message& msg) {
         memcpy(&payload, msg.body(), msg.size());
         // Enable some tone generation
         _toneActive = true;
-        _toneTicks = 50 * 3;
+        _toneTicks = payload.durationMs / 20;
         _toneOmega = 2.0f * 3.1415926f * payload.freq / 48000.0f;
     }    
 }
@@ -213,9 +213,8 @@ void LineRadio::_generateToneFrame() {
     _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
 
     // Call down to do the actual play on the hardware
-    if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) == false) {
-        _log.error("USB play buffer overflow");
-    }
+    if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) != PlayStatus::STATUS_OK)
+        _log.error("Tone play error");
 
     _lastPlayedFrameMs = _clock.time();
     _playing = true;

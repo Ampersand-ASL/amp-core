@@ -242,6 +242,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                 string freq = data["freq"];
                 payload.freq = std::stof(freq);
                 payload.level = 0.5;
+                payload.durationMs = 3000;
                 ui->_log.info("Tone %f %f", payload.freq, payload.level);
                 MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::TONE, 
                     sizeof(payload), (const uint8_t*)&payload, 0, 0);
@@ -279,12 +280,28 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             } else if (data["action"] == "dtmf") {
                 string symbol = data["symbol"].get<std::string>();
                 if (symbol.size() >= 1) {
-                    PayloadDtmfGen payload;
-                    payload.symbol = symbol[0];
-                    MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
-                        sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                    msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
-                    bus->consume(msg);
+
+                    // Send the DTMF generation request to the network
+                    {
+                        PayloadDtmfGen payload;
+                        payload.symbol = symbol[0];
+                        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
+                            sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                        msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                        bus->consume(msg);
+                    }
+
+                    // Per Joe KA9OPL, generate some audio feedback on DTMF pad
+                    {
+                        PayloadTone payload;
+                        payload.freq = 440;
+                        payload.level = 0.5;
+                        payload.durationMs = 100;
+                        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::TONE, 
+                            sizeof(payload), (const uint8_t*)&payload, 0, 0);
+                        msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
+                        bus->consume(msg);
+                    }
                 }
             }
             else if (data["action"] == "dropcall") {

@@ -262,6 +262,7 @@ struct PayloadTTS {
 struct PayloadTone {
     float freq;
     float level;
+    unsigned durationMs;
 };
 
 }
