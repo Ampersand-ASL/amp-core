@@ -254,26 +254,6 @@ void LineRadio::oneSecTick() {
     // Send the talker ID if we are actively capturing audio
     if (_clock.isInWindow(_lastCaptureMs, 2000))
         _sendTalkerId();
-
-    // DTMF command?
-    if (_clock.isPastWindow(_lastDtmfDetectionMs, 2000) && !_dtmfAccumulator.empty()) {
-        if (_dtmfAccumulator.starts_with("*3") && !_localNode.empty()) {
-
-            string targetNode = _dtmfAccumulator.substr(2);
-            _log.info("DTMF command: connect to node [%s]", targetNode.c_str());
-
-            PayloadCall payload;
-            strcpyLimited(payload.localNumber, _localNode.c_str(), sizeof(payload.localNumber));
-            strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
-            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
-                sizeof(payload), (const uint8_t*)&payload, 0, 0);
-            msg.setDest(_networkDestLineId, DEST_CALL_ID);
-            _captureConsumer.consume(msg);
-        }
-
-        // Clear no matter what
-        _dtmfAccumulator.clear();
-    }
 }
 
 void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len) {
@@ -440,18 +420,24 @@ void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen
     _resampler.resample(block, blockLen, pcm8k, BLOCK_SIZE_8K);
 
     // Check for DTMF signaling. The detector
-    // is configured for a frame size of 80 so we
+    // is configured for a frame size of 80 (10ms) so we
     // pass the audio in two pieces.
     _dtmfDetector.processBlock(pcm8k);
     _dtmfDetector.processBlock(pcm8k + (BLOCK_SIZE_8K / 2));
 
-    // TODO: SIGNALING
+    // #### TODO: COME UP WITH A WAY TO SILENCE THE DTMF
+
     if (_dtmfDetector.isDetectionPending()) {
-        char c = _dtmfDetector.popDetection();
-        //_log.info("DTMF %c [%s]", c, _dtmfAccumulator.c_str());
-        _log.info("DTMF %c", c);
-        _lastDtmfDetectionMs = _clock.timeMs();
-        _dtmfAccumulator += c;
+
+        PayloadDtmfPress payload;
+        payload.symbol = _dtmfDetector.popDetection();
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+        msg.setSource(_busId, _callId);
+        msg.setDest(_destBusId, _destCallId);
+        _captureConsumer.consume(msg);
+
+        _log.info("DTMF %c", payload.symbol);
     }
 
     // Make an SLIN_48K buffer in CODEC format.5

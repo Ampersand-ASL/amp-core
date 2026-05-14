@@ -189,9 +189,6 @@ protected:
     amp::Resampler _resampler;
     DTMFDetector2 _dtmfDetector;
 
-    std::string _dtmfAccumulator;
-    uint64_t _lastDtmfDetectionMs = 0;
-
     bool _cosActive = false;
     bool _ctcssActive = true;
 
