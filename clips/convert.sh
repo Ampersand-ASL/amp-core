@@ -1,0 +1,27 @@
+xxd -n _amp_core_clips_clip_0_raw -i clip_0.raw resource_amp_core_clips_clip_0_raw.c
+xxd -n _amp_core_clips_clip_0_end_raw -i clip_0_end.raw resource_amp_core_clips_clip_0_end_raw.c
+xxd -n _amp_core_clips_clip_1_raw -i clip_1.raw resource_amp_core_clips_clip_1_raw.c
+xxd -n _amp_core_clips_clip_1_end_raw -i clip_1_end.raw resource_amp_core_clips_clip_1_end_raw.c
+xxd -n _amp_core_clips_clip_2_raw -i clip_2.raw resource_amp_core_clips_clip_2_raw.c
+xxd -n _amp_core_clips_clip_2_end_raw -i clip_2_end.raw resource_amp_core_clips_clip_2_end_raw.c
+xxd -n _amp_core_clips_clip_3_raw -i clip_3.raw resource_amp_core_clips_clip_3_raw.c
+xxd -n _amp_core_clips_clip_3_end_raw -i clip_3_end.raw resource_amp_core_clips_clip_3_end_raw.c
+xxd -n _amp_core_clips_clip_4_raw -i clip_4.raw resource_amp_core_clips_clip_4_raw.c
+xxd -n _amp_core_clips_clip_4_end_raw -i clip_4_end.raw resource_amp_core_clips_clip_4_end_raw.c
+xxd -n _amp_core_clips_clip_5_raw -i clip_5.raw resource_amp_core_clips_clip_5_raw.c
+xxd -n _amp_core_clips_clip_5_end_raw -i clip_5_end.raw resource_amp_core_clips_clip_5_end_raw.c
+xxd -n _amp_core_clips_clip_6_raw -i clip_6.raw resource_amp_core_clips_clip_6_raw.c
+xxd -n _amp_core_clips_clip_6_end_raw -i clip_6_end.raw resource_amp_core_clips_clip_6_end_raw.c
+xxd -n _amp_core_clips_clip_7_raw -i clip_7.raw resource_amp_core_clips_clip_7_raw.c
+xxd -n _amp_core_clips_clip_7_end_raw -i clip_7_end.raw resource_amp_core_clips_clip_7_end_raw.c
+xxd -n _amp_core_clips_clip_8_raw -i clip_8.raw resource_amp_core_clips_clip_8_raw.c
+xxd -n _amp_core_clips_clip_8_end_raw -i clip_8_end.raw resource_amp_core_clips_clip_8_end_raw.c
+xxd -n _amp_core_clips_clip_9_raw -i clip_9.raw resource_amp_core_clips_clip_9_raw.c
+xxd -n _amp_core_clips_clip_9_end_raw -i clip_9_end.raw resource_amp_core_clips_clip_9_end_raw.c
+
+xxd -n _amp_core_clips_clip_calling_node_raw -i clip_calling_node.raw resource_amp_core_clips_clip_calling_node_raw.c
+xxd -n _amp_core_clips_clip_connected_raw -i clip_connected.raw resource_amp_core_clips_clip_connected_raw.c
+xxd -n _amp_core_clips_clip_dot_raw -i clip_dot.raw resource_amp_core_clips_clip_dot_raw.c
+xxd -n _amp_core_clips_clip_node_raw -i clip_node.raw resource_amp_core_clips_clip_node_raw.c
+xxd -n _amp_core_clips_clip_not_connected_raw -i clip_not_connected.raw resource_amp_core_clips_clip_not_connected_raw.c
+xxd -n _amp_core_clips_clip_welcome_to_ampersand_raw -i clip_welcome_to_ampersand.raw resource_amp_core_clips_clip_welcome_to_ampersand_raw.c
