@@ -57,6 +57,11 @@ SignalOut::SignalOut(Log& log, Clock& clock, MessageConsumer& bus,
 
 int SignalOut::openHid(const char* hidName, const char* signalName) {
 
+    // Ignore inconsequential opens
+    if (_mode == Mode::MODE_HID && _deviceName == hidName && _signalName == signalName && 
+        !_hidFailed)
+        return 0;
+
     close();
 
     if ((_fd = ::open(hidName, O_RDWR | O_NONBLOCK)) < 0) {
@@ -71,29 +76,35 @@ int SignalOut::openHid(const char* hidName, const char* signalName) {
     _hidMask = 0x04;
     _hidFailed = false;
     _mode = Mode::MODE_HID;
+    _deviceName = hidName;
+    _signalName = signalName;
 
     // Set initial state
-    _set(false);
-    _setDebounced(false);
+    _rawValue = false;
+    _setOfficialValue(false);
 
     return 0;
 }
 
-int SignalOut::openSerial(const char* deviceName, const char* signal) {
+int SignalOut::openSerial(const char* deviceName, const char* signalName) {
+
+    // Ignore inconsequential opens
+    if (_mode == Mode::MODE_SERIAL && _deviceName == deviceName && _signalName == signalName)
+        return 0;
 
     close();
 
-    if (strcmp(signal, "rts") == 0) {
+    if (strcmp(signalName, "rts") == 0)
         _ticomMask = TIOCM_RTS;
-    }
-    else if (strcmp(signal, "dtr") == 0) {
+    else if (strcmp(signalName, "dtr") == 0)
         _ticomMask = TIOCM_DTR;
-    }
     else {
         _log.info("Unrecognized serial signal");
         return -1;
     }
 
+    // Serial modem control signals are manipulated using ioctl() calls. So 
+    // the port needs to be opened for this to work.
     if ((_fd = ::open(deviceName, O_RDWR | O_NONBLOCK | O_NOCTTY)) < 0) {
         _log.error("Cannot open serial device %d", errno);
         _fd = -1;
@@ -101,10 +112,12 @@ int SignalOut::openSerial(const char* deviceName, const char* signal) {
     }
 
     _mode = Mode::MODE_SERIAL;
+    _deviceName = deviceName;
+    _signalName = signalName;
 
     // Set initial state
-    _set(false);
-    _setDebounced(false);
+    _rawValue = false;
+    _setOfficialValue(false);
 
     return 0;
 }
@@ -114,31 +127,28 @@ void SignalOut::close() {
         ::close(_fd);
     _fd = -1;
     _mode = Mode::MODE_NONE;
+    _deviceName.clear();
+    _signalName.clear();
 }
 
 // ----- MessageConsumer --------------------------------------------------
 
 void SignalOut::consume(const Message& msg) {
-    if (msg.isSignal(_sigTypeOn)) {
-        _set(true);
-    } else if (msg.isSignal(_sigTypeOff)) {
-        _set(false);
-    }
-}
-
-void SignalOut::_set(bool s) {
-    _rawValue = s;
+    if (msg.isSignal(_sigTypeOn))
+        _rawValue = true;
+    else if (msg.isSignal(_sigTypeOff))
+        _rawValue = false;
 }
 
 void SignalOut::audioRateTick(uint32_t tickMs) {
     // Look for the transition of the debounced state
     if (_debouncedState.get() != _officialValue) {        
         _officialValue = _debouncedState.get();
-        _setDebounced(_officialValue);
+        _setOfficialValue(_officialValue);
     }
 }
 
-void SignalOut::_setDebounced(bool s) {
+void SignalOut::_setOfficialValue(bool s) {
     if (_fd != -1) {
         if (_mode == Mode::MODE_HID) {
             if ((!_invert && s) || (_invert && !s)) {

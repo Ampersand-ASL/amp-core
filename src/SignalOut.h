@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "kc1fsz-tools/TimeDebouncer2.h"
 
@@ -31,6 +32,13 @@ class MessageConsumer;
 
     namespace amp {
 
+/**
+ * An instance of this class is responsible for managing a single output
+ * signal, most usually a PTT signal or something like that.
+ *
+ * Support various modes like HID (typically on a CM108 device) or serial
+ * modem control signals like RTS/DTR or GPIO pins.
+ */
 class SignalOut : public Runnable2, public MessageConsumer {
 public:
 
@@ -64,17 +72,20 @@ private:
     Log& _log;
     Clock& _clock;
     MessageConsumer& _bus;
-    Message::SignalType _sigTypeOn;
-    Message::SignalType _sigTypeOff;
-    int _fd = 0;
+    const Message::SignalType _sigTypeOn;
+    const Message::SignalType _sigTypeOff;
+
+    std::string _deviceName;
+    std::string _signalName;
     Mode _mode = Mode::MODE_NONE;
+
+    int _fd = 0;
     bool _invert = false;
     bool _rawValue = false;
     bool _officialValue = false;
     TimeDebouncer2 _debouncedState;
 
-    void _set(bool s);
-    void _setDebounced(bool s);
+    void _setOfficialValue(bool s);
 
     // ------ HID Related ----------------------------------------------------
 
