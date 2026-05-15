@@ -1809,6 +1809,11 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
             _bus.consume(msg);
         }
+        // #### TODO: NEED TO STUDY THIS CASE MORE. CERTAINLY RELATED
+        // #### TO TALKER ID FEATURE.
+        else if (textMessage[0] == 'K') {
+            _log.info("Keyup message received: [%s]", textMessage);
+        }
         else {
             _log.infoDump("Unrecognized text", frame.buf(), frame.size());
         }
