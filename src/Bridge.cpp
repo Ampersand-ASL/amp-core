@@ -33,6 +33,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     unsigned lineId, unsigned ttsLineId, unsigned netTestLineId, 
     const char* netTestBindAddr,
     unsigned networkDestLineId, unsigned statsLineId,
+    unsigned simpleTtsLineId,
     BridgeCall* callSpace, unsigned callSpaceLen, bool parrotConference)
 :   _log(log),
     _traceLog(traceLog),
@@ -44,6 +45,7 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _netTestLineId(netTestLineId),
     _networkDestLineId(networkDestLineId),
     _statsLineId(statsLineId),
+    _simpleTtsLineId(simpleTtsLineId),
     _calls(callSpace, callSpaceLen),
     _parrotConference(parrotConference) { 
 

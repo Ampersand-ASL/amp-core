@@ -23,6 +23,8 @@
 // platfom that we are building for.
 #include <arm_math.h>
 
+#include "amp/Ampersand.h"
+
 namespace kc1fsz {
     namespace amp {
 
@@ -37,11 +39,6 @@ namespace kc1fsz {
  */
 class Resampler {
 public:
-
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_16K = 160 * 2;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     /** 
      * Resets internal state without changing the sample rates.

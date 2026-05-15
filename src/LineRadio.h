@@ -20,6 +20,8 @@
 #include <string>
 
 #include "kc1fsz-tools/DTMFDetector2.h"
+
+#include "amp/Ampersand.h"
 #include "amp/Resampler.h"
 
 // #### TODO: MOVE INCLUDE FILES FOR THIS PROJECT
@@ -40,11 +42,6 @@ class Clock;
 
 class LineRadio : public Line, public AudioCoreOutputPort, public Tx {
 public:
-
-    static const unsigned AUDIO_RATE = 48000;
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     /**
      * Example for sanity: 0dBv is 0.5 Vp.

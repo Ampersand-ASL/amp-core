@@ -59,8 +59,6 @@ using json = nlohmann::json;
 // https://github.com/yhirose/cpp-httplib
 // https://github.com/nlohmann/json
 
-static const unsigned DEST_CALL_ID = 1;
-
 /* 
 External Resources
 ------------------
@@ -246,7 +244,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                 ui->_log.info("Tone %f %f", payload.freq, payload.level);
                 MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::TONE, 
                     sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
+                msg.setDest(ui->_radioDestLineId, Message::UNKNOWN_CALL_ID);
                 bus->consume(msg);
             } else if (data["action"] == "ptt") {
                 ui->_ptt.store(!ui->_ptt.load());
@@ -255,7 +253,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                     msg = MessageEmpty::signal(Message::SignalType::COS_ON);
                 else 
                     msg = MessageEmpty::signal(Message::SignalType::COS_OFF);
-                msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
+                msg.setDest(ui->_radioDestLineId, Message::UNKNOWN_CALL_ID);
                 bus->consume(msg);
             } 
             else if (data["action"] == "call") {
@@ -272,7 +270,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                     strcpyLimited(payload.targetNumber, targetNode.c_str(), sizeof(payload.targetNumber));
                     MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_NODE, 
                         sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                    msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                    msg.setDest(ui->_networkDestLineId, Message::UNKNOWN_CALL_ID);
                     bus->consume(msg);
                 } else {
                     // ### TODO: ERROR MESSAGE
@@ -287,7 +285,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                         payload.symbol = symbol[0];
                         MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_GEN, 
                             sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                        msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                        msg.setDest(ui->_radioDestLineId, Message::UNKNOWN_CALL_ID);
                         bus->consume(msg);
                     }
 
@@ -299,7 +297,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                         payload.durationMs = 100;
                         MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::TONE, 
                             sizeof(payload), (const uint8_t*)&payload, 0, 0);
-                        msg.setDest(ui->_radioDestLineId, DEST_CALL_ID);
+                        msg.setDest(ui->_radioDestLineId, Message::UNKNOWN_CALL_ID);
                         bus->consume(msg);
                     }
                 }
@@ -313,7 +311,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             }
             else if (data["action"] == "dropall") {
                 MessageEmpty msg = MessageEmpty::signal(Message::SignalType::DROP_ALL_CALLS);
-                msg.setDest(ui->_networkDestLineId, DEST_CALL_ID);
+                msg.setDest(ui->_networkDestLineId, Message::UNKNOWN_CALL_ID);
                 bus->consume(msg);
             }
             else if (data["action"] == "capture") {

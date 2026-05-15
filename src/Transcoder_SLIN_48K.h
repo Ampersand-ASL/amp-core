@@ -20,16 +20,13 @@
 // platfom that we are building for.
 #include <arm_math.h>
 
+#include "amp/Ampersand.h"
 #include "Transcoder.h"
 
 namespace kc1fsz {
 
 class Transcoder_SLIN_48K : public Transcoder {
 public:
-
-    static const unsigned AUDIO_RATE = 48000;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     virtual bool decode(const uint8_t* source, unsigned sourceLen, 
         int16_t* dest, unsigned destLen);

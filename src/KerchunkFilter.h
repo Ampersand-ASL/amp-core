@@ -19,6 +19,7 @@
 #include <functional>
 #include <queue>
 
+#include "amp/Ampersand.h"
 #include "MessageConsumer.h"
 #include "Runnable2.h"
 
@@ -40,8 +41,6 @@ class Clock;
  */
 class KerchunkFilter : public MessageConsumer, public Runnable2 {
 public:
-
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
 
     KerchunkFilter();
 

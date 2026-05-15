@@ -18,6 +18,7 @@
 
 #include <functional>
 
+#include "amp/Ampersand.h"
 #include "amp/Resampler.h"
 
 #include "IAX2Util.h"
@@ -41,10 +42,6 @@ class Clock;
  */
 class BridgeOut : public MessageConsumer {
 public:
-
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     void setSink(std::function<void(const Message& msg)> sink) { _sink = sink; }
 

@@ -188,6 +188,28 @@ void LineRadio::consume(const Message& msg) {
         _toneTicks = payload.durationMs / 20;
         _toneOmega = 2.0f * 3.1415926f * payload.freq / 48000.0f;
     }    
+    else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
+        
+        char symbol = 0;
+
+        // Extract the symbol that was requested
+        {
+            PayloadDtmfGen payload;
+            assert(msg.size() == sizeof(payload));
+            memcpy(&payload, msg.body(), sizeof(payload));
+            symbol = payload.symbol;
+        }
+
+        // Build a request message and send to the bridge
+        {
+            PayloadDtmfPress payload = { .symbol = symbol };
+            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
+                sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+            msg.setSource(_busId, _callId);
+            msg.setDest(_destBusId, _destCallId);
+            _captureConsumer.consume(msg);
+        }
+    }
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2025, Bruce MacKinnon KC1FSZ
+ * Copyright (C) 2025, Bruce MacKinnon KC1FSZ, All Rights Reserved
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,24 +16,9 @@
  */
 #pragma once
 
-// NOTE: This may be the real ARM library or a mock, depending on the
-// platfom that we are building for.
-#include <arm_math.h>
+#define BLOCK_SIZE_8K (160)
+#define BLOCK_SIZE_16K (160 * 2)
+#define BLOCK_SIZE_48K (960)
+#define BLOCK_PERIOD_MS (20)
+#define AUDIO_RATE (48000)
 
-#include "itu-g711-plc/Plc.h"
-
-#include "amp/Ampersand.h"
-#include "Transcoder.h"
-
-namespace kc1fsz {
-
-class Transcoder_SLIN_8K : public Transcoder {
-public:
-
-    virtual bool decode(const uint8_t* source, unsigned sourceLen, 
-        int16_t* dest, unsigned destLen);
-    virtual bool encode(const int16_t* source, unsigned sourceLen, 
-        uint8_t* dest, unsigned destLen);
-};
-
-}

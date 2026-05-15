@@ -26,6 +26,7 @@
 #include "kc1fsz-tools/fixedvector.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 
+#include "amp/Ampersand.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
 #include "Message.h"
@@ -50,12 +51,6 @@ public:
 
     friend class BridgeCall;
 
-    static const unsigned AUDIO_RATE = 48000;
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_16K = 160 * 2;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
-
     /**
     * Takes text and adds a space between each letter. Relevant to 
     * text-to-speech.
@@ -65,6 +60,8 @@ public:
     /**
      * @param bus Used to request TTS, network tests, and to post link messages.
      * @param netDestLineId The line ID of the IAX network connection.
+     * @param simpleTtsLineId The line ID of the "simple" text-to-speech unit,
+     * or zero if this isn't being used.
      * @param callSpace The pre-allocated bank of BrideCalls. This is 
      * passed as a parameter to allow flexibility around the max number
      * of calls.
@@ -75,6 +72,7 @@ public:
         unsigned lineId, unsigned ttsLineId, 
         unsigned netTestLineId, const char* netTestBindAddr, 
         unsigned netDestLineId, unsigned statsLineId,
+        unsigned simpleTtsLineId,
         BridgeCall* callSpace, unsigned callSpaceLen,
         bool parrotConference = false);
 
@@ -142,6 +140,8 @@ private:
     unsigned _netTestLineId;
     unsigned _networkDestLineId;
     unsigned _statsLineId;
+    unsigned _simpleTtsLineId;
+
     std::string _nodeNumber;
     std::string _greetingText;
     std::vector<std::string> _kerchunkFilterNodes;

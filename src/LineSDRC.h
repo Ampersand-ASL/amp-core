@@ -21,6 +21,7 @@
 // SDRC stuff
 #include "DigitalAudioPortRxHandler.h"
 
+#include "amp/Ampersand.h"
 #include "Line.h"
 #include "IAX2Util.h"
 #include "Message.h"
@@ -37,9 +38,6 @@ class Clock;
  */
 class LineSDRC : public Line {
 public:
-
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     /**
      * @param consumer This is the sink interface that received messages

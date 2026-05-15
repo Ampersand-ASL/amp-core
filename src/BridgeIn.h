@@ -21,6 +21,7 @@
 
 #include "itu-g711-plc/Plc.h"
 
+#include "amp/Ampersand.h"
 #include "amp/Resampler.h"
 #include "amp/SequencingBufferStd.h"
 
@@ -50,11 +51,6 @@ class Clock;
  */
 class BridgeIn : public MessageConsumer {
 public:
-
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_16K = 160 * 2;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     BridgeIn();
 

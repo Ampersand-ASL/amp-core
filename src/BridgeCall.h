@@ -24,6 +24,8 @@
 
 #include "kc1fsz-tools/threadsafequeue.h"
 
+// amp-core
+#include "amp/Ampersand.h"
 #include "PCM16Frame.h"
 #include "Runnable2.h"
 #include "MessageConsumer.h"
@@ -51,11 +53,6 @@ public:
 
     friend class Bridge;
 
-    static const unsigned AUDIO_RATE = 48000;
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_16K = 160 * 2;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
     static const unsigned LINE_ID = 10;
     static const unsigned CALL_ID = 1;
 

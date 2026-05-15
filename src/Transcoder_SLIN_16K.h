@@ -22,15 +22,13 @@
 
 #include "itu-g711-plc/Plc.h"
 
+#include "amp/Ampersand.h"
 #include "Transcoder.h"
 
 namespace kc1fsz {
 
 class Transcoder_SLIN_16K : public Transcoder {
 public:
-
-    static const unsigned BLOCK_SIZE_16K = 160 * 2;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     virtual bool decode(const uint8_t* source, unsigned sourceLen, 
         int16_t* dest, unsigned destLen);

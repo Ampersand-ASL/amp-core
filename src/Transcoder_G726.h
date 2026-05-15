@@ -20,17 +20,13 @@ extern "C" {
 #include "g72x.h"
 }
 
+#include "amp/Ampersand.h"
 #include "Transcoder.h"
 
 namespace kc1fsz {
 
 class Transcoder_G726 : public Transcoder {
 public:
-
-    static const unsigned AUDIO_RATE = 48000;
-    static const unsigned BLOCK_SIZE_8K = 160;
-    static const unsigned BLOCK_SIZE_48K = 160 * 6;
-    static const unsigned BLOCK_PERIOD_MS = 20;
 
     Transcoder_G726();
 
