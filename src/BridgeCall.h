@@ -215,6 +215,11 @@ public:
      */
     std::string getLinkReport() const { return _linkReport; }
 
+    unsigned getLineId() const { return _lineId; }
+    unsigned getCallId() const { return _callId; }
+    unsigned getBridgeLineId() const { return _bridgeLineId; }
+    unsigned getBridgeCallId() const { return _bridgeCallId; }
+
     // ----- MessageConsumer -------------------------------------------------
 
     void consume(const Message& frame);

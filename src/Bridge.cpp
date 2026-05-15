@@ -47,10 +47,11 @@ Bridge::Bridge(Log& log, Log& traceLog, Clock& clock, MessageConsumer& bus,
     _calls(callSpace, callSpaceLen),
     _parrotConference(parrotConference) { 
 
-    // One-time (static) setup of all calls
+    // One-time (static) setup of all calls. Calls start numbering
+    // at 2 to avoid any confusion with 0 and 1.
     for (unsigned i = 0; i < callSpaceLen; i++)
         callSpace[i].init(this, &log, &traceLog, &clock, &_bus, 
-            _lineId, i, _ttsLineId, _netTestLineId, netTestBindAddr);
+            _lineId, i + 2, _ttsLineId, _netTestLineId, netTestBindAddr);
 }
 
 void Bridge::reset() {
@@ -67,6 +68,8 @@ unsigned Bridge::getCallCount() const {
 }
 
 void Bridge::setLocalNodeNumber(const char* nodeNumber) { 
+    if (_nodeNumber == nodeNumber)
+        return;
     _log.info("Bridge node number %s", nodeNumber);
     _nodeNumber = nodeNumber; 
 }
@@ -238,7 +241,7 @@ void Bridge::consume(const Message& msg) {
             // Visitor
             RESET_VISITOR,
             // Predicate
-            [&msg](const BridgeCall& s) { return s.belongsTo(msg); }
+            [this, &msg](const BridgeCall& s) { return s.belongsTo(msg); }
         );
         
         // Add new session for this call
@@ -341,6 +344,7 @@ void Bridge::consume(const Message& msg) {
 
         _log.info("Call ended %u:%u (%s)", msg.getSourceBusId(), msg.getSourceCallId(),
             payload.remoteNumber);
+        _log.info("  Dest %u:%u", msg.getDestBusId(), msg.getDestCallId());
 
         _calls.visitIf(
             // Visitor

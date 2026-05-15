@@ -175,7 +175,7 @@ void LineIAX2::setAuthMode(AuthMode mode) {
 
 int LineIAX2::open(short addrFamily, int listenPort) {
 
-    // If the configuration is changing then ignore the request
+    // If the configuration isn't changing then ignore the request
     if (addrFamily == _addrFamily &&
         _iaxListenPort == listenPort &&
         _iaxSockFd != -1 &&

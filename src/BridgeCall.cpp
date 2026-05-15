@@ -103,10 +103,8 @@ BridgeCall::BridgeCall() {
         if (_mode == Mode::NORMAL) {
             if (msg.getType() == Message::Type::AUDIO)
                 _processNormalAudio(msg);
-            else {
-                _log->info("TYPE %d", msg.getType());
+            else
                 assert(false);
-            }
         } else if (_mode == Mode::PARROT) {
             if (msg.getType() == Message::Type::AUDIO)
                 _processParrotAudio(msg);
@@ -250,7 +248,6 @@ void BridgeCall::_forceEnd() {
 }
 
 void BridgeCall::_enterNormalMode() {
-    _log->info("Call %u:%u going into normal conference mode", _lineId, _callId);
     _mode = Mode::NORMAL;
 }
 
@@ -370,8 +367,6 @@ void BridgeCall::consume(const Message& frame) {
         if (_talkerId != r && _bridgeIn.isActiveRecently()) {
             _talkerId = r;
             _talkerIdChangeMs = _clock->timeMs();
-            //_log->info("Input talker ID from %s set %s", 
-            //    _remoteNodeNumber.c_str(), _talkerId.c_str());
         }
     } 
     else if (frame.isSignal(Message::SignalType::DTMF_PRESS)) {
@@ -464,8 +459,6 @@ void BridgeCall::_normalOneSecTick() {
 void BridgeCall::setOutputTalkerId(const char* talkerId) {
     if (_outputTalkerId != talkerId) {
         _outputTalkerId = talkerId;
-        //_log->info("Output talker ID to %s set to %s", 
-        //    _remoteNodeNumber.c_str(), _outputTalkerId.c_str());
     }
 }
 
