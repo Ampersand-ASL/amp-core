@@ -52,6 +52,9 @@ void EventLoop::run(Log& log, Clock& clock,
     unsigned long loopCount = 0;   
     unsigned long maxLateUs = 0;
 
+    // IMPORTANT POINT: THIS IS THE ACTUAL EVENT LOOP OF THE APPLICATION. THIS
+    // WHILE LOOP WILL NEVER EXIT!
+
     while (true) {        
 
         uint64_t pollStartUs = clock.timeUs();
@@ -77,10 +80,10 @@ void EventLoop::run(Log& log, Clock& clock,
         msLeft /= 1000;
     
         uint32_t sleepMs = msLeft;
-        // But never less than 1ms
+        // But never less than 2ms
         sleepMs = std::max(sleepMs, (uint32_t)2);
 
-        // Block waiting for activity or timeout
+        // Block waiting for I/O activity wakeup or sleep timeout
         int rc = 0;
 #ifdef _WIN32
         if (fdsSize > 0)
@@ -90,6 +93,19 @@ void EventLoop::run(Log& log, Clock& clock,
             // on Windows, so don't expect a very short sleep here.
             Sleep(sleepMs);
 #else        
+        // For LINUX the entire event loop boils down to this call. The 
+        // sleepMs tells the kernel the longest it is allowed to sleep
+        // before giving up on the I/O activity and performing an execution
+        // cycle.
+        //
+        // For the Ampersand system we need to be cognizant of the fact that there
+        // is a fundamental network audio frame of 20ms, so we never want to sleep
+        // for too long in order to provide smooth audio playout or, in the case 
+        // of a hub or other radio-less node, smooth audio distribution.
+        //
+        // On the other hand, be cautious of a program that loops excessively and 
+        // consumes high CPU%.
+        
         rc = poll(fds, fdsSize, sleepMs);
 #endif
         if (rc < 0) {
