@@ -429,15 +429,17 @@ void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen
 
     if (_dtmfDetector.isDetectionPending()) {
 
+        DTMFDetector2::Detection det = _dtmfDetector.popDetection();
+        _log.info("DTMF %c %d %d", det.vsc.symbol, det.vsc.combPower, det.vsc.signalThresholdPower);
+
         PayloadDtmfPress payload;
-        payload.symbol = _dtmfDetector.popDetection();
+        payload.symbol = det.vsc.symbol;
         MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::DTMF_PRESS, 
             sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
         msg.setSource(_busId, _callId);
         msg.setDest(_destBusId, _destCallId);
         _captureConsumer.consume(msg);
 
-        _log.info("DTMF %c", payload.symbol);
     }
 
     // Make an SLIN_48K buffer in CODEC format.5
