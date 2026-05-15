@@ -136,6 +136,8 @@ sudo udevadmin trigger
 // Provides two frames of margin to address any skew between the system
 // clock and the USB clock.
 #define USB_PLAY_START_THRESHOLD_FRAMES (960 * 3)
+// How many play/capture errors can happen before essentially rebooting the line
+#define ERROR_COUNT_THRESHOLD (10)
 
 using namespace std;
 
@@ -152,6 +154,8 @@ LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer,
 int LineUsb::open(int cardNumber, int playLevelL, int playLevelR, int captureLevel, 
     bool echo, float echoGainDb) {
 
+    // Capture all of the parameters of the open so that we can open and re-open 
+    // if necessary.
     _openCardNumber = cardNumber;
     _openPlayLevelL = playLevelL;
     _openPlayLevelR = playLevelR;
@@ -183,9 +187,12 @@ int LineUsb::_open() {
     // Using hardware directly
     snprintf(alsaDeviceName, 16, "hw:%d,0", _openCardNumber);
     char alsaDeviceNameC[16];
+    // #### TODO: For reasons that I don't fully understand, the capture device needs 
+    // to go through the plug plugin. Possibly due to some format/rate translation?
+    // If I use the hardware directly the audio is distorted.
     snprintf(alsaDeviceNameC, 16, "plughw:%d,0", _openCardNumber);
     char alsaDeviceName2[16];
-    // Using hardware directly
+    // Using hardware directly for mixer setting
     snprintf(alsaDeviceName2, 16, "hw:%d", _openCardNumber);
 
     snd_pcm_t* playH = 0;
@@ -403,6 +410,7 @@ void LineUsb::oneSecTick() {
     
     LineRadio::oneSecTick();
 
+    // Check to see if an automatic reset of the line is required
     if (_fatalError) {
         _log.info("LineUsb error reported, attempting to re-open interface");
         _open();
@@ -414,11 +422,6 @@ void LineUsb::tenSecTick() {
         _underrunCountReported = _underrunCount;
         //_log.info("LineUSB Underrun %u", _underrunCount);
     }
-}
-
-void LineUsb::consume(const Message& frame) {
-    // Then go through the normal consume process
-    LineRadio::consume(frame);
 }
 
 // ===== Capture Related =========================================================
@@ -499,12 +502,20 @@ void LineUsb::_captureIfPossible() {
     else if (samplesRead == -11) {
         snd_pcm_recover(_captureH, samplesRead, 0); 
     } 
+    else if (samplesRead == -ENODEV) {
+        _log.error("Capture device not found");
+        _captureErrorCount++;
+    }
     else if (samplesRead < 0) {
         _log.error("Audio capture error %s", snd_strerror(samplesRead));
         snd_pcm_recover(_captureH, samplesRead, 0); 
         _captureErrorCount++;
-        _fatalError = true;
     }
+
+    // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
+    // a preemptive close/re-open of the system. 
+    if (_captureErrorCount > ERROR_COUNT_THRESHOLD) 
+        _fatalError = true;
 }
 
 // ===== Play Related =========================================================
@@ -589,8 +600,8 @@ void LineUsb::_playIfPossible() {
     }
 
     // Here is where we send the audio to the hardware. We attempt to write 
-    // everything in the accumulator knowing that the hardware might not accept all
-    // of it.
+    // everything in the accumulator, knowing that THE HARDWARE MIGHT NOT ACCEPT
+    // ALL OF IT.
     int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
     if (rc < 0) {
         if (rc == -EPIPE) {
@@ -604,12 +615,18 @@ void LineUsb::_playIfPossible() {
             if (!_startOfTs)
                 _underrunCount++;
         } else if (rc == -11) {
-            // This is the case that the card can't accept anything more. 
+            // This is the case that the card can't accept anything more. This
+            // really shouldn't happen given how much space is available in the 
+            // play buffer. However, David NR9V demonstrated an Arduino Uno Q
+            // that would randomly stop consuming audio, causing the play buffers
+            // to fill up to 100%.
+            _playErrorCount++;
         } else {
+            // All other errors are unknown/serious. For example, the USB plug 
+            // being pulled out.
             _log.error("Write failed %d", rc);
             snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
-            _fatalError = true;
         }
     } 
     else if (rc > 0) {     
@@ -620,6 +637,11 @@ void LineUsb::_playIfPossible() {
                 (_playAccumulatorSize - rc) * sizeof(int16_t));
         _playAccumulatorSize -= rc;
     }
+
+    // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
+    // a preemptive close/re-open of the system. 
+    if (_playErrorCount > ERROR_COUNT_THRESHOLD) 
+        _fatalError = true;
 }
 
 }

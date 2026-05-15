@@ -57,10 +57,6 @@ public:
         
     unsigned getUnderrunCount() const { return _underrunCount; }
 
-    // ----- MessageConsumer --------------------------------------------------
-
-    virtual void consume(const Message& frame);
-
     // ----- Runnable ---------------------------------------------------------
 
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
@@ -105,6 +101,8 @@ private:
 
     bool _openRequested = false;
     bool _isOpen = false;
+    // This flag is set when something unrecoverable happens. It will cause the 
+    // sound system to re-initialize.
     bool _fatalError = false;
 
     // All of the parameters sent to the original open call, saved for re-open.
@@ -124,6 +122,7 @@ private:
     unsigned _playErrorCount = 0;
     snd_pcm_state_t _lastState = snd_pcm_state_t::SND_PCM_STATE_DISCONNECTED;
     unsigned _lastDelayFrames = 0;
+    unsigned _demoCounter = 0;
 };
 
 // ====== Utility Functions ======================================================
