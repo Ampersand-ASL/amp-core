@@ -344,7 +344,6 @@ void Bridge::consume(const Message& msg) {
 
         _log.info("Call ended %u:%u (%s)", msg.getSourceBusId(), msg.getSourceCallId(),
             payload.remoteNumber);
-        _log.info("  Dest %u:%u", msg.getDestBusId(), msg.getDestCallId());
 
         _calls.visitIf(
             // Visitor

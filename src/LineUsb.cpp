@@ -14,30 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
-
-#include <cmath>
-#include <cassert>
-#include <algorithm>
-#include <cstring>
-
-// NOTE: This may be the real ARM library or a mock, depending on the
-// platfom that we are building for.
-#include <arm_math.h>
-
-#include <kc1fsz-tools/Log.h>
-#include <kc1fsz-tools/raiiholder.h>
-
-#include "IAX2Util.h"
-#include "MessageConsumer.h"
-#include "Transcoder_SLIN_48K.h"
-#include "LineUsb.h"
-
-using namespace std;
-
-namespace kc1fsz {
 
 // "A close look at ALSA paper": https://www.volkerschatz.com/noise/alsa.html
 // IMPORTANT: https://equalarea.com/paul/alsa-audio.html
@@ -132,6 +108,39 @@ sudo udevadmin control --reload-rules
 sudo udevadmin trigger
 
 */
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+
+#include <cmath>
+#include <cassert>
+#include <algorithm>
+#include <cstring>
+
+// NOTE: This may be the real ARM library or a mock, depending on the
+// platfom that we are building for.
+#include <arm_math.h>
+
+#include <kc1fsz-tools/Log.h>
+#include <kc1fsz-tools/raiiholder.h>
+
+#include "IAX2Util.h"
+#include "MessageConsumer.h"
+#include "Transcoder_SLIN_48K.h"
+#include "LineUsb.h"
+
+// Per David NR9V, this is a good setting (one 20ms frame)
+#define USB_PLAY_PERIOD_SIZE_FRAMES (960)
+// Per David NR9V, this is a good setting
+#define USB_PLAY_BUFFER_SIZE_FRAMES (960 * 4)
+// Provides two frames of margin to address any skew between the system
+// clock and the USB clock.
+#define USB_PLAY_START_THRESHOLD_FRAMES (960 * 3)
+
+using namespace std;
+
+namespace kc1fsz {
+
 LineUsb::LineUsb(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
     unsigned destBusId, unsigned destCallId, unsigned signalDestLineId, 
@@ -213,14 +222,12 @@ int LineUsb::_open() {
     snd_pcm_hw_params_set_format(playH, play_hw_params, SND_PCM_FORMAT_S16_LE);
     snd_pcm_hw_params_set_rate(playH, play_hw_params, audioRate, 0);
     snd_pcm_hw_params_set_channels(playH, play_hw_params, channels);
-    // With this setting we're getting around 480 audio samples per
-    // period, which leads to a good range of jitters.
-    unsigned int periodTimeUs = 20000;
-    snd_pcm_hw_params_set_period_time_near(playH, play_hw_params, &periodTimeUs, 0);
+    snd_pcm_uframes_t periodFrames = USB_PLAY_PERIOD_SIZE_FRAMES;
+    snd_pcm_hw_params_set_period_size_near(playH, play_hw_params, &periodFrames, 0);
     // Let the buffer store 16x 20ms frames of sound. 
     // At 48K, there are 960 samples in a 20ms frame.
-    unsigned int bufferTimeUs = 20000 * 16;
-    snd_pcm_hw_params_set_buffer_time_near(playH, play_hw_params, &bufferTimeUs, 0);
+    snd_pcm_uframes_t bufferFrames = USB_PLAY_BUFFER_SIZE_FRAMES;
+    snd_pcm_hw_params_set_buffer_size_near(playH, play_hw_params, &bufferFrames);
 
     if ((err = snd_pcm_hw_params(playH, play_hw_params)) < 0) {
         _log.error("Play parameters %d", err);
@@ -231,8 +238,7 @@ int LineUsb::_open() {
     snd_pcm_sw_params_t* play_sw_params;
     snd_pcm_sw_params_alloca(&play_sw_params);
     snd_pcm_sw_params_current(playH, play_sw_params);
-    const unsigned bufferMs = 40;
-    snd_pcm_uframes_t startThreshold = ((960 * bufferMs) / 20);
+    snd_pcm_uframes_t startThreshold = USB_PLAY_START_THRESHOLD_FRAMES;
     snd_pcm_sw_params_set_start_threshold(playH, play_sw_params, startThreshold);
 
     if ((err = snd_pcm_sw_params(playH, play_sw_params)) < 0) {
@@ -263,11 +269,11 @@ int LineUsb::_open() {
     snd_pcm_hw_params_set_channels(captureH, capture_hw_params, 2);
     // With this setting we're getting around 480 audio samples per
     // period, which leads to a good range of jitters.
-    periodTimeUs = 5000;
+    unsigned periodTimeUs = 5000;
     // Request a max period
     snd_pcm_hw_params_set_period_time_max(captureH, capture_hw_params, &periodTimeUs, 0);
     // Let the buffer store 8x 20ms frames of sound
-    bufferTimeUs = 20000 * 8;
+    unsigned bufferTimeUs = 20000 * 8;
     snd_pcm_hw_params_set_buffer_time(captureH, capture_hw_params, bufferTimeUs, 0);
 
     if ((err = snd_pcm_hw_params(captureH, capture_hw_params)) < 0) {
@@ -423,8 +429,6 @@ void LineUsb::_captureIfPossible() {
    
     if (!_isOpen || !_captureH || _fatalError)
         return;
-
-    //bool audioCaptureEnabled = (_cosActive && _ctcssActive);
 
     // Attempt to read inbound (captured) audio data. Whenever a full
     // block is accumulated it can be returned to the outside.
