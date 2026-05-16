@@ -28,6 +28,9 @@
 #include "Message.h"
 #include "LineRadio.h"
 
+// The maximum number of pollfds that are supported.
+#define MAX_POLL_FDS (4)
+
 namespace kc1fsz {
 
 class Log;
@@ -62,11 +65,13 @@ public:
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
     virtual void oneSecTick();
-    virtual void tenSecTick();
 
 protected:
 
-    void _playStart();
+    /**
+     * Called when the base class determines that a talkspurt is finished.
+     */
+    virtual void _playSpurtEnd();
 
     /**
      * This function is called to do the actual playing of the 48K PCM.
@@ -85,6 +90,12 @@ private:
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
 
+    // The poll FDs will be extracted when the sound system is opened
+    pollfd _playFds[MAX_POLL_FDS];
+    unsigned _playFdCount = 0;
+    pollfd _captureFds[MAX_POLL_FDS];
+    unsigned _captureFdCount = 0;
+
     // Buffer used to capture a full audio block. This is 
     // a mono 48k PCM buffer.
     int16_t _captureAccumulator[BLOCK_SIZE_48K] = {};
@@ -97,7 +108,7 @@ private:
     int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY]= {};
     unsigned _playAccumulatorSize = 0;
 
-    bool _startOfTs = false;
+    bool _tsRunning = false;
 
     bool _openRequested = false;
     bool _isOpen = false;
@@ -115,14 +126,10 @@ private:
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 
-    unsigned _playFrameCount = 0;
     unsigned _underrunCount = 0;
-    unsigned _underrunCountReported = 0;
     unsigned _captureErrorCount = 0;
     unsigned _playErrorCount = 0;
-    snd_pcm_state_t _lastState = snd_pcm_state_t::SND_PCM_STATE_DISCONNECTED;
     unsigned _lastDelayFrames = 0;
-    unsigned _demoCounter = 0;
 };
 
 // ====== Utility Functions ======================================================

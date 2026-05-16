@@ -107,6 +107,17 @@ sudo touch /etc/udev/rules.d/99-mydevice.rules
 sudo udevadmin control --reload-rules
 sudo udevadmin trigger
 
+Location of libsound.so.2.0.0, used to check version of binary:
+
+    /usr/lib/aarch64-linux-gnu/
+
+Command to get ALSA driver version:
+
+    cat /proc/asound/version
+
+Command to get details about the USB Audio driver:
+
+    sudo modinfo snd-usb-audio
 */
 #include <fcntl.h>
 #include <errno.h>
@@ -117,16 +128,10 @@ sudo udevadmin trigger
 #include <algorithm>
 #include <cstring>
 
-// NOTE: This may be the real ARM library or a mock, depending on the
-// platfom that we are building for.
-#include <arm_math.h>
-
 #include <kc1fsz-tools/Log.h>
 #include <kc1fsz-tools/raiiholder.h>
 
-#include "IAX2Util.h"
 #include "MessageConsumer.h"
-#include "Transcoder_SLIN_48K.h"
 #include "LineUsb.h"
 
 // Per David NR9V, this is a good setting (one 20ms frame)
@@ -336,16 +341,32 @@ int LineUsb::_open() {
         return -10;
     }
 
+    // Since we're doing non-blocking I/O, pull out the pollfds that will 
+    // be monitored to see when hardware activity is pending.
+    int rc;
+    rc = snd_pcm_poll_descriptors(playH, _playFds, MAX_POLL_FDS);
+    if (rc < 0) {
+        _log.error("FD problem 2");
+        return -11;
+    } 
+    _playFdCount = rc;
+
+    rc = snd_pcm_poll_descriptors(captureH, _captureFds, MAX_POLL_FDS);
+    if (rc < 0) {
+        _log.error("FD problem 3");
+        return -12;
+    } 
+    _captureFdCount = rc;
+
     // At this point we are good to go
     playHolder.release();
     _playH = playH;
     captureHolder.release();
-
     _captureH = captureH;
     _captureStartMs = _clock.time();
     _captureCount = 0;
     _captureErrorCount = 0;
-    _playErrorCount = 0;
+    _playErrorCount = 0; 
     
     // Call up to the base for signaling
     _signalOpen(_openEcho, _openEchoGainDb);
@@ -361,6 +382,8 @@ void LineUsb::_close() {
     _signalClose();
 
     _isOpen = false;
+    _playFdCount = 0;
+    _captureFdCount = 0;
 
     if (_playH)
         snd_pcm_close(_playH);
@@ -372,37 +395,39 @@ void LineUsb::_close() {
 
 int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 
-    int used = 0, rc;    
+    int used = 0;    
 
-    if (_isOpen && _captureH) {
-        // We always want to be alerted about capture
-        rc = snd_pcm_poll_descriptors(_captureH, fds + used, fdsCapacity);
-        if (rc < 0) {
-            _log.error("FD problem 2");
-        } else {
-            used += rc;
-            fdsCapacity -= rc;
+    if (_isOpen) {
+        // We always want to be alerted about capture activity
+        for (unsigned i = 0; i < _captureFdCount && fdsCapacity > 0; i++) {
+            fds[used++] = _captureFds[i];
+            fdsCapacity--;
         }
-    }
 
-    // Alerts about playing are only needed when there is something 
-    // in the accumulator that needs to be swept out.
-    if (_isOpen && _playH && _playAccumulatorSize > 0) {
-        rc = snd_pcm_poll_descriptors(_playH, fds + used, fdsCapacity);
-        if (rc < 0) {
-            _log.error("FD problem 3");
-        } else {
-            used += rc;
-            fdsCapacity -= rc;
+        // Alerts about playing are only needed when there is something 
+        // in the accumulator that needs to be swept out.
+        if (_playAccumulatorSize > 0) {
+            for (unsigned i = 0; i < _playFdCount && fdsCapacity > 0; i++) {
+                fds[used++] = _playFds[i];
+                fdsCapacity--;
+            }
         }
-    }
-   
+    } 
+    
     return used;
 }
 
 bool LineUsb::run2() { 
+
     _captureIfPossible();
     _playIfPossible();
+
+    // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
+    // a preemptive close/re-open of the system. 
+    if (_captureErrorCount > ERROR_COUNT_THRESHOLD || 
+        _playErrorCount > ERROR_COUNT_THRESHOLD) 
+        _fatalError = true;
+
     return false;
 }
 
@@ -417,20 +442,11 @@ void LineUsb::oneSecTick() {
     }
 }
 
-void LineUsb::tenSecTick() {
-    if (_underrunCount != _underrunCountReported) {
-        _underrunCountReported = _underrunCount;
-        //_log.info("LineUSB Underrun %u", _underrunCount);
-    }
-}
-
 // ===== Capture Related =========================================================
 
-// On startup the capture card is in STATE_PREPARED
-// 
 void LineUsb::_captureIfPossible() {  
    
-    if (!_isOpen || !_captureH || _fatalError)
+    if (!_isOpen || _fatalError)
         return;
 
     // Attempt to read inbound (captured) audio data. Whenever a full
@@ -511,23 +527,19 @@ void LineUsb::_captureIfPossible() {
         snd_pcm_recover(_captureH, samplesRead, 0); 
         _captureErrorCount++;
     }
-
-    // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
-    // a preemptive close/re-open of the system. 
-    if (_captureErrorCount > ERROR_COUNT_THRESHOLD) 
-        _fatalError = true;
 }
 
 // ===== Play Related =========================================================
 
-void LineUsb::_playStart() {
-    _startOfTs = true;
-    LineRadio::_playStart();
+// This will be called by the base class to indicate that a talkspurt has 
+// reached its end.
+void LineUsb::_playSpurtEnd() {
+    _tsRunning = false;
+    // Call up to let the base class do its thing as well
+    LineRadio::_playSpurtEnd();
 }
 
-/**
- * This will be called by the base class after all decoding has happened.
- */
+// This will be called by the base class after all decoding has happened.
 LineRadio::PlayStatus LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize) {
 
     assert(blockSize == BLOCK_SIZE_48K);
@@ -539,53 +551,42 @@ LineRadio::PlayStatus LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize
     if (_playAccumulatorSize + BLOCK_SIZE_48K > PLAY_ACCUMULATOR_CAPACITY)
         return PlayStatus::STATUS_FULL;
 
-    // Move new audio block into the play accumulator 
+    // Move new audio block into the play accumulator. This accumulator is necessary
+    // because there is no certainty that the audio hardware will accept data at 
+    // the same pace as it is being delivered in this function. We accumulate play
+    // audio and then pass it to the hardware in what might turn out to be multiple chunks.
     memcpy(&(_playAccumulator[_playAccumulatorSize]), pcm48k_2,
         BLOCK_SIZE_48K * sizeof(int16_t));
     _playAccumulatorSize += BLOCK_SIZE_48K;
-
-    _playFrameCount++;
 
     // Try to clear the _playAccumulator into the hardware.
     _playIfPossible();
 
     // At this point at least the frame has been accepted into the _playAccumulator.
+    // As far as the base class is concerned we are done.
     return PlayStatus::STATUS_OK;
 }
 
+// This is called from within the event loop to try to make progress on any 
+// frames that are hanging in the play accumulator.
 void LineUsb::_playIfPossible() {
 
-    if (!_isOpen || !_playH || _fatalError || _playAccumulatorSize == 0)
+    if (!_isOpen || _fatalError || _playAccumulatorSize == 0)
         return;
 
     // Look at the status of the PCM
-    snd_pcm_status_t *status;
-    snd_pcm_status_alloca(&status);
-    snd_pcm_status(_playH, status);
+    //snd_pcm_status_t *status;
+    //snd_pcm_status_alloca(&status);
+    //snd_pcm_status(_playH, status);
     // Delay is distance between current application frame position and sound frame position. 
     // It's positive and less than buffer size in normal situation, negative on playback underrun 
     // and greater than buffer size on capture overrun.
-    unsigned delayFrames = snd_pcm_status_get_delay(status);
-    // State 2 = Prepared
-    // State 3 = Running
-    // State 4 = Underrun 
-    snd_pcm_state_t currentState = snd_pcm_status_get_state(status);
-    if (currentState != _lastState) {
-        _log.info("Playback PCM state change %d -> %d [%u]", _lastState, currentState, delayFrames);
-        _lastState = currentState;
-    }
+    //unsigned delayFrames = snd_pcm_status_get_delay(status);
 
-    // We will likely encounter the PCM in an underrun state after the previous talkspurt
-    // has ended and there is nothing left to play. It is possible that could also result 
-    // from the data falling behind the audio frame rate. Either way, we re-prepare the PCM 
-    // for a new stream of audio.
-    if (currentState == snd_pcm_state_t::SND_PCM_STATE_XRUN)
-        snd_pcm_prepare(_playH);
-
-    if (delayFrames != _lastDelayFrames) {
+    //if (delayFrames != _lastDelayFrames) {
         //_log.info("Delay %u frames", delayFrames);
-        _lastDelayFrames = delayFrames;
-    }
+    //    _lastDelayFrames = delayFrames;
+    //}
 
     // Add the other stereo channel (interleaved) and convert to S16_LE.
     // There is no guarantee how much of this buffer will actually be accepted by the USB driver
@@ -605,43 +606,50 @@ void LineUsb::_playIfPossible() {
     int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
     if (rc < 0) {
         if (rc == -EPIPE) {
-            _log.info("Playback underrun");
+            // We will likely encounter the PCM in an underrun state after the previous talkspurt
+            // has ended and there is nothing left to play. It is possible that could also result 
+            // from the data falling behind the audio frame rate. Either way, we re-prepare the PCM 
+            // for a new stream of audio.
+            //
             // This isn't really an error, it's just the sound card telling
             // us that it was underrun prior to us starting to stream again.
             // We recover the card and then wait for the polling loop to 
             // come back to get things rolling with a re-write.
             // We expect an underrun at the very beginning of a talkspurt
             // so there is a flag to supress the message in that case.
-            if (!_startOfTs)
+            snd_pcm_prepare(_playH);
+            // This is only concerning if it happens in the midst of a talkspurt
+            if (_tsRunning) {
                 _underrunCount++;
+                _log.info("Playback underrun");
+            }
         } else if (rc == -11) {
             // This is the case that the card can't accept anything more. This
             // really shouldn't happen given how much space is available in the 
             // play buffer. However, David NR9V demonstrated an Arduino Uno Q
             // that would randomly stop consuming audio, causing the play buffers
             // to fill up to 100%.
+            snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
+            _log.error("Play overrun");
         } else {
             // All other errors are unknown/serious. For example, the USB plug 
             // being pulled out.
-            _log.error("Write failed %d", rc);
             snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
+            _log.error("Write failed %d", rc);
         }
     } 
     else if (rc > 0) {     
-        _startOfTs = false;
+        // This flag gets set as soon as a write was successful (i.e. streaming
+        // is underway)
+        _tsRunning = true;
         // Shift left to get rid of the frames that were accepted into the driver
         if ((unsigned)rc < _playAccumulatorSize)
             memmove(_playAccumulator, &(_playAccumulator[rc]),
                 (_playAccumulatorSize - rc) * sizeof(int16_t));
         _playAccumulatorSize -= rc;
     }
-
-    // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
-    // a preemptive close/re-open of the system. 
-    if (_playErrorCount > ERROR_COUNT_THRESHOLD) 
-        _fatalError = true;
 }
 
 }

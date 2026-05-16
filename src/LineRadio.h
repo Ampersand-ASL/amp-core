@@ -133,8 +133,8 @@ protected:
 
     void _generateToneFrame();
     void _analyzePlayedAudio(const int16_t* frame, unsigned frameLen);
-    void _playStart();
-    void _playEnd();
+    virtual void _playSpurtStart();
+    virtual void _playSpurtEnd();
 
     /**
      * This should be called whenever the hardware as captured a complete 

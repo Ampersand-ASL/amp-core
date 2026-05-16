@@ -147,7 +147,7 @@ void LineRadio::consume(const Message& msg) {
 
         // Detect transitions from silence to playing
         if (!_playing)
-            _playStart();
+            _playSpurtStart();
 
         assert(msg.size() == BLOCK_SIZE_48K * 2);
 
@@ -301,7 +301,7 @@ void LineRadio::audioRateTick(uint32_t tickMs) {
             _toneActive = false;
         else {
             if (!_playing) 
-                _playStart();
+                _playSpurtStart();
             _generateToneFrame();
         }
     }
@@ -313,7 +313,7 @@ void LineRadio::_checkTimeouts() {
     if (_playing &&
         _clock.isPast(_lastPlayedFrameMs + _playSilenceIntervalMs)) {
         _playing = false;
-        _playEnd();
+        _playSpurtEnd();
     }
 
     if (_capturing &&
@@ -516,7 +516,7 @@ void LineRadio::_captureEnd() {
     _sendSignal(Message::SignalType::RADIO_UNKEY, 0, 0);
 }
 
-void LineRadio::_playStart() {
+void LineRadio::_playSpurtStart() {
 
     // Generate a PTT ON signal
     _sendSignal(Message::SignalType::PTT_ON, 0, 0, _signalDestLineId, 
@@ -529,9 +529,9 @@ void LineRadio::_playStart() {
     _tsFrameCount = 0;
 }
 
-void LineRadio::_playEnd() {
-
+void LineRadio::_playSpurtEnd() {
     // Generate a PTT OFF signal
+    // #### TODO: SHOULD WE BE DOING THIS ANYMORE?
     _sendSignal(Message::SignalType::PTT_OFF, 0, 0, _signalDestLineId, 
         Message::UNKNOWN_CALL_ID);
 }

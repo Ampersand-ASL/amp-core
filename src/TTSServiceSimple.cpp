@@ -16,9 +16,11 @@
  */
 #include <cmath>
 #include <cstring>
+#include <functional>
 
 #include "kc1fsz-tools/Log.h"
 
+#include "amp/Resampler.h"
 #include "Message.h"
 #include "TTSServiceSimple.h"
 
@@ -29,10 +31,132 @@
 
 using namespace std;
 
+extern unsigned char _amp_core_clips_clip_0_raw[];
+extern unsigned int  _amp_core_clips_clip_0_raw_len;
+extern unsigned char _amp_core_clips_clip_0_end_raw[];
+extern unsigned int  _amp_core_clips_clip_0_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_1_raw[];
+extern unsigned int  _amp_core_clips_clip_1_raw_len;
+extern unsigned char _amp_core_clips_clip_1_end_raw[];
+extern unsigned int  _amp_core_clips_clip_1_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_2_raw[];
+extern unsigned int  _amp_core_clips_clip_2_raw_len;
+extern unsigned char _amp_core_clips_clip_2_end_raw[];
+extern unsigned int  _amp_core_clips_clip_2_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_3_raw[];
+extern unsigned int  _amp_core_clips_clip_3_raw_len;
+extern unsigned char _amp_core_clips_clip_3_end_raw[];
+extern unsigned int  _amp_core_clips_clip_3_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_4_raw[];
+extern unsigned int  _amp_core_clips_clip_4_raw_len;
+extern unsigned char _amp_core_clips_clip_4_end_raw[];
+extern unsigned int  _amp_core_clips_clip_4_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_5_raw[];
+extern unsigned int  _amp_core_clips_clip_5_raw_len;
+extern unsigned char _amp_core_clips_clip_5_end_raw[];
+extern unsigned int  _amp_core_clips_clip_5_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_6_raw[];
+extern unsigned int  _amp_core_clips_clip_6_raw_len;
+extern unsigned char _amp_core_clips_clip_6_end_raw[];
+extern unsigned int  _amp_core_clips_clip_6_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_7_raw[];
+extern unsigned int  _amp_core_clips_clip_7_raw_len;
+extern unsigned char _amp_core_clips_clip_7_end_raw[];
+extern unsigned int  _amp_core_clips_clip_7_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_8_raw[];
+extern unsigned int  _amp_core_clips_clip_8_raw_len;
+extern unsigned char _amp_core_clips_clip_8_end_raw[];
+extern unsigned int  _amp_core_clips_clip_8_end_raw_len;
+
+extern unsigned char _amp_core_clips_clip_9_raw[];
+extern unsigned int  _amp_core_clips_clip_9_raw_len;
+extern unsigned char _amp_core_clips_clip_9_end_raw[];
+extern unsigned int  _amp_core_clips_clip_9_end_raw_len;
+
 extern unsigned char _amp_core_clips_clip_calling_node_raw[];
-extern unsigned int _amp_core_clips_clip_calling_node_raw_len;
+extern unsigned int  _amp_core_clips_clip_calling_node_raw_len;
+
+struct Clip {
+    unsigned char* data;
+    unsigned int len;
+};
+
+static Clip Clips[] = {
+
+    { .data = _amp_core_clips_clip_0_raw, .len = _amp_core_clips_clip_0_raw_len },
+    { .data = _amp_core_clips_clip_1_raw, .len = _amp_core_clips_clip_1_raw_len },
+    { .data = _amp_core_clips_clip_2_raw, .len = _amp_core_clips_clip_2_raw_len },
+    { .data = _amp_core_clips_clip_3_raw, .len = _amp_core_clips_clip_3_raw_len },
+    { .data = _amp_core_clips_clip_4_raw, .len = _amp_core_clips_clip_4_raw_len },
+    { .data = _amp_core_clips_clip_5_raw, .len = _amp_core_clips_clip_5_raw_len },
+    { .data = _amp_core_clips_clip_6_raw, .len = _amp_core_clips_clip_6_raw_len },
+    { .data = _amp_core_clips_clip_7_raw, .len = _amp_core_clips_clip_7_raw_len },
+    { .data = _amp_core_clips_clip_8_raw, .len = _amp_core_clips_clip_8_raw_len },
+    { .data = _amp_core_clips_clip_9_raw, .len = _amp_core_clips_clip_9_raw_len },
+
+    { .data = _amp_core_clips_clip_0_end_raw, .len = _amp_core_clips_clip_0_end_raw_len },
+    { .data = _amp_core_clips_clip_1_end_raw, .len = _amp_core_clips_clip_1_end_raw_len },
+    { .data = _amp_core_clips_clip_2_end_raw, .len = _amp_core_clips_clip_2_end_raw_len },
+    { .data = _amp_core_clips_clip_3_end_raw, .len = _amp_core_clips_clip_3_end_raw_len },
+    { .data = _amp_core_clips_clip_4_end_raw, .len = _amp_core_clips_clip_4_end_raw_len },
+    { .data = _amp_core_clips_clip_5_end_raw, .len = _amp_core_clips_clip_5_end_raw_len },
+    { .data = _amp_core_clips_clip_6_end_raw, .len = _amp_core_clips_clip_6_end_raw_len },
+    { .data = _amp_core_clips_clip_7_end_raw, .len = _amp_core_clips_clip_7_end_raw_len },
+    { .data = _amp_core_clips_clip_8_end_raw, .len = _amp_core_clips_clip_8_end_raw_len },
+    { .data = _amp_core_clips_clip_9_end_raw, .len = _amp_core_clips_clip_9_end_raw_len },
+
+    { .data = _amp_core_clips_clip_calling_node_raw, .len = _amp_core_clips_clip_calling_node_raw_len }
+};
+
+struct Step {
+    unsigned wordIx;
+    unsigned preSilence;
+    unsigned postSilence;
+};
 
 namespace kc1fsz {
+
+// Takes a series of steps and emits 48K audio frames
+void makeStatement(Step* steps, unsigned stepCount, 
+    std::function<void(const int16_t* pcm8)> cb) {
+
+    amp::Resampler resampler;
+    resampler.setRates(8000, 48000);
+    int16_t pcm48[BLOCK_SIZE_48K] = { 0 };
+    int16_t pcm8[BLOCK_SIZE_8K] = { 0 };
+    // Pointer in pcm8 block
+    unsigned p = 0;
+    /*
+    for (unsigned s = 0; s < stepCount; s++) {
+        const int16_t* stepAudio = (const int16_t*)Clips[steps[s].wordIx].data;
+        // Length in 16-bit samples
+        const unsigned stepLength = Clips[steps[s].wordIx].len / 2;
+
+        // Add pre-silence
+        for (unsigned i = 0; i < (steps[s].preSilence * 8000) / 1000; i++) {
+            pcm8[p++] = 0;
+            if (p == BLOCK_SIZE_8K) 
+
+
+
+        
+
+
+        for (unsigned i = 0; i < stepLength; i++) 
+
+
+
+
+    */
+}
 
 TTSServiceSimple::TTSServiceSimple(Log& log, Clock& clock, MessageConsumer& bus, 
     unsigned lineId, unsigned destLineId)
@@ -53,6 +177,7 @@ void TTSServiceSimple::consume(const Message& msg) {
         memcpy(&payload, msg.body(), msg.size());
         _log.infoDump("Payload", &payload, sizeof(payload));
 
+        /*
         // Stream back some audio
         unsigned blocks = (_amp_core_clips_clip_calling_node_raw_len / 2) / 160;
         const int16_t* audio = (const int16_t*)_amp_core_clips_clip_calling_node_raw;
@@ -85,6 +210,8 @@ void TTSServiceSimple::consume(const Message& msg) {
         res.setSource(msg.getDestBusId(), msg.getDestCallId());
         res.setDest(msg.getSourceBusId(), msg.getSourceCallId());
         _bus.consume(res);
+    }
+    */
     }
 }
 
