@@ -117,7 +117,7 @@ static Clip Clips[] = {
 };
 
 struct Step {
-    unsigned wordIx;
+    unsigned clipIx;
     unsigned preSilence;
     unsigned postSilence;
 };
@@ -125,37 +125,71 @@ struct Step {
 namespace kc1fsz {
 
 // Takes a series of steps and emits 48K audio frames
-void makeStatement(Step* steps, unsigned stepCount, 
-    std::function<void(const int16_t* pcm8)> cb) {
+void makeStatement8k(Step* steps, unsigned stepCount, 
+    std::function<void(const int16_t* pcm8, unsigned len)> cb) {
 
-    amp::Resampler resampler;
-    resampler.setRates(8000, 48000);
-    int16_t pcm48[BLOCK_SIZE_48K] = { 0 };
-    int16_t pcm8[BLOCK_SIZE_8K] = { 0 };
+    int16_t pcm8[BLOCK_SIZE_8K];
     // Pointer in pcm8 block
     unsigned p = 0;
-    /*
+    
     for (unsigned s = 0; s < stepCount; s++) {
-        const int16_t* stepAudio = (const int16_t*)Clips[steps[s].wordIx].data;
+
+        // The PCM for this step
+        const int16_t* stepAudio = (const int16_t*)Clips[steps[s].clipIx].data;
         // Length in 16-bit samples
-        const unsigned stepLength = Clips[steps[s].wordIx].len / 2;
+        const unsigned stepLength = Clips[steps[s].clipIx].len / 2;
 
         // Add pre-silence
         for (unsigned i = 0; i < (steps[s].preSilence * 8000) / 1000; i++) {
             pcm8[p++] = 0;
-            if (p == BLOCK_SIZE_8K) 
+            if (p == BLOCK_SIZE_8K) {
+                cb(pcm8, BLOCK_SIZE_8K);
+                p = 0;
+            }
+        }
 
+        // Add clip
+        for (unsigned i = 0; i < stepLength; i++) {
+            pcm8[p++] = stepAudio[i];
+            if (p == BLOCK_SIZE_8K) {
+                cb(pcm8, BLOCK_SIZE_8K);
+                p = 0;
+            }
+        }
 
+        // Add post-silence
+        for (unsigned i = 0; i < (steps[s].postSilence * 8000) / 1000; i++) {
+            pcm8[p++] = 0;
+            if (p == BLOCK_SIZE_8K) {
+                cb(pcm8, BLOCK_SIZE_8K);
+                p = 0;
+            }
+        }
+    }
 
-        
+    // Pad last block
+    if (p > 0) {
+        while (p < BLOCK_SIZE_8K)
+            pcm8[p++] = 0;
+        cb(pcm8, BLOCK_SIZE_8K);
+    }
+}
 
+// Takes a series of steps and emits 48K audio frames
+void makeStatement48k(Step* steps, unsigned stepCount, 
+    std::function<void(const int16_t* pcm8, unsigned len)> cb) {
 
-        for (unsigned i = 0; i < stepLength; i++) 
+    amp::Resampler resampler;
+    resampler.setRates(8000, 48000);
 
-
-
-
-    */
+    makeStatement8k(steps, stepCount, 
+        [&resampler, &cb](const int16_t* pcm8, unsigned len) {
+            // Convert to 48K
+            int16_t pcm48[BLOCK_SIZE_48K];
+            resampler.resample(pcm8, len, pcm48, BLOCK_SIZE_48K);
+            cb(pcm48, BLOCK_SIZE_48K);
+        }
+    );
 }
 
 TTSServiceSimple::TTSServiceSimple(Log& log, Clock& clock, MessageConsumer& bus, 

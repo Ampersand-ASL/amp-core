@@ -367,7 +367,8 @@ int LineUsb::_open() {
     _captureCount = 0;
     _captureErrorCount = 0;
     _playErrorCount = 0; 
-    
+    _playAccumulatorSize = 0;
+   
     // Call up to the base for signaling
     _signalOpen(_openEcho, _openEchoGainDb);
 
