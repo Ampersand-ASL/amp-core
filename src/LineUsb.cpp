@@ -589,12 +589,16 @@ void LineUsb::_playIfPossible() {
     //    _lastDelayFrames = delayFrames;
     //}
 
-    // Add the other stereo channel (interleaved) and convert to S16_LE.
-    // There is no guarantee how much of this buffer will actually be accepted by the USB driver
-    const int usbBufferSize = PLAY_ACCUMULATOR_CAPACITY * 2 * 2;
-    uint8_t usbBuffer[usbBufferSize];
+    // Build a buffer that is at most one period in length.
+    // There is no guarantee how much of this buffer will actually be accepted by 
+    // the USB driver.
+    uint8_t usbBuffer[USB_PLAY_PERIOD_SIZE_FRAMES * 2 * sizeof(int16_t)];
     uint8_t* p2 = usbBuffer;
-    for (unsigned i = 0; i < _playAccumulatorSize; i++, p2 += 4) {
+    unsigned writeFrames = std::min((unsigned)USB_PLAY_PERIOD_SIZE_FRAMES, 
+        _playAccumulatorSize);
+
+    // Add the other stereo channel (interleaved) and convert to S16_LE.
+    for (unsigned i = 0; i < writeFrames; i++, p2 += 4) {
         // Left
         pack_int16_le(_playAccumulator[i], p2);
         // Right
@@ -604,7 +608,7 @@ void LineUsb::_playIfPossible() {
     // Here is where we send the audio to the hardware. We attempt to write 
     // everything in the accumulator, knowing that THE HARDWARE MIGHT NOT ACCEPT
     // ALL OF IT.
-    int rc = snd_pcm_writei(_playH, usbBuffer, _playAccumulatorSize);
+    int rc = snd_pcm_writei(_playH, usbBuffer, writeFrames);
     if (rc < 0) {
         if (rc == -EPIPE) {
             // We will likely encounter the PCM in an underrun state after the previous talkspurt
