@@ -448,8 +448,8 @@ void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen
     _dtmfDetector.processBlock(pcm8k + (BLOCK_SIZE_8K / 2));
 
     // #### TEMP
-    ofstream captureFile("./audio.raw", std::ios::app | std::ios::binary);
-    captureFile.write((const char*)pcm8k, BLOCK_SIZE_8K * sizeof(int16_t));
+    //ofstream captureFile("./audio.raw", std::ios::app | std::ios::binary);
+    //captureFile.write((const char*)pcm8k, BLOCK_SIZE_8K * sizeof(int16_t));
 
     // #### TODO: COME UP WITH A WAY TO SILENCE THE DTMF
 
