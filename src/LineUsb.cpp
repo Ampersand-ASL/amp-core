@@ -645,11 +645,16 @@ void LineUsb::_playIfPossible() {
             // come back to get things rolling with a re-write.
             // We expect an underrun at the very beginning of a talkspurt
             // so there is a flag to supress the message in that case.
-            snd_pcm_prepare(_playH);
             // This is only concerning if it happens in the midst of a talkspurt
             if (_tsRunning) {
                 _underrunCount++;
-                _log.info("Playback underrun");
+                _log.info("snd_pcm_writei underrun");
+            }
+            int rc2 = snd_pcm_recover(_playH, rc, 1);
+            if (rc2 < 0) {
+                _log.info("Underrun recovery failed %d", rc2);
+            } else {
+                snd_pcm_start(_playH);
             }
         } else if (rc == -11) {
             // This is the case that the card can't accept anything more. This
@@ -657,15 +662,20 @@ void LineUsb::_playIfPossible() {
             // play buffer. However, David NR9V demonstrated an Arduino Uno Q
             // that would randomly stop consuming audio, causing the play buffers
             // to fill up to 100%.
-            snd_pcm_recover(_playH, rc, 1); 
-            _playErrorCount++;
-            _log.error("Play overrun");
+            _log.error("snd_pcm_writei overrun");
+            int rc2 = snd_pcm_recover(_playH, rc, 1); 
+            if (rc2 < 0) {
+                _log.info("Overrun recovery failed %d", rc2);
+                _playErrorCount++;
+            } else {
+                snd_pcm_start(_playH);
+            }
         } else {
             // All other errors are unknown/serious. For example, the USB plug 
             // being pulled out.
             snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
-            _log.error("Write failed %d", rc);
+            _log.error("snd_pcm_writei failed %d", rc);
         }
     } 
     else if (rc > 0) {     
