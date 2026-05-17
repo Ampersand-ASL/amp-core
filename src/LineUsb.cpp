@@ -256,6 +256,7 @@ int LineUsb::_open() {
     //const snd_pcm_uframes_t stopThreshold = USB_PLAY_BUFFER_SIZE_FRAMES - USB_PLAY_PERIOD_SIZE_FRAMES;
     //snd_pcm_sw_params_set_stop_threshold(playH, play_sw_params, stopThreshold);
 
+    
     if ((err = snd_pcm_sw_params(playH, play_sw_params)) < 0) {
         _log.error("Unable to configure play SW parameters %d", err);
         return -1;
