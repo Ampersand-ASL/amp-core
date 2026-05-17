@@ -421,7 +421,10 @@ int LineUsb::getPolls(pollfd* fds, unsigned fdsCapacity) {
 bool LineUsb::run2() { 
 
     _captureIfPossible();
-    _playIfPossible();
+
+    // Only attempt to write more audio every 10ms
+    if (_clock.isPastWindow(_lastWriteMs, 10))
+        _playIfPossible();
 
     // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
     // a preemptive close/re-open of the system. 
@@ -560,7 +563,7 @@ LineRadio::PlayStatus LineUsb::_playPCM48k(int16_t* pcm48k_2, unsigned blockSize
         BLOCK_SIZE_48K * sizeof(int16_t));
     _playAccumulatorSize += BLOCK_SIZE_48K;
 
-    // Try to clear the _playAccumulator into the hardware.
+    // Immediately try to clear the _playAccumulator into the hardware.
     _playIfPossible();
 
     // At this point at least the frame has been accepted into the _playAccumulator.
@@ -608,6 +611,7 @@ void LineUsb::_playIfPossible() {
     // Here is where we send the audio to the hardware. We attempt to write 
     // everything in the accumulator, knowing that THE HARDWARE MIGHT NOT ACCEPT
     // ALL OF IT.
+    _lastWriteMs = _clock.timeMs();
     int rc = snd_pcm_writei(_playH, usbBuffer, writeFrames);
     if (rc < 0) {
         if (rc == -EPIPE) {

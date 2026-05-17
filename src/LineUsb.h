@@ -87,6 +87,16 @@ private:
 
     static void _sndCloser(snd_pcm_t* h) { snd_pcm_close(h); }
 
+    // All of the parameters sent to the original open call, saved for re-open.
+    int _openCardNumber = 0;
+    int _openPlayLevelL = 0;
+    int _openPlayLevelR = 0;
+    int _openCaptureLevel = 0;
+    bool _openEcho = false;
+    float _openEchoGainDb = 0;
+
+    bool _openRequested = false;
+    bool _isOpen = false;
     snd_pcm_t* _playH = 0;
     snd_pcm_t* _captureH = 0;
 
@@ -108,21 +118,13 @@ private:
     int16_t _playAccumulator[PLAY_ACCUMULATOR_CAPACITY]= {};
     unsigned _playAccumulatorSize = 0;
 
+    // Indicates that a talkspurt is active
     bool _tsRunning = false;
-
-    bool _openRequested = false;
-    bool _isOpen = false;
     // This flag is set when something unrecoverable happens. It will cause the 
     // sound system to re-initialize.
     bool _fatalError = false;
-
-    // All of the parameters sent to the original open call, saved for re-open.
-    int _openCardNumber = 0;
-    int _openPlayLevelL = 0;
-    int _openPlayLevelR = 0;
-    int _openCaptureLevel = 0;
-    bool _openEcho = false;
-    float _openEchoGainDb = 0;
+    // The last time a hardware write was called.
+    uint64_t _lastWriteMs = 0;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 
