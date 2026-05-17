@@ -127,6 +127,8 @@ private:
     bool _fastRecoveryAttempted = false;
     // The last time a hardware write was called.
     uint64_t _lastWriteMs = 0;
+    // The last time a hardware write resulted in an overrun (-EAGAIN)
+    uint64_t _lastWriteOverrunMs = 0;
 
     // ----- Diagnostic/Statistical Data ----------------------------------------
 

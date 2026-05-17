@@ -381,6 +381,8 @@ int LineUsb::_open() {
     _isOpen = true;
     _fatalError = false;
     _fastRecoveryAttempted = false;
+    _lastWriteMs = 0;
+    _lastWriteOverrunMs = 0;
 
     return 0;
 }
@@ -599,6 +601,12 @@ void LineUsb::_playIfPossible() {
     if (!_isOpen || _fatalError || _playAccumulatorSize == 0)
         return;
 
+    // After an overrun create a delay to try to recover
+    if (!_clock.isPastWindow(_lastWriteOverrunMs, 500)) {
+        _log.info("In overrun recovery delay");
+        return;
+    }
+
     // Look at the status of the PCM
     //snd_pcm_status_t *status;
     //snd_pcm_status_alloca(&status);
@@ -648,8 +656,8 @@ void LineUsb::_playIfPossible() {
             // We expect an underrun at the very beginning of a talkspurt
             // so there is a flag to supress the message in that case.
             // This is only concerning if it happens in the midst of a talkspurt
-            if (_tsRunning)
-                _log.info("snd_pcm_writei underrun");
+            //if (_tsRunning)
+            _log.info("snd_pcm_writei underrun");
             int rc2 = snd_pcm_recover(_playH, rc, 1);
             if (rc2 < 0) {
                 _log.info("Underrun recovery failed %d", rc2);
@@ -672,6 +680,7 @@ void LineUsb::_playIfPossible() {
                 snd_pcm_start(_playH);
             }
             _underrunCount = 0;
+            _lastWriteOverrunMs = _clock.timeMs();
         } else {
             // All other errors are unknown/serious. For example, the USB plug 
             // being pulled out.
