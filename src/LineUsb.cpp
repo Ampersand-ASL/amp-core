@@ -251,8 +251,10 @@ int LineUsb::_open() {
     snd_pcm_sw_params_t* play_sw_params;
     snd_pcm_sw_params_alloca(&play_sw_params);
     snd_pcm_sw_params_current(playH, play_sw_params);
-    snd_pcm_uframes_t startThreshold = USB_PLAY_START_THRESHOLD_FRAMES;
+    const snd_pcm_uframes_t startThreshold = USB_PLAY_START_THRESHOLD_FRAMES;
     snd_pcm_sw_params_set_start_threshold(playH, play_sw_params, startThreshold);
+    const snd_pcm_uframes_t stopThreshold = USB_PLAY_BUFFER_SIZE_FRAMES - USB_PLAY_PERIOD_SIZE_FRAMES;
+    snd_pcm_sw_params_set_stop_threshold(playH, play_sw_params, stopThreshold);
 
     if ((err = snd_pcm_sw_params(playH, play_sw_params)) < 0) {
         _log.error("Unable to configure play SW parameters %d", err);
@@ -264,7 +266,7 @@ int LineUsb::_open() {
     _log.info("Start threshold %d (frames)", t0);
 
     snd_pcm_uframes_t t1 = 0;
-    snd_pcm_sw_params_get_start_threshold(play_sw_params, &t1);
+    snd_pcm_sw_params_get_stop_threshold(play_sw_params, &t1);
     _log.info("Stop threshold %d (frames)", t1);
 
     // No free needed, alloca() frees memory one function exit
@@ -452,7 +454,7 @@ void LineUsb::audioRateTick(uint32_t tickMs) {
     
     // Let the base class do its thing
     LineRadio::audioRateTick(tickMs);
-    
+
     // Check to see if an automatic reset of the line is required
     if (_fatalError && !_fastRecoveryAttempted) {
         _log.info("LineUsb error reported, attempting to re-open interface");
