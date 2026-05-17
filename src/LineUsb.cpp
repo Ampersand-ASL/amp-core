@@ -449,6 +449,10 @@ void LineUsb::oneSecTick() {
 }
 
 void LineUsb::audioRateTick(uint32_t tickMs) {
+    
+    // Let the base class do its thing
+    LineRadio::audioRateTick(tickMs);
+    
     // Check to see if an automatic reset of the line is required
     if (_fatalError && !_fastRecoveryAttempted) {
         _log.info("LineUsb error reported, attempting to re-open interface");
