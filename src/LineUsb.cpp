@@ -602,7 +602,7 @@ void LineUsb::_playIfPossible() {
         return;
 
     // After an overrun create a delay to try to recover
-    if (!_clock.isPastWindow(_lastWriteOverrunMs, 500)) {
+    if (_clock.isInWindow(_lastWriteOverrunMs, 500)) {
         _log.info("In overrun recovery delay");
         return;
     }
