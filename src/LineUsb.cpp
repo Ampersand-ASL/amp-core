@@ -373,6 +373,7 @@ int LineUsb::_open() {
     _captureErrorCount = 0;
     _playErrorCount = 0; 
     _playAccumulatorSize = 0;
+    _underrunCount = 0;
    
     // Call up to the base for signaling
     _signalOpen(_openEcho, _openEchoGainDb);
@@ -428,8 +429,9 @@ bool LineUsb::run2() {
 
     _captureIfPossible();
 
-    // Only attempt to write more audio every 10ms
-    if (_clock.isPastWindow(_lastWriteMs, 10))
+    // Only attempt to write more audio every 10ms, unless this is the first
+    // pass after an underrun
+    if (_clock.isPastWindow(_lastWriteMs, 10) || _underrunCount == 1)
         _playIfPossible();
 
     // Per suggestion from David NR9V, if the errors start to accumulate then trigger 
@@ -646,16 +648,15 @@ void LineUsb::_playIfPossible() {
             // We expect an underrun at the very beginning of a talkspurt
             // so there is a flag to supress the message in that case.
             // This is only concerning if it happens in the midst of a talkspurt
-            if (_tsRunning) {
-                _underrunCount++;
+            if (_tsRunning)
                 _log.info("snd_pcm_writei underrun");
-            }
             int rc2 = snd_pcm_recover(_playH, rc, 1);
             if (rc2 < 0) {
                 _log.info("Underrun recovery failed %d", rc2);
             } else {
                 snd_pcm_start(_playH);
             }
+            _underrunCount++;
         } else if (rc == -11) {
             // This is the case that the card can't accept anything more. This
             // really shouldn't happen given how much space is available in the 
@@ -670,12 +671,14 @@ void LineUsb::_playIfPossible() {
             } else {
                 snd_pcm_start(_playH);
             }
+            _underrunCount = 0;
         } else {
             // All other errors are unknown/serious. For example, the USB plug 
             // being pulled out.
             snd_pcm_recover(_playH, rc, 1); 
             _playErrorCount++;
             _log.error("snd_pcm_writei failed %d", rc);
+            _underrunCount = 0;
         }
     } 
     else if (rc > 0) {     
@@ -687,6 +690,11 @@ void LineUsb::_playIfPossible() {
             memmove(_playAccumulator, &(_playAccumulator[rc]),
                 (_playAccumulatorSize - rc) * sizeof(int16_t));
         _playAccumulatorSize -= rc;
+        _underrunCount = 0;
+    }
+    else {
+        _log.info("snd_pcm_writei 0");
+        _underrunCount = 0;
     }
 }
 
