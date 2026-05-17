@@ -143,7 +143,7 @@ Command to get details about the USB Audio driver:
 // clock and the USB clock.
 #define USB_PLAY_START_THRESHOLD_FRAMES (960 * 8)
 // How many play/capture errors can happen before essentially rebooting the line
-#define ERROR_COUNT_THRESHOLD (10)
+#define ERROR_COUNT_THRESHOLD (5)
 
 using namespace std;
 
