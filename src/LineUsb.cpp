@@ -139,9 +139,10 @@ Command to get details about the USB Audio driver:
 // Per David NR9V, 4 is a good setting.
 // 17-May-2026, Bruce changed to much larger to see if it reduces the overrun problem.
 #define USB_PLAY_BUFFER_SIZE_FRAMES (960 * 16)
-// Provides a few frames of margin to address any skew between the system
-// clock and the USB clock.
-#define USB_PLAY_START_THRESHOLD_FRAMES (960 * 8)
+// This sets the initial delay between the arrival of audio frames and the playout of 
+// audio frames. A smaller number means less latency, but a greater possibility of 
+// underruns.
+#define USB_PLAY_START_THRESHOLD_FRAMES (960 * 2)
 // How many play/capture errors can happen before essentially rebooting the line
 #define ERROR_COUNT_THRESHOLD (5)
 
@@ -256,7 +257,7 @@ int LineUsb::_open() {
     //const snd_pcm_uframes_t stopThreshold = USB_PLAY_BUFFER_SIZE_FRAMES - USB_PLAY_PERIOD_SIZE_FRAMES;
     //snd_pcm_sw_params_set_stop_threshold(playH, play_sw_params, stopThreshold);
 
-    
+
     if ((err = snd_pcm_sw_params(playH, play_sw_params)) < 0) {
         _log.error("Unable to configure play SW parameters %d", err);
         return -1;
