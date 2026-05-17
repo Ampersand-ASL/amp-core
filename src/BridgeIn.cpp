@@ -105,6 +105,7 @@ void BridgeIn::audioRateTick(uint32_t tickMs) {
             if (_clock->isInWindow(_lastUnkeyMs, UNKEY_WINDOW_MS)) {
             }
             else {
+                _log->info("Interpolate request");
                 // #### TODO: NOTE: The source/destination aren't filled in. Does this matter?
                 MessageEmpty msg(Message::Type::AUDIO_INTERPOLATE, 0, origMs, localMs);
                 _handleJitBufOut(msg);

@@ -65,6 +65,7 @@ public:
     virtual int getPolls(pollfd* fds, unsigned fdsCapacity);
     virtual bool run2();
     virtual void oneSecTick();
+    virtual void audioRateTick(uint32_t tickMs);
 
 protected:
 
@@ -123,6 +124,7 @@ private:
     // This flag is set when something unrecoverable happens. It will cause the 
     // sound system to re-initialize.
     bool _fatalError = false;
+    bool _fastRecoveryAttempted = false;
     // The last time a hardware write was called.
     uint64_t _lastWriteMs = 0;
 

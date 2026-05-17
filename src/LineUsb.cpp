@@ -136,11 +136,12 @@ Command to get details about the USB Audio driver:
 
 // Per David NR9V, this is a good setting (one 20ms frame)
 #define USB_PLAY_PERIOD_SIZE_FRAMES (960)
-// Per David NR9V, this is a good setting
-#define USB_PLAY_BUFFER_SIZE_FRAMES (960 * 4)
-// Provides two frames of margin to address any skew between the system
+// Per David NR9V, 4 is a good setting.
+// 17-May-2026, Bruce changed to much larger to see if it reduces the overrun problem.
+#define USB_PLAY_BUFFER_SIZE_FRAMES (960 * 16)
+// Provides a few frames of margin to address any skew between the system
 // clock and the USB clock.
-#define USB_PLAY_START_THRESHOLD_FRAMES (960 * 3)
+#define USB_PLAY_START_THRESHOLD_FRAMES (960 * 8)
 // How many play/capture errors can happen before essentially rebooting the line
 #define ERROR_COUNT_THRESHOLD (10)
 
@@ -374,6 +375,7 @@ int LineUsb::_open() {
 
     _isOpen = true;
     _fatalError = false;
+    _fastRecoveryAttempted = false;
 
     return 0;
 }
@@ -443,6 +445,15 @@ void LineUsb::oneSecTick() {
     if (_fatalError) {
         _log.info("LineUsb error reported, attempting to re-open interface");
         _open();
+    }
+}
+
+void LineUsb::audioRateTick(uint32_t tickMs) {
+    // Check to see if an automatic reset of the line is required
+    if (_fatalError && !_fastRecoveryAttempted) {
+        _log.info("LineUsb error reported, attempting to re-open interface");
+        _open();
+        _fastRecoveryAttempted = true;
     }
 }
 

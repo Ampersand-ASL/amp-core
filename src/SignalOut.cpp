@@ -52,7 +52,7 @@ SignalOut::SignalOut(Log& log, Clock& clock, MessageConsumer& bus,
     _debouncedState.setActiveTime(0);
     // Release has some delay
     // ### TODO: MAKE THIS CONFIGURABLE
-    _debouncedState.setInactiveTime(100);
+    _debouncedState.setInactiveTime(200);
 }
 
 int SignalOut::openHid(const char* hidName, const char* signalName) {
