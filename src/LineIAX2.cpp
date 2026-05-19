@@ -1596,9 +1596,22 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     }
     // PING - response with PONG
     else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PING)) {
+
+        // 6.7.3.  PONG Response Message
+        //
+        // A PONG message is a response to a PING or a POKE.  It acknowledges
+        // the connection.  The receiver uses the time-stamp of the received
+        // PING or POKE and its times to determine the Round Trip Time of the
+        // connection.  Several receiver report IEs MAY be included with a PONG,
+        // including received jitter, received frames, delay, and dropped
+        // frames.  Receipt of a PONG requires an ACK.
+        //
+        // This message does not require any IEs.
+
         IAX2FrameFull respFrame;
         respFrame.setHeader(call.localCallId, call.remoteCallId, 
-            call.dispenseElapsedMs(_clock), 
+            // Echo TS back
+            frame.getTimeStamp(),
             call.outSeqNo, call.expectedInSeqNo, 
                 FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_PONG);
         _sendFrameToPeer(respFrame, call);
