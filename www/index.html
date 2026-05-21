@@ -132,6 +132,11 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
   display: flex;
   flex-wrap: wrap;
 }
+
+#running-ind {
+    background-color: green;
+    visibility: hidden;
+}
         </style>
     </head>
     <body>
@@ -272,6 +277,8 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
                                 <td>0</td>
                             </tr>
                         </table>
+                        <br/>
+                        <span id="running-ind">&nbsp;Running&nbsp;</span>
                     </div>
                 </div>
                 <!-- Extra stuff -->
@@ -413,7 +420,11 @@ async function levels_update() {
 }
 
 async function status_update() {
+
+    var el = document.getElementById("running-ind");
+
     try {
+
         const response = await fetch('status');
         if (response.ok) {
             const data = await response.json();
@@ -425,9 +436,10 @@ async function status_update() {
                 lastStatusRenderMs = Date.now();
                 statusRender(data);
             }
+            el.style.visibility = "visible";
         }
-    } catch (error) {
-        console.log(error)
+    } catch (error) {    
+        el.style.visibility = "hidden";
     }
 }
 
