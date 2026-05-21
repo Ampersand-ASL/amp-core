@@ -188,8 +188,6 @@ int LineIAX2::open(short addrFamily, int listenPort) {
     _addrFamily = addrFamily;
     _iaxListenPort = listenPort;
 
-    _log.info("Listening on IAX port %d", _iaxListenPort);
-
     // UDP open/bind
     int iaxSockFd = socket(_addrFamily, SOCK_DGRAM, 0);
     if (iaxSockFd < 0) {
