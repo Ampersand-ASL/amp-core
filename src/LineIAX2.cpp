@@ -1384,10 +1384,22 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // If the sequence number is wrong then ignore the message (retransmit 
     // requests will clean this up later).
     else {
-        //_log.info("Call %u/%u ignoring high sequence frame %d, expected %d", 
-        //    call.localCallId, call.remoteCallId,
-        //    (int)frame.getOSeqNo(), (int)call.expectedInSeqNo);
+        _log.info("Call %u/%u got high sequence frame %d, expected %d", 
+            call.localCallId, call.remoteCallId,
+            (int)frame.getOSeqNo(), (int)call.expectedInSeqNo);
         call._rxSeqErrorCount++;
+
+        // Send VNAK to try to get the missing messages.
+        // ISeqNo should provide the starting point of the 
+        // gap (i.e. vnak.iseqno = call.expectedInSeqNo)
+
+        IAX2FrameFull vnakFrame;
+        vnakFrame.setHeader(call.localCallId, call.remoteCallId,
+            call.dispenseElapsedMs(_clock), 
+            call.outSeqNo, call.expectedInSeqNo, 
+            FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_VNAK);
+        _sendFrameToPeer(vnakFrame, call);
+
         return;
     }
 
