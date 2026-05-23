@@ -25,6 +25,7 @@
 #include "kc1fsz-tools/raiiholder.h"
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/NetUtils.h"
+#include "kc1fsz-tools/md5/md5.h"
 
 #include "RegisterTaskIAX2.h"
 #include "IAX2FrameFull.h"
@@ -62,6 +63,7 @@ void RegisterTaskIAX2::_doRegister() {
         return;
 
     _state = State::STATE_REG_PENDING;
+    _challengeResponse.clear();
 }
 
 void RegisterTaskIAX2::tenSecTick() {
@@ -144,6 +146,9 @@ bool RegisterTaskIAX2::_sendREGREQ() {
         FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_REGREQ);
     frame.addIE_str(0x06, _nodeNumber.c_str());
 
+    if (!_challengeResponse.empty()) 
+        frame.addIE_str(0x10, _challengeResponse.c_str());
+
     _sendFrameToPeer(frame.buf(), frame.size(), (sockaddr&)targetAddr);
     
     return true;
@@ -205,6 +210,66 @@ void RegisterTaskIAX2::_processReceivedIAXPacket(
     const sockaddr& peerAddr, uint32_t rxStampMs) {
 
     _log.infoDump("Received", buf, bufLen);
+
+    char ipStr[64];
+    formatIPAddr(peerAddr, ipStr, 64);
+    
+    if (bufLen < 12 || bufLen > 1500) {
+        _log.error("Malformed packet from %s", ipStr);
+        // TODO: CHECK SECURITY (LENGTH)
+        _log.infoDump("Malformed", buf, bufLen);
+        return;
+    }
+
+    // SECURITY: This has internal limits on how much of the buffer
+    // it will accept.
+    const IAX2FrameFull frame(buf, bufLen);
+
+    if (_state == State::STATE_0) {
+        if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_REGAUTH)) {
+
+            _log.info("Got REGAUTH");
+
+            // Grab the authmethod/challenge
+
+            uint16_t authMethods = 0;
+            if (!frame.getIE_uint16(0x0e, &authMethods)) {
+                _log.error("Unable to get authmethods");
+                _state = State::STATE_FAILED;
+                return;
+            }
+
+            char challenge[65];
+            if (!frame.getIE_str(0x0f, challenge, sizeof(challenge))) {
+                _log.error("Unable to get challenge");
+                _state = State::STATE_FAILED;
+                return;
+            }
+
+            // Make an MD5 response
+            char tokenClear[128];
+            snprintf(tokenClear, 128, "%s%s", challenge, _password.c_str());
+            MD5_CTX md5Ctx;
+            MD5Init(&md5Ctx);
+            MD5Update(&md5Ctx, (unsigned char*)tokenClear, strlen(tokenClear));
+            unsigned char tokenHashed[16];
+            char tokenHashedText[33];
+            MD5Final(tokenHashed, &md5Ctx);
+            MD5DigestToText(tokenHashed, tokenHashedText);
+
+            // Resend the REGREQ with the appropriate authentication
+            _challengeResponse = tokenHashedText;
+            _sendREGREQ();
+            _state = State::STATE_1;
+        }
+    }
+    else if (_state == State::STATE_1) {
+        if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_REGACK)) {
+            _log.info("Got REGACK");
+            _lastGoodRegistrationMs = _clock.timeMs();
+            _state = State::STATE_IDLE;
+        }
+    }
 }
 
 }

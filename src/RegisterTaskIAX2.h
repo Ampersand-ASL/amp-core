@@ -77,13 +77,14 @@ private:
         STATE_REG_PENDING,
         // First REGREQ sent, waiting for REGAUTH
         STATE_0,
-        // REGAUTH sent, waiting for REGACK
+        // Second REGAUTH sent, waiting for REGACK
         STATE_1,
         // The request was rejected or timed out.
         STATE_FAILED
     };
     
     StateMachine _state;
+    fixedstring _challengeResponse;
 };
 
 }
