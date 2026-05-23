@@ -109,7 +109,8 @@ bool IAX2FrameFull::isACKRequired() const {
 // https://datatracker.ietf.org/doc/html/rfc5456#section-7
 bool IAX2FrameFull::shouldIncrementSequence() const {
     if (isACK() || 
-        isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_INVAL))
+        isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_INVAL) ||
+        isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_VNAK))
         return false;
     else
         return true;

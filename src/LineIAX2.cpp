@@ -3126,7 +3126,6 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     // Reviewing for defect reported by N2DYI
     // https://github.com/asterisk/asterisk/blob/master/channels/chan_iax2.c#L10651
 
-
     reTx.visitAll(
         [this, &context=line, &log, &clock]
         (uint32_t stamp, unsigned, const uint8_t* packet, unsigned packetLen) {
@@ -3136,24 +3135,14 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             const bool shouldTx = GT_MOD32(clock.timeMs(), stamp + RETRANSMIT_INTERVAL_MS);
             if (shouldTx) {
                 IAX2FrameFull rf = reTxFrame;
-                // Don't bother re-transmitting a message that wasn't supposed to 
-                // be ACKd in the first place.
-                if (rf.isACKRequired()) {
-                    log.info("Timer-driven retransmit %u", (unsigned)reTxFrame.getOSeqNo());
-                    // Make a copy of the frame with the retransmission flag on and 
-                    // the expected sequence number adjusted to match reality.
-                    rf.setRetransmit();
-                    rf.setISeqNo(expectedInSeqNo);
-                    log.infoDump("DUMP", (const uint8_t*)rf.buf(), rf.size());
-                    // This does a send without putting anything onto the RETX queue
-                    context._sendFrameToPeer(rf, (const sockaddr&)peerAddr);
-                }
-                else {
-                    log.info("Not re-transmitting non-ACKed frame %u %u %u",
-                        (unsigned)reTxFrame.getOSeqNo(), 
-                        (unsigned)reTxFrame.getType(),
-                        (unsigned)reTxFrame.getSubclass());
-                }
+                log.info("Timer-driven retransmit %u", (unsigned)reTxFrame.getOSeqNo());
+                // Make a copy of the frame with the retransmission flag on and 
+                // the expected sequence number adjusted to match reality.
+                rf.setRetransmit();
+                rf.setISeqNo(expectedInSeqNo);
+                log.infoDump("DUMP", (const uint8_t*)rf.buf(), rf.size());
+                // This does a send without putting anything onto the RETX queue
+                context._sendFrameToPeer(rf, (const sockaddr&)peerAddr);
             }
         }
     );
