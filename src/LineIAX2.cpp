@@ -93,6 +93,9 @@ static const char* DNS_IP_ADDR = "208.67.222.222";
 // Is appears that we need to be pretty aggressive about this 
 // to keep Asterisk happy.
 #define RETRANSMIT_INTERVAL_MS (1000)
+// Controls the maximum number of messages that are allowed in the 
+// retransmit buffer
+#define RETRANSMIT_COUNT_LIMIT (16)
 
 namespace kc1fsz {
 
@@ -574,6 +577,8 @@ bool LineIAX2::run2() {
     return w1 || w2 || w3;
 }
 
+//static unsigned dropRecvCount = 0;
+
 bool LineIAX2::_processInboundIAXData() {
 
     if (_iaxSockFd == -1)
@@ -604,6 +609,11 @@ bool LineIAX2::_processInboundIAXData() {
     } 
 #endif
     else if (rc > 0) {
+        // #### TEMP: Drop packets to test recovery
+        //if (++dropRecvCount % 10 == 0) {
+        //    _log.info("Dropped inbound packet");
+        //    return true;
+        //}
         // Capture/trace
         _captureRxPacket(readBuffer, rc, (const sockaddr&)peerAddr);
         // The actual processing of the received packet
@@ -1333,6 +1343,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         // Do nothing, let the message in without a sequence number validation
     }
     */
+
     // Make sure the sequence number is correct. If so, move the expected 
     // sequence number forward and generate the ACK.
     if (frame.getOSeqNo() == call.expectedInSeqNo) {
@@ -1381,8 +1392,8 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         // NOTE: We return with no further processing since we already processed the message
         return;
     }
-    // If the sequence number is wrong then ignore the message (retransmit 
-    // requests will clean this up later).
+    // If the sequence number is high then ignore the message but ask for a 
+    // fill-in of the missed number(s)
     else {
         _log.info("Call %u/%u got high sequence frame %d, expected %d", 
             call.localCallId, call.remoteCallId,
@@ -1390,15 +1401,18 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         call._rxSeqErrorCount++;
 
         // Send VNAK to try to get the missing messages.
-        // ISeqNo should provide the starting point of the 
-        // gap (i.e. vnak.iseqno = call.expectedInSeqNo)
+        // ISeqNo will provide the starting point of the gap (i.e. vnak.iseqno = 
+        // call.expectedInSeqNo)
 
         IAX2FrameFull vnakFrame;
         vnakFrame.setHeader(call.localCallId, call.remoteCallId,
             call.dispenseElapsedMs(_clock), 
             call.outSeqNo, call.expectedInSeqNo, 
             FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_VNAK);
-        _sendFrameToPeer(vnakFrame, call);
+        
+        // Send the frame in a way that doesn't go into the re-transmit buffer.
+        // Also, this message does not consume an outbound sequence number.
+        _sendFrameToPeer(vnakFrame, (const sockaddr&)call.peerAddr);
 
         return;
     }
@@ -2620,13 +2634,20 @@ void LineIAX2::_sendFrameToPeer(const IAX2FrameFull& frame,
     _sendFrameToPeer(frame.buf(), frame.size(), peerAddr);
 }
 
-// NOTE: This is the ONLY place where IAX socket transmissions happen.
+//static int dropSendCount = 0;
 
+// NOTE: This is the ONLY place where IAX socket transmissions happen.
 void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len, 
     const sockaddr& peerAddr) {
 
     if (_iaxSockFd == -1)
         return;
+
+    // Used for testing message recovery
+    //if (++dropSendCount % 10 == 0) {
+    //    _log.info("Dropped outbound packet");
+    //    return;
+    //}
 
     int rc = ::sendto(_iaxSockFd, 
 // Windows uses slightly different types on the socket calls
@@ -3135,17 +3156,21 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             const bool shouldTx = GT_MOD32(clock.timeMs(), stamp + RETRANSMIT_INTERVAL_MS);
             if (shouldTx) {
                 IAX2FrameFull rf = reTxFrame;
-                log.info("Timer-driven retransmit %u", (unsigned)reTxFrame.getOSeqNo());
                 // Make a copy of the frame with the retransmission flag on and 
                 // the expected sequence number adjusted to match reality.
                 rf.setRetransmit();
                 rf.setISeqNo(expectedInSeqNo);
-                log.infoDump("DUMP", (const uint8_t*)rf.buf(), rf.size());
                 // This does a send without putting anything onto the RETX queue
                 context._sendFrameToPeer(rf, (const sockaddr&)peerAddr);
             }
         }
     );
+
+    if (reTx.count() > RETRANSMIT_COUNT_LIMIT) {
+        log.info("Re-transmit count exceeded on call %d/%d", 
+            localCallId, remoteCallId);
+        line._hangupCall(*this);
+    }
 }
 
 void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
@@ -3218,7 +3243,5 @@ void LineIAX2::Call::dtmfGen(Log& log, Clock& clock, LineIAX2& line, char symbol
         outSeqNo, expectedInSeqNo, FrameType::IAX2_TYPE_DTMF2, symbol);
     line._sendFrameToPeer(frame, *this);
 }
-
-
 
 }
