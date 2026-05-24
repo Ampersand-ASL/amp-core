@@ -29,7 +29,7 @@ class MessageConsumer;
 
     namespace amp {
 
-class SignalIn : public Runnable2, public MessageConsumer {
+class SignalIn : public Runnable2 {
 public:
 
     SignalIn(Log& log, Clock& clock, MessageConsumer& bus, unsigned radioLineId,
@@ -40,10 +40,6 @@ public:
     void close();
 
     void setInvert(bool b) { _invert = b; }
-
-    // ----- MessageConsumer --------------------------------------------------
-
-    virtual void consume(const Message& frame);
 
     // ----- Runnable ---------------------------------------------------------
 
@@ -64,7 +60,11 @@ private:
     unsigned _radioLineId;
     Message::SignalType _sigTypeOn;
     Message::SignalType _sigTypeOff;
+
+    std::string _deviceName;
+    std::string _signalName;
     Mode _mode = Mode::MODE_NONE;
+
     int _fd = 0;
     bool _invert = false;
 

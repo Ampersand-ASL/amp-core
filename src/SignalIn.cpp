@@ -47,66 +47,79 @@ SignalIn::SignalIn(Log& log, Clock& clock, MessageConsumer& bus, unsigned radioL
     _sigTypeOff(sigTypeOff) {
 }
 
-int SignalIn::openHid(const char* hidName, const char* serial) {
+int SignalIn::openHid(const char* deviceName, const char* signalName) {
+
+    // Ignore inconsequential opens
+    if (_mode == Mode::MODE_SERIAL && _deviceName == deviceName && _signalName == signalName)
+        return 0;
 
     close();
 
-    if (strcmp(serial, "voldn") == 0) {
+    if (strcmp(signalName, "voldn") == 0) {
         _hidOffset = 0;
         _hidMask = 0x02;
-    } else if (strcmp(serial, "volup") == 0) {
+    } else if (strcmp(signalName, "volup") == 0) {
         _hidOffset = 0;
         _hidMask = 0x01;
     } else
         return -1;
 
-    if ((_fd = ::open(hidName, O_RDWR | O_NONBLOCK)) < 0) {
+    int fd;
+    if ((fd = ::open(deviceName, O_RDWR | O_NONBLOCK)) < 0) {
         _log.error("Cannot open HID device %d", errno);
-        _fd = -1;
-        _hidFailed = true;
         return -1;
     }
 
+    _fd = fd;
     _hidAccPtr = 0;
     _hidPacketSize = 4;
     _hidFailed = false;
     assert(_hidPacketSize <= MAX_HID_MESSAGE_SIZE);
+
     _mode = Mode::MODE_HID;
+    _deviceName = deviceName;
+    _signalName = signalName;
 
     return 0;
 }
 
-int SignalIn::openSerial(const char* deviceName, const char* signal) {
+int SignalIn::openSerial(const char* deviceName, const char* signalName) {
+
+    // Ignore inconsequential opens
+    if (_mode == Mode::MODE_SERIAL && _deviceName == deviceName && _signalName == signalName)
+        return 0;
 
     close();
 
-    if (strcmp(signal, "cts") == 0) {
+    if (strcmp(signalName, "cts") == 0)
         _ticomMask = TIOCM_CTS;
-    }
-    else if (strcmp(signal, "dcd") == 0) {
+    else if (strcmp(signalName, "dcd") == 0)
         _ticomMask = TIOCM_CD;
-    }
     else {
         _log.info("Unrecognized serial signal");
         return -1;
     }
 
-    if ((_fd = ::open(deviceName, O_RDWR | O_NONBLOCK | O_NOCTTY)) < 0) {
+    int fd;
+    if ((fd = ::open(deviceName, O_RDWR | O_NONBLOCK | O_NOCTTY)) < 0) {
         _log.error("Cannot open serial device %d", errno);
-        _fd = -1;
         return -1;
     }
 
-    _mode = Mode::MODE_SERIAL;
+    _fd = fd;
+    _mode = Mode::MODE_SERIAL;    
+    _deviceName = deviceName;
+    _signalName = signalName;
 
     return 0;
 }
 
 void SignalIn::close() {
-    if (_fd)
+    if (_fd != -1)
         ::close(_fd);
     _fd = -1;
     _mode = Mode::MODE_NONE;
+    _hidFailed = false;
 }
 
 void SignalIn::_pollHidStatus() {
@@ -143,9 +156,6 @@ void SignalIn::_pollHidStatus() {
 }
 
 void SignalIn::_processHidPacket(const uint8_t* packet, unsigned packetLen) {
-
-    //_log.infoDump("HID packet", packet, packetLen);
-
     // Note that HID messages may be generated for a number of reasons. We check
     // to see if the current HID message differs in the way that is relevant
     // to our signal by comparing to the last HID message.
@@ -163,13 +173,6 @@ void SignalIn::_pollSerialStatus() {
     int status = 0;
     int rc = ioctl(_fd, TIOCMGET, &status);
     if (rc == 0) {
-
-        //static int last = 0;
-        //if (status != last) {
-        //    _log.info("New %08X", status);
-        //    last = status;
-        //}
-
         // Mask off the bit we care about
         status &= _ticomMask;
         // If something changed then generate an event
@@ -186,11 +189,6 @@ void SignalIn::_generateEvent(bool status) {
     MessageEmpty msg = MessageEmpty::signal((status) ? _sigTypeOn : _sigTypeOff);
     msg.setDest(_radioLineId, DEST_CALL_ID);
     _bus.consume(msg);
-}
-
-// ----- MessageConsumer --------------------------------------------------
-
-void SignalIn::consume(const Message& frame) {
 }
 
 // ----- Runnable ---------------------------------------------------------

@@ -91,7 +91,7 @@ int SignalOut::openSerial(const char* deviceName, const char* signalName) {
     // Ignore inconsequential opens
     if (_mode == Mode::MODE_SERIAL && _deviceName == deviceName && _signalName == signalName)
         return 0;
-
+   
     close();
 
     if (strcmp(signalName, "rts") == 0)
