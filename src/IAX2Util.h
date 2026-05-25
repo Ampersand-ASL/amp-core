@@ -122,9 +122,12 @@ unsigned codecBlockSize(CODECType type);
 
 enum IEType {
     IAX2_IE_CALLING_NUMBER = 0x02,
+    IAX2_IE_CALLING_NAME = 0x04,
+    IAX2_IE_USERNAME = 0x06,
     /** Actual CODEC capability */
     IAX2_IE_CAPABILITY = 0x08,
     IAX2_IE_FORMAT = 0x09,
+    IAX2_IE_LANGUAGE = 0x0a,
     IAX2_IE_VERSION = 0x0b,
     IAX2_IE_AUTHMETHODS = 0x0e,
     IAX2_IE_CHALLENGE = 0x0f,
@@ -189,5 +192,32 @@ uint32_t assignCodec(uint32_t callerCapability,
  * @param buf Must be a 9-byte buffer.
  */
 void fillCodecWide(uint32_t codecs, char* buf);
+
+/**
+ * A structure that holds the result of a parse of an IAX URL
+ */
+struct IAXURIParameters {
+    bool valid;
+    char username[16];
+    char hostname[64];
+    int port;
+    char number[16];
+    char password[32];
+};
+
+/**
+ * A utility function that parses an IAX URI.
+ * 
+ * Format is: 
+ *
+ * iax:[username@]hostname[:udp_port]/node_number,iax_password
+ * 
+ * The port, if omitted, is considered to be the same as the default, 4569.
+ *
+ * All URI components, except the username field, are case insensitive, and MUST be normalized 
+ * to lower case as per Section 6.2.2.1 of [RFC3986].
+ *
+ */
+IAXURIParameters parseIAXURI(const char* uri);
 
 }

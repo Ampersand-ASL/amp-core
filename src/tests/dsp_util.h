@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <cinttypes>
 #include <cmath>
 
 #include "kc1fsz-tools/fixed_math.h"

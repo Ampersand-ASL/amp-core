@@ -112,7 +112,6 @@ add_executable(protocol-test
   src/LineIAX2.cpp
   src/IAX2FrameFull.cpp
   src/IAX2Util.cpp
-  src/RetransmissionBufferStd.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/MicroDNS.cpp
@@ -218,7 +217,6 @@ target_include_directories(seq-test PRIVATE amp-server/sw/include)
 add_executable(retx-test
   src/tests/retx-test.cpp
   src/tests/TestUtil.cpp
-  src/RetransmissionBufferStd.cpp
   src/IAX2FrameFull.cpp
   kc1fsz-tools-cpp/src/Common.cpp
 )
@@ -466,7 +464,6 @@ add_executable(load-server-1
   src/Transcoder_SLIN_48K.cpp
   src/Transcoder_SLIN_16K.cpp
   src/Transcoder_SLIN_8K.cpp
-  src/RetransmissionBufferStd.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/MicroDNS.cpp
@@ -528,7 +525,6 @@ add_executable(load-client-1
   src/Transcoder_SLIN_48K.cpp
   src/Transcoder_SLIN_16K.cpp
   src/Transcoder_SLIN_8K.cpp
-  src/RetransmissionBufferStd.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/MicroDNS.cpp
@@ -596,40 +592,50 @@ add_executable(unit-test
   src/IAX2FrameFull.cpp
   src/IAX2Util.cpp
   src/Resampler.cpp
-  #src/Transcoder_G711_ULAW.cpp
-  #src/NodeParrot.cpp
+  src/LineParrot.cpp
   src/Bridge.cpp
   src/BridgeCall.cpp
   src/BridgeIn.cpp
   src/BridgeOut.cpp
+  src/ProgramUtils.cpp
   src/KerchunkFilter.cpp
   src/Transcoder_G711_ULAW.cpp
   src/Transcoder_SLIN_48K.cpp
   src/Transcoder_SLIN_16K.cpp
   src/Transcoder_SLIN_8K.cpp
+  src/Transcoder_G726.cpp
+  src/voter/VoterUtil.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
   kc1fsz-tools-cpp/src/DTMFDetector2.cpp
   kc1fsz-tools-cpp/src/StdPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp
   kc1fsz-tools-cpp/src/fixed_math.cpp
+  kc1fsz-tools-cpp/src/crc/crc.c
   itu-g711-codec/src/codec.cpp
   itu-g711-codec/src/Plc.cpp
   cmsis-dsp-mock/src/main.cpp
+  cmsis-dsp-mock/src/main-float.cpp
   #cpp-base64/base64.cpp
+  g726-codec/src/g711.c
+  g726-codec/src/g72x.c
+  g726-codec/src/g726_32.c
 )
 target_compile_options(unit-test PRIVATE -fstack-protector-all -Wall -Wpedantic -g -O3 -mtune=native)
 
-target_include_directories(unit-test PRIVATE src)
-target_include_directories(unit-test PRIVATE include)
-target_include_directories(unit-test PRIVATE kc1fsz-tools-cpp/include)
-target_include_directories(unit-test PRIVATE itu-g711-codec/src)
-target_include_directories(unit-test PRIVATE cmsis-dsp-mock/include)
-target_include_directories(unit-test PRIVATE alsa-mock/include)
-target_include_directories(unit-test PRIVATE hid-mock/include)
-target_include_directories(unit-test PRIVATE json/include)
-target_include_directories(unit-test PRIVATE argparse/include)
-target_link_libraries(unit-test)
+target_include_directories(unit-test PRIVATE 
+  src
+  include
+  kc1fsz-tools-cpp/include
+  kc1fsz-tools-cpp/include/kc1fsz-tools/crc  
+  itu-g711-codec/src
+  cmsis-dsp-mock/include
+  alsa-mock/include
+  hid-mock/include
+  json/include
+  argparse/include
+  g726-codec/src
+)
 
 # ----- voter-test
 

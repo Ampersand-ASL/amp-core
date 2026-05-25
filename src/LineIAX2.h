@@ -107,7 +107,7 @@ public:
      * Controls the root of the DNS queries that are used to resolve IP addresses
      * and lookup public keys. Defaults to "allstarlink.org"
      */
-    void setDNSRoot(const char* dnsRoot);
+    void setASLDNSRoot(const char* dnsRoot);
 
     /** 
      * Controls whether a regular poke is issued. This would generally be used 
@@ -136,17 +136,20 @@ public:
     void setPokeNodeNumber(const char* nodeNumber);
 
     /**
+     * Sets the official callsign. Will be used for authentication mechanisms that 
+     * require this.
+     */
+    void setCallSign(const char* callSign);
+
+    /**
      * Sets the private ED25519 seed. This is a 64-byte ASCII hex string.
      */
     void setPrivateKey(const char* privateKeyHex);
 
-    enum AuthMode {
-        OPEN,
-        SOURCE_IP,
-        CHALLENGE_ED25519
-    };
-
-    void setAuthMode(AuthMode mode);
+    /**
+     * Sets whether authentication is required for inbound calls.
+     */
+    void setAuthenticationRequired(bool ar) { _authenticationRequired = ar; }
 
     /**
      * Opens the network connection for in/out traffic for this line.
@@ -256,12 +259,16 @@ public:
             STATE_INITIATION_WAIT,
             // (CALLER) After a NEW has been sent and waiting for a response
             STATE_WAITING,
+            // (CALLED) Need to to send out the DNS request to get the caller's public key
+            STATE_AUTH_WAIT_0a,
             // (CALLED) Sent out the DNS request to get the caller's public key
-            STATE_AUTHREP_WAIT_0,
+            STATE_AUTH_WAIT_0b,
+            // (CALLED) Need to send out a DNS request to get caller's registered IP
+            STATE_AUTH_WAIT_0c,
+            // (CALLED) Sent out a DNS request to get caller's registered IP
+            STATE_AUTH_WAIT_0d,
             // Sent out the AUTHREQ challenge and waiting for the response
             STATE_AUTHREP_WAIT_1,
-            // Waiting for DNS to respond to the validation request
-            STATE_IP_VALIDATION_0,
             // All validations complete, clear to send accept
             STATE_CALLER_VALIDATED,
             // (CALLER) Have received the ACCEPT, waiting for the ANSWER
@@ -303,6 +310,9 @@ public:
         fixedstring callUser;
         fixedstring callPassword;
         fixedstring calltoken;
+        // Optional, used when an inbound caller should be authenticated using
+        // a public/private key pair.
+        fixedstring callingName;
         // This is the ED5519 public key in binary format
         unsigned char publicKeyBin[32] = {};
         sockaddr_storage peerAddr;
@@ -419,9 +429,14 @@ private:
     // tokens.
     const uint32_t _startTime;
 
+    // Official callsign
+    char _callSign[16];
     // This is an ED25519 private key in ASCII Hex format (exactly 64 characters)
     char _privateKeyHex[65];
-    char _dnsRoot[32];
+    // The DNS root used for the ASL system
+    char _aslDnsRoot[32] = { "allstarlink.org" };
+    // The DNS root used to get public keys from ampr.org
+    char _amprDnsRoot[32] = { "ampr.org" };
 
     // The IP address family used for this connection. Either AF_INET
     // or AF_INET6.
@@ -449,17 +464,19 @@ private:
     unsigned int _dnsRequestIdCounter = 1;
     // Diagnostics    
     unsigned _invalidCallPacketCounter = 0;
-    // Controls whether source IP validation is required
-    bool _sourceIpValidationRequired = false;
-    // Controls authentication methods, only relevant for inbound calls
+    // Controls wether the CALLTOKEN protocol must be used to validate source IP
     bool _authorizeWithCalltoken = true;
-    bool _authorizeWithAuthreq = false;
+    // Determines whether an authentication step is required
+    bool _authenticationRequired = true;
 
     bool _pokeEnabled = false;
     char _pokeAddr[65];
     bool _supportDirectedPoke = false;
     // #### TODO: MAKE THIS A LIST
     char _pokeNodeNumber[17];
+
+    bool _captureEnabled = false;
+    std::ofstream _captureFile;
 
     /**
      * Drops all calls that match the predicate.
@@ -544,8 +561,17 @@ private:
     void _capturePacket(uint32_t ts, uint32_t tus, const uint8_t* b, unsigned len, 
         const sockaddr& fromAddr, const sockaddr& toAddr);
 
-    bool _captureEnabled = false;
-    std::ofstream _captureFile;
+    /**
+     * This is the method that does the actual cryptographic validation. This may be
+     * implemented differently on different platforms.
+     */
+    static bool _isValidEd25519Signature(const uint8_t* sigBin, const char* challengeTxt,
+        const uint8_t* publicKeyBin);
+
+    /**
+     * This takes a token and signs it.
+     */
+    static void _signEd25519(uint8_t* sig, const char* token, const char* privateKeyHex);
 };
 
 }

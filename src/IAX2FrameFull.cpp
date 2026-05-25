@@ -198,15 +198,6 @@ bool IAX2FrameFull::getIE_uint16(uint8_t id, uint16_t* result) const {
         return true;
     else 
         return false;
-    /*
-    uint8_t buf[2];
-    int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, 2);
-    if (rc == 2) {
-        *result = (buf[0] << 8) | buf[1];
-        return true;
-    }
-    return false;
-    */
 }
 
 bool IAX2FrameFull::getIE_uint32(uint8_t id, uint32_t* result) const {
@@ -214,15 +205,6 @@ bool IAX2FrameFull::getIE_uint32(uint8_t id, uint32_t* result) const {
         return true;
     else 
         return false;
-    /*
-    uint8_t buf[4];
-    int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, 4);
-    if (rc == 4) {
-        *result = (buf[0] << 24) |(buf[1] << 16) | (buf[2] << 8) | buf[3];
-        return true;
-    }
-    return false;
-    */
 }
 
 bool IAX2FrameFull::getIE_str(uint8_t id, char* buf, unsigned bufMaxLen) const {
@@ -236,21 +218,9 @@ bool IAX2FrameFull::getIE_str(uint8_t id, char* buf, unsigned bufMaxLen) const {
     else {
         return false;
     }
-    /*
-    // Leave space for the null that will be added
-    int rc = extractIE(_buf + 12, _bufLen - 12, id, (uint8_t*)buf, bufMaxLen - 1);
-    if (rc == -1) {
-        return false;
-    } else {
-        // Apply the null-termination
-        buf[rc] = 0;
-        return true;
-    }
-    */
 }
 
 int IAX2FrameFull::getIE_raw(uint8_t id, uint8_t* buf, unsigned bufCapacity) const {
-    //int rc = extractIE(_buf + 12, _bufLen - 12, id, buf, bufCapacity);
     int rc = extractIE_raw(_buf + 12, _bufLen - 12, id, buf, bufCapacity);
     if (rc == -1)
         return -1;

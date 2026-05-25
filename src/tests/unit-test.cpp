@@ -26,7 +26,7 @@
 #include "NullConsumer.h"
 #include "KerchunkFilter.h"
 #include "LineIAX2.h"
-#include "VoterUtil.h"
+#include "voter/VoterUtil.h"
 
 #include "TestUtil.h"
 #include "dsp_util.h"
@@ -37,9 +37,9 @@ using namespace kc1fsz;
 static void bufferTest1() {
     uint8_t packet[32] = { 1, 4, 1, 2, 3, 4, 2, 2, 1, 1, 4, 0 };
     uint8_t buf[32];
-    assert(extractIE(packet, 10, 1, buf, 32) == 4);
-    assert(extractIE(packet, 10, 2, buf, 32) == 2);
-    assert(extractIE(packet, 12, 4, buf, 32) == 0);
+    assert(extractIE_raw(packet, 10, 1, buf, 32) == 4);
+    assert(extractIE_raw(packet, 10, 2, buf, 32) == 2);
+    assert(extractIE_raw(packet, 12, 4, buf, 32) == 0);
 }
 
 static void timerTest1() {
@@ -138,48 +138,6 @@ static void frameTest1() {
     fl.pop();
     assert(fl.size() == 0);
 }
-
-/*
-static void dspTest1() {
-
-    // Initialize the filters
-    arm_fir_instance_q15 f1Filter;
-    int16_t f1State[ChannelUsb::F1_TAPS + ChannelUsb::BLOCK_SIZE_48K - 1];
-    arm_fir_init_q15(&f1Filter, ChannelUsb::F1_TAPS, 
-        ChannelUsb::F1_COEFFS, f1State, ChannelUsb::BLOCK_SIZE_48K);
-    arm_fir_instance_q15 f2Filter;
-    int16_t f2State[ChannelUsb::F2_TAPS + ChannelUsb::BLOCK_SIZE_48K - 1];
-    arm_fir_init_q15(&f2Filter, ChannelUsb::F2_TAPS, 
-        ChannelUsb::F2_COEFFS, f2State, ChannelUsb::BLOCK_SIZE_48K);
-
-    unsigned seconds = 2;
-    unsigned frames = seconds * 8000 / 160;
-    unsigned sampleRate = 8000;
-    float ft = 2000;
-    const float omega = ft * 2.0 * 3.1415926 / (float)sampleRate;
-    float phi = 0;
-
-    ofstream outFile("dsp1.txt");
-
-    for (unsigned f = 0; f < frames; f++) {
-
-        // Make an 8k G711 frame
-        uint8_t buffer[160];
-        for (unsigned i = 0; i < 160; i++) {
-            float a = (32767.0) * 0.99 * std::sin(phi);
-            buffer[i] = encode_ulaw((int16_t)a);
-            phi += omega;
-        }
-
-        // Convert to pcm 48
-        int16_t pcm48[960];
-        ChannelUsb::g711ToPcm48(&f1Filter, buffer, 160, pcm48, 960);
-
-        for (unsigned i = 0; i < 960; i++)
-            outFile << pcm48[i] << endl;
-    }
-}
-*/
 
 void pack1() {
     uint8_t d[] = { 0x01, 0x02 };
@@ -292,7 +250,7 @@ static void speedTest1() {
 
     unsigned bridgeLineId = 10;
     amp::Bridge bridge(log, log, clock, nullCons,  amp::BridgeCall::Mode::NORMAL,
-        bridgeLineId, 0, 0, 0, 1, callSpace, callCount);
+        bridgeLineId, 0, 0, 0, 1, 0, 0, callSpace, callCount);
     bridge.setLocalNodeNumber("1000");
 
     unsigned lineId = 1;
@@ -393,7 +351,7 @@ static void wrapTest1() {
     assert(compareWrap8(7, 8) == -1);
     for (unsigned i = 0; i < 256; i++)
         assert(compareWrap8(254 + i, 8 + i) == -1);
-    assert(compareWrap8(254 + 128, 8 + 128) == -1);
+    assert(compareWrap8((uint8_t)(254 + 128), 8 + 128) == -1);
     for (unsigned i = 0; i < 256; i++)
         assert(compareWrap8(8 + i, 7 + i) == 1);
 }
@@ -401,6 +359,54 @@ static void wrapTest1() {
 static void crcTest1() { 
     uint32_t r1 = VoterUtil::crc32("IzzyHenry");
     assert(r1 == 3749699513);
+}
+
+static void iaxParseTest1() {
+    {
+        IAXURIParameters p = parseIAXURI("r");
+        assert(!p.valid);
+    }
+    {
+        IAXURIParameters p = parseIAXURI("iax:radio@host:4569/100,a");
+        assert(p.valid);
+        assert(strcmp(p.username, "radio") == 0);
+        assert(strcmp(p.hostname, "host") == 0);
+        assert(p.port == 4569);
+    }
+    {
+        IAXURIParameters p = parseIAXURI("iax:host");
+        assert(p.valid);
+        assert(strcmp(p.username, "") == 0);
+        assert(strcmp(p.hostname, "host") == 0);
+        assert(p.port == 4569);
+        assert(strcmp(p.password, "") == 0);
+    }
+    {
+        IAXURIParameters p = parseIAXURI("iax:host:1");
+        assert(p.valid);
+        assert(strcmp(p.username, "") == 0);
+        assert(strcmp(p.hostname, "host") == 0);
+        assert(p.port == 1);
+        assert(strcmp(p.password, "") == 0);
+    }
+    {
+        IAXURIParameters p = parseIAXURI("iax:host/1,s");
+        assert(p.valid);
+        assert(strcmp(p.username, "") == 0);
+        assert(strcmp(p.hostname, "host") == 0);
+        assert(p.port == 4569);
+        assert(strcmp(p.number, "1") == 0);
+        assert(strcmp(p.password, "s") == 0);
+    }
+    {
+        IAXURIParameters p = parseIAXURI("iax: host /1 ,s");
+        assert(p.valid);
+        assert(strcmp(p.username, "") == 0);
+        assert(strcmp(p.hostname, "host") == 0);
+        assert(p.port == 4569);
+        assert(strcmp(p.number, "1") == 0);
+        assert(strcmp(p.password, "s") == 0);
+    }
 }
 
 int main(int, const char**) {
@@ -419,5 +425,6 @@ int main(int, const char**) {
     timerTest1();
     timerTest2();
     frameTest1();
-    //dspTest1();
+    iaxParseTest1();
+    return 0;
 }

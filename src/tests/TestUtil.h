@@ -65,8 +65,11 @@ struct TestFrame {
     bool isVoice() const { return voice; }
 };
 
+/*
 void play(Log& log, unsigned gapMs, unsigned lastMs, std::vector<TestFrame>& ins,
     SequencingBuffer<TestFrame>& jb, SequencingBufferSink<TestFrame>* sink, 
     bool displayTick = true, 
     std::function<void(unsigned tickMs)> checkCb = nullptr);
+}
+*/
 }

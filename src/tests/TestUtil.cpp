@@ -3,6 +3,7 @@
 
 namespace kc1fsz {
 
+/*
 // A utility for playing a series of frames into a buffer
 void play(Log& log, unsigned gapT, unsigned lastT, std::vector<TestFrame>& ins, 
     SequencingBuffer<TestFrame>& jb, SequencingBufferSink<TestFrame>* sink, bool displayTick,
@@ -23,5 +24,6 @@ void play(Log& log, unsigned gapT, unsigned lastT, std::vector<TestFrame>& ins,
             checkCb(t);
     }
 }
+*/
 
 }

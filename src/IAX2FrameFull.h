@@ -143,7 +143,7 @@ private:
  * @returns Number of bytes extracted and written to
  * buf, or -1 if the id is not found.
  */
-int extractIE(const uint8_t* packet, unsigned packetLen, 
-    uint8_t id, uint8_t* buf, unsigned bufMaxLen);
+//int extractIE(const uint8_t* packet, unsigned packetLen, 
+//    uint8_t id, uint8_t* buf, unsigned bufMaxLen);
 
 }

@@ -47,11 +47,6 @@ struct udphdr {
 #include <iostream>
 #include <algorithm>
 
-// Crypto not supported on microcontroller
-#if !(defined(PICO_BOARD) || defined(MICROAMP_BOARD))
-#include "ed25519.h"
-#endif
-
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/NetUtils.h"
 #include "kc1fsz-tools/Log.h"
@@ -126,15 +121,15 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
     _pokeNodeNumber[0] = 0;
-    strcpyLimited(_dnsRoot, "allstarlink.org", sizeof(_dnsRoot));
+    //strcpyLimited(_dnsRoot, "allstarlink.org", sizeof(_dnsRoot));
 }
 
 LineIAX2::~LineIAX2() {
 }
 
-void LineIAX2::setDNSRoot(const char* dnsRoot) {
+void LineIAX2::setASLDNSRoot(const char* dnsRoot) {
     if (dnsRoot)
-        strcpyLimited(_dnsRoot, dnsRoot, sizeof(_dnsRoot));
+        strcpyLimited(_aslDnsRoot, dnsRoot, sizeof(_aslDnsRoot));
 }
 
 void LineIAX2::setPokeAddr(const char* addrAndPort) {
@@ -154,26 +149,15 @@ void LineIAX2::setPokeNodeNumber(const char* nodeNumber) {
 void LineIAX2::setPrivateKey(const char* privateKeyHex) {
     if (privateKeyHex)
         strcpyLimited(_privateKeyHex, privateKeyHex, sizeof(_privateKeyHex));
+    else 
+        _privateKeyHex[0] = 0;
 }
 
-void LineIAX2::setAuthMode(AuthMode mode) {
-    if (mode == AuthMode::OPEN) {
-        _sourceIpValidationRequired = false;
-        _authorizeWithCalltoken = false;
-        _authorizeWithAuthreq = false;
-    }
-    else if (mode == AuthMode::SOURCE_IP) {
-        _sourceIpValidationRequired = true;
-        _authorizeWithCalltoken = true;
-        _authorizeWithAuthreq = false;
-        
-    } else if (mode == AuthMode::CHALLENGE_ED25519) {
-        _sourceIpValidationRequired = false;
-        _authorizeWithCalltoken = false;
-        _authorizeWithAuthreq = true;
-    } else {
-        assert(false);
-    }
+void LineIAX2::setCallSign(const char* callSign) { 
+    if (callSign)
+        strcpyLimited(_callSign, callSign, sizeof(_callSign)); 
+    else 
+        _callSign[0] = 0;
 }
 
 int LineIAX2::open(short addrFamily, int listenPort) {
@@ -322,71 +306,44 @@ void LineIAX2::close() {
     _addrFamily = 0;
 } 
 
-// TEST: radio@52.8.197.124:4569/61057,NONE
+// TEST URI: iax:radio@52.8.197.124:4569/61057,NONE
+
 int LineIAX2::call(const char* localNumber, const char* targetNode,
     CODECType desiredCodec) {  
 
     // It's possible that the node has been specified in explicit 
-    // format: radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
-    // pieces so 
-    fixedstring targetUser;
-    fixedstring targetNumber = targetNode;
-    fixedstring targetAddrAndPort;
-    fixedstring targetPassword;
-    bool targetExplicit = false;
+    // format: iax:radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
+    // pieces too.
+    IAXURIParameters targetParams;
+    if (strncmp(targetNode, "iax:", 4) == 0)
+        targetParams = parseIAXURI(targetNode);
+    else
+        strcpyLimited(targetParams.number, targetNode, sizeof(targetParams.number));
 
-    // Look for the case where explicit target information was provided.
-    const char* slash = strchr(targetNode, '/');
-    if (slash != 0) {
-        targetExplicit = true;
-        int state = 0;
-        targetUser.clear();
-        targetNumber.clear();
-        for (unsigned i = 0; i < strlen(targetNode); i++) {
-            char c = targetNode[i];
-            if (state == 0) {
-                if (c == '@') {
-                    state = 1;
-                } else {
-                    targetUser.append(c);
-                }
-            } else if (state == 1) {
-                if (c == '/') {
-                    state = 2;
-                } else {
-                    targetAddrAndPort.append(c);
-                }
-            } else if (state == 2) {
-                if (c == ',') {
-                    state = 3;
-                } else {   
-                    targetNumber.append(c);
-                }
-            } else if (state == 3) {
-                targetPassword.append(c);
-            }
-        }
-        if (targetUser.empty() || targetAddrAndPort.empty() ||
-            targetNumber.empty() || targetPassword.empty())
-            return -4;
-    }
+    // At the very least, a target number needs to have been specified
+    if (targetParams.number[0] == 0)
+        return -9;
 
-    _log.info("Request to call %s -> %s", localNumber, targetNode);
+    // Handle defaults
+    if (targetParams.username[0] == 0)
+        strcpyLimited(targetParams.username, _publicUser.c_str(), sizeof(targetParams.username));
+
+    _log.info("Request to call %s -> %s", localNumber, targetParams.number);
 
     // Make sure we don't have an active call already to the same target number.
     bool found = false;
 
     _visitActiveCallsIf(
         // Visitor
-        [&found, localNumber, &targetNumber, &log = _log](const Call& call) {
+        [&found, localNumber, &targetParams, &log = _log](const Call& call) {
             log.info("%s -> %s already linked in call %u", localNumber, 
-                targetNumber.c_str(), call.localCallId);
+                targetParams.number, call.localCallId);
             found = true;
         },
         // Predicate
-        [&localNumber, &targetNumber](const Call& call) {
+        [&localNumber, &targetParams](const Call& call) {
             return 
-              call.remoteNumber == targetNumber && 
+              call.remoteNumber == targetParams.number && 
               call.state != Call::State::STATE_TERMINATE_WAITING && 
               call.state != Call::State::STATE_TERMINATED;
         }
@@ -399,12 +356,17 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     int callIx = _allocateCallIx();
     if (callIx == -1) 
         return -2; 
+
     assert((unsigned)callIx < _maxCalls);
     Call& call = _calls[callIx];
 
     call.reset();
+
     call.localNumber = localNumber;
-    call.remoteNumber = targetNumber;
+    call.remoteNumber = targetParams.number;
+    call.callUser = targetParams.username;
+    call.callPassword = targetParams.password;
+    call.callingName = _callSign;
     call.desiredCodec = desiredCodec;
     call.side = Call::Side::SIDE_CALLER;
     // Move back a few ms to make sure that the elapsed time is always positive
@@ -414,15 +376,14 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     call.lastFrameRxMs = _clock.time();
 
     // If an explicit address was specified 
-    if (targetExplicit) {
+    if (targetParams.hostname[0] != 0) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
-        if (parseIPAddrAndPort(targetAddrAndPort.c_str(), targetAddr) != 0) {
-            return -5;
-        }
+        // #### TODO: IPv6
+        targetAddr.ss_family = AF_INET;
+        setIPAddr(targetAddr, targetParams.hostname);
+        setIPPort(targetAddr, targetParams.port);
         memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
-        call.callUser = targetUser;
-        call.callPassword = targetPassword;
         call.state = Call::State::STATE_INITIATION_WAIT;
         call.active = true;
     }
@@ -431,11 +392,13 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     else if (_locReg) {
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
+        fixedstring targetUser, targetPassword;
         if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr, targetUser, targetPassword)) { 
             char addr[64];
             formatIPAddrAndPort((const sockaddr&)targetAddr, addr, 64);
             _log.info("Resolved %s locally -> %s", call.remoteNumber.c_str(), addr);
             memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
+            // This method will override the username/password
             call.callUser = targetUser;
             call.callPassword = targetPassword;
             call.state = Call::State::STATE_INITIATION_WAIT;
@@ -444,14 +407,12 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
         // If there's nothing in the local registry then assume this is a public
         // node and trigger a DNS.
         else {
-            call.callUser = _publicUser;
             call.state = Call::State::STATE_LOOKUP_0;
             call.active = true;
         }
     }
-    // Otherwise, we in a state that will trigger a DNS lookup
+    // Otherwise, we're in a state that will trigger a DNS lookup
     else {
-        call.callUser = _publicUser;
         call.state = Call::State::STATE_LOOKUP_0;
         call.active = true;
     }
@@ -734,11 +695,13 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
         
             _log.info("NEW call received from %s", ipStr);
 
+            // The very first level of authentication uses the calltoken protocol
+            // to validate the caller's source IP address.
             if (_authorizeWithCalltoken) {
 
                 // Create a token relevant to this NEW request
                 char tokenClear[128];
-                snprintf(tokenClear, 128, "T:%s:%lX", ipStr, _startTime);
+                snprintf(tokenClear, 128, "T:%s:%X", ipStr, _startTime);
                 MD5_CTX md5Ctx;
                 MD5Init(&md5Ctx);
                 MD5Update(&md5Ctx, (unsigned char*)tokenClear, strlen(tokenClear));
@@ -816,10 +779,9 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             }
 
             fixedstring callingNumber;
-            found = frame.getIE_str(IEType::IAX2_IE_CALLING_NUMBER, temp, 33);
-            if (found) {
+            if (frame.getIE_str(IEType::IAX2_IE_CALLING_NUMBER, temp, 33))
                 callingNumber = temp;
-            } else {
+            else {
                 _log.error("No calling number provided");
                 _sendREJECT(destCallId, peerAddr, "Calling number missing");
                 return;
@@ -833,14 +795,19 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             }
 
             fixedstring callingUser;
-            found = frame.getIE_str(6, temp, 33);
-            if (found) {
+            if (frame.getIE_str(IEType::IAX2_IE_USERNAME, temp, sizeof(temp))) {
                 callingUser = temp;
             } else {
                 _log.error("No calling user provided");
                 _sendREJECT(destCallId, peerAddr, "Calling user missing");
                 return;
             }
+
+            // This is optional, should contain the user's callsign for lookup
+            // in public databases.
+            fixedstring callingName;
+            if (frame.getIE_str(IEType::IAX2_IE_CALLING_NAME, temp, sizeof(temp)))
+                callingName = temp;
 
             // What CODECs are supported by the caller?
             uint32_t capableCodecs = 0;
@@ -944,6 +911,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.expectedInSeqNo = 1;
             call.remoteNumber = callingNumber;
             call.callUser = callingUser;
+            call.callingName = callingName;
             // Move the entire address in for use when sending out messages
             memcpy(&call.peerAddr, &peerAddr, getIPAddrSize(peerAddr));
             // Schedule the ping out
@@ -954,31 +922,13 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             // Explicit ACK 
             _sendACK(0, call);
 
-            if (_authorizeWithAuthreq) {
-                // Go out to get the caller's public key
-                call.dnsRequestId = _dnsRequestIdCounter++;
-                char hostName[128];
-                snprintf(hostName, sizeof(hostName), "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
-                _log.info("Call %u starting AUTHREQ process for %s", call.localCallId, hostName);
-                // Start the DNS lookup process
-                if (_sendDNSRequestTXT(call.dnsRequestId, hostName) != 0) {
-                    _log.error("Unable to request public key, ignoring call");
-                } else {
-                    call.state = Call::State::STATE_AUTHREP_WAIT_0;   
+            if (_authenticationRequired) {
+                if (!callingName.empty()) {
+                    call.state = Call::State::STATE_AUTH_WAIT_0a;
                     call.active = true;
                 }
-            }
-            else {
-                // Make an IP address lookup request. 
-                call.dnsRequestId = _dnsRequestIdCounter++;
-                char hostName[128];
-                snprintf(hostName, sizeof(hostName), 
-                    "%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
-                // Start the DNS lookup process
-                if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
-                    _log.error("Unable to start address validation, ignoring call");
-                } else {
-                    call.state = Call::State::STATE_IP_VALIDATION_0;
+                else {
+                    call.state = Call::State::STATE_AUTH_WAIT_0c;
                     call.active = true;
                 }
             }
@@ -1190,7 +1140,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                 // Make a challenge that uses some things that are unique to the call
                 char challengeTxt[32];
-                snprintf(challengeTxt, 31, "%u%lu", 
+                snprintf(challengeTxt, 31, "%u%u", 
                     untrustedCall.localCallId, untrustedCall.localStartMs);
 
                 // Only supporting ED25519 challenge, which is found in the 0x20 IE.
@@ -1209,21 +1159,14 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 unsigned char sigBin[64];
                 asciiHexToBin(sigHex, 128, sigBin, 64);
 
-#if !(defined(PICO_BOARD) || defined(MICROAMP_BOARD))
                 // Do the actual public key validation 
-                if (ed25519_verify(sigBin, 
-                    (const uint8_t*)challengeTxt, strlen(challengeTxt), 
-                    untrustedCall.publicKeyBin) == 1) {
+                if (_isValidEd25519Signature(sigBin, challengeTxt, untrustedCall.publicKeyBin)) {
                     untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
-
                     _log.info("Call %u good signature", destCallId);                   
                 }
                 else {
-                    _log.info("Call %u invalid signature", destCallId);
+                    _log.info("Call %u authentication failed", destCallId);
                 }
-#else
-                _log.info("Call %u invalid signature", destCallId);
-#endif
 
                 // Normally the sequence/ACK would be handled later, but this message
                 // is a special case.
@@ -1443,46 +1386,37 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
             return;
         }
 
-        // NOTE: We are assuming the 0x08 bit signifies ED25519 method (not in the official
-        // RFC document)
-        if ((authmethod & 0x08) == 0) {
-            _log.error("Call %u unsupported AUTHMETHOD", call.localCallId);
-            return;
-        }
-
-        // Pull out the ED25519 challenge token, leaving room for a null-termination
+        // Pull out the challenge token, leaving room for a null-termination
         char token[33];
-        if (!frame.getIE_str(IEType::IAX2_IE_CHALLENGE, token, 33) || token[0] == 0) {
+        if (!frame.getIE_str(IEType::IAX2_IE_CHALLENGE, token, sizeof(token)) || token[0] == 0) {
             _log.error("Unable to get challenge token");
             return;
         }
 
-#if !(defined(PICO_BOARD) || defined(MICROAMP_BOARD))
-        // Sign the challenge token using our private key
-        uint8_t seedBin[32];
-        asciiHexToBin(_privateKeyHex, 64, seedBin, 32);
-        unsigned char pubBin[32];
-        unsigned char privBin[64];
-        ed25519_create_keypair(pubBin, privBin, seedBin);
-        unsigned char sig[64];
-        ed25519_sign(sig, (const uint8_t*)token, strlen(token), pubBin, privBin);
-        char sigHex[129];
-        binToAsciiHex(sig, 64, sigHex, 128);
-        sigHex[128] = 0;
+        // NOTE: We are assuming the 0x08 bit signifies ED25519 method (not in the official
+        // RFC document)
+        if ((authmethod & 0x08) == 0x08) {
 
-        // Make the AUTHREP response
-        IAX2FrameFull authrepFrame;
-        authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
-            call.dispenseElapsedMs(_clock), 
-            call.outSeqNo, call.expectedInSeqNo, 
-            FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
-        authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
+            // Sign the challenge token using our private key
+            unsigned char sig[64];
+            _signEd25519(sig, token, _privateKeyHex);
+            char sigHex[129];
+            binToAsciiHex(sig, 64, sigHex, 128);
+            sigHex[128] = 0;
 
-        _sendFrameToPeer(authrepFrame, call);
-#else 
-        _log.error("Token type not supported");
-        return;
-#endif 
+            // Make the AUTHREP response
+            IAX2FrameFull authrepFrame;
+            authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
+                call.dispenseElapsedMs(_clock), 
+                call.outSeqNo, call.expectedInSeqNo, 
+                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
+            authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
+
+            _sendFrameToPeer(authrepFrame, call);
+        }
+        else {
+            _log.error("Call %u unsupported AUTHMETHOD", call.localCallId);
+        }
     } 
     // REJECT
     else if (frame.getType() == 6 && frame.getSubclass() == 6) {
@@ -1961,10 +1895,10 @@ void LineIAX2::_processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen,
                 line->_processDNSResponse0(call, buf, bufLen);
             else if (call.state == Call::State::STATE_LOOKUP_1A)
                 line->_processDNSResponse1(call, buf, bufLen);
-            else if (call.state == Call::State::STATE_IP_VALIDATION_0)
-                line->_processDNSResponseIPValidation(call, buf, bufLen);
-            else if (call.state == Call::State::STATE_AUTHREP_WAIT_0)
+            else if (call.state == Call::State::STATE_AUTH_WAIT_0b)
                 line->_processDNSResponsePublicKey(call, buf, bufLen);
+            else if (call.state == Call::State::STATE_AUTH_WAIT_0d)
+                line->_processDNSResponseIPValidation(call, buf, bufLen);
             // Otherwise ignore
             else 
                 log.info("Ignoring unexpected DNS response");
@@ -2053,37 +1987,29 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        if (_sourceIpValidationRequired) {
-            _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-                "DNS error (A)");
-            _terminateCall(call);
-        } else {
-            call.state = Call::State::STATE_CALLER_VALIDATED;
-        }
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "DNS error (A)");
+        _terminateCall(call);
+        return;
     }
-    else {
-        // NOTE: All of this is assuming IPv4!
-        // Get the address returned by DNS
-        char addrStr[64];
-        formatIP4Address(addr, addrStr, 64);
-        // Get the address of the peer
-        char addrStrPeer[64];
-        formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
 
-        if (strcmp(addrStr, addrStrPeer) == 0) {
-            _log.info("Call %u IP validation succeeded", call.localCallId);
-            call.state = Call::State::STATE_CALLER_VALIDATED;
-            call.sourceAddrValidated = true;
-        } else {
-            if (_sourceIpValidationRequired) {
-                _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-                    "IP address validation failed");
-                _terminateCall(call);
-            } else{
-                _log.info("Call %u ignoring IP validation failure", call.localCallId);
-                call.state = Call::State::STATE_CALLER_VALIDATED;
-            }
-        }
+    // NOTE: All of this is assuming IPv4!
+    // Get the address returned by DNS
+    char addrStr[64];
+    formatIP4Address(addr, addrStr, 64);
+    // Get the address of the peer
+    char addrStrPeer[64];
+    formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
+
+    if (strcmp(addrStr, addrStrPeer) == 0) {
+        _log.info("Call %u IP validation succeeded", call.localCallId);
+        call.state = Call::State::STATE_CALLER_VALIDATED;
+        call.sourceAddrValidated = true;
+    } 
+    else {
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "IP address validation failed");
+        _terminateCall(call);
     }
 }
 
@@ -2095,19 +2021,21 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
 
     // Pull the port number and domain name from the response 
     char txt[256];
-    int rc1 = microdns::parseDNSAnswer_TXT(buf, bufLen, txt, 256);
+    int rc1 = microdns::parseDNSAnswer_TXT(buf, bufLen, txt, sizeof(txt));
+    
     if (rc1 < 0) {
-        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-            "DNS error (TXT)");
-        _terminateCall(call);
+        _log.info("No public key registered, falling back to IP address authentication");
+        // If the TXT lookup fails then go to regular IP address validation
+        call.state = Call::State::STATE_AUTH_WAIT_0c;
         return;
     }
     if (strlen(txt) != 64) {
-        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-            "Invalid public key");
-        _terminateCall(call);
+        _log.info("Invalid public key registered, falling back to IP address authentication");
+        // If the TXT lookup fails then go to regular IP address validation
+        call.state = Call::State::STATE_AUTH_WAIT_0c;
         return;
     }
+    _log.info("Got Public: %s", txt);
 
     // Once a valid public key is obtained we launch an AUTHREQ challenge
     // to the calling peer.
@@ -2118,16 +2046,19 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
 
     // Make a challenge that uses some things that are unique to the call
     char challenge[32];
-    snprintf(challenge, 31, "%u%lu", call.localCallId, call.localStartMs);
+    snprintf(challenge, 31, "%u%u", call.localCallId, call.localStartMs);
 
     IAX2FrameFull authreqFrame;
     authreqFrame.setHeader(call.localCallId, call.remoteCallId, 
         call.dispenseElapsedMs(_clock), 
         call.outSeqNo, call.expectedInSeqNo, 
         FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREQ);
-    // NOTE: We are requiring AUTHMETHOD 0x08, which is ED25519 (not in RFC)
-    authreqFrame.addIE_uint16(0x0e, 0x08);
-    authreqFrame.addIE_str(0x0f, challenge);
+
+    // NOTE: We are requiring AUTHMETHOD 0x08, which is ED25519. This authentication
+    // method is not yet supported in the official IANA documentation but a formal
+    // request has been raised to get it added.
+    authreqFrame.addIE_uint16(IEType::IAX2_IE_AUTHMETHODS, 0x08);
+    authreqFrame.addIE_str(IEType::IAX2_IE_CHALLENGE, challenge);
 
     _sendFrameToPeer(authreqFrame, call);
 
@@ -2167,7 +2098,7 @@ bool LineIAX2::_progressCall(Call& call) {
             // Create the SRV query hostname
             char srvHostName[256];
             snprintf(srvHostName, sizeof(srvHostName), 
-                "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _dnsRoot);
+                "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
             // Start the DNS lookup process
             if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) {
                 _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
@@ -2215,7 +2146,7 @@ bool LineIAX2::_progressCall(Call& call) {
             // CODECs are mapped to letters staring with "B". D means ulaw.
             // This code means SLIN16, ULAW, G726_AAL2, SLIN8
             frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "QDFH", 3);
-            frame.addIE_str(2, call.localNumber);
+            frame.addIE_str(IEType::IAX2_IE_CALLING_NUMBER, call.localNumber);
             // Not sure what these are for?
             frame.addIE_uint8(38, 0x00);
             frame.addIE_uint8(39, 0x00);
@@ -2223,10 +2154,12 @@ bool LineIAX2::_progressCall(Call& call) {
             // Unknown what this is, seen in WireShark when connecting to 55553
             // Per the IANA, this is unassigned.
             frame.addIE_uint32(57, 0x00000000);
-            // Name of caller, not sent by Asterisk
-            //frame.addIE_str(4, 0, 0);
-            frame.addIE_str(10, "en", 2);
-            frame.addIE_str(6, call.callUser);
+            // Name of caller, not sent by Asterisk but used by Ampersand for advanced 
+            // authentication
+            if (!call.callingName.empty())
+                frame.addIE_str(IEType::IAX2_IE_CALLING_NAME, call.callingName);
+            frame.addIE_str(IEType::IAX2_IE_LANGUAGE, "en", 2);
+            frame.addIE_str(IEType::IAX2_IE_USERNAME, call.callUser);
 
             // Desired CODEC
             frame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.desiredCodec);
@@ -2269,7 +2202,39 @@ bool LineIAX2::_progressCall(Call& call) {
         }
     }
     else if (call.side == Call::Side::SIDE_CALLED) {
-        if (call.state == Call::State::STATE_CALLER_VALIDATED) {
+
+        if (call.state == Call::State::STATE_AUTH_WAIT_0a) {
+            // Make an public key lookup request. 
+            call.dnsRequestId = _dnsRequestIdCounter++;
+            char dnsName[256];
+            //snprintf(dnsName, sizeof(dnsName), 
+            //    "asl%s.%s.%s", call.remoteNumber.c_str(), call.callingName.c_str(), _amprDnsRoot);
+            snprintf(dnsName, sizeof(dnsName), 
+                "aslpk.%s.%s", call.callingName.c_str(), _amprDnsRoot);
+            _log.info("TXT lookup %s", dnsName);
+            // Start the DNS lookup process
+            if (_sendDNSRequestTXT(call.dnsRequestId, dnsName) != 0) {
+                _log.error("Unable to start PK lookup, ignoring call");
+                call.active = false;
+            } else {
+                call.state = Call::State::STATE_AUTH_WAIT_0b;
+            }
+        }
+        else if (call.state == Call::State::STATE_AUTH_WAIT_0c) {
+            // Make an IP address lookup request. 
+            call.dnsRequestId = _dnsRequestIdCounter++;
+            char hostName[128];
+            snprintf(hostName, sizeof(hostName), 
+                "%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
+            // Start the DNS lookup process
+            if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
+                _log.error("Unable to start address validation, ignoring call");
+                call.active = false;
+            } else {
+                call.state = Call::State::STATE_AUTH_WAIT_0d;
+            }
+        }
+        else if (call.state == Call::State::STATE_CALLER_VALIDATED) {
 
             // Send the ACCEPT message
             IAX2FrameFull acceptFrame;
@@ -2747,7 +2712,7 @@ int LineIAX2::_sendDNSRequestA(uint16_t requestId, const char* name) {
 
 int LineIAX2::_sendDNSRequestTXT(uint16_t requestId, const char* name) {    
 
-    _log.info("Making DNS request (TXT for %s", name);
+    _log.info("Making DNS request (TXT) for %s", name);
 
     // Make the query
     const unsigned dnsPacketCapacity = 128;
@@ -2864,7 +2829,7 @@ void LineIAX2::_publishCallFailed(const char* localNumber, const char* remoteNum
 void LineIAX2::_openCapture() {  
     // Create some uniqueness in the filename
     char fn[64];
-    snprintf(fn, sizeof(fn), "./capture-%lu.pcap", (uint32_t)(_clock.timeMs() / 1000));
+    snprintf(fn, sizeof(fn), "./capture-%u.pcap", (uint32_t)(_clock.timeMs() / 1000));
     _log.info("Opening capture file %s", fn);
     _captureFile.open(fn, std::ios::binary);
     // See https://www.ietf.org/archive/id/draft-gharris-opsawg-pcap-01.html

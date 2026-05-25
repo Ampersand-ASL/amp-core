@@ -18,7 +18,11 @@
 #include <cstdint>
 #include <cstring>
 
+#include "kc1fsz-tools/Common.h"
+
 #include "IAX2Util.h"
+
+using namespace std;
 
 namespace kc1fsz {
 
@@ -257,6 +261,148 @@ void fillCodecWide(uint32_t types, char* buf) {
         buf[7] |= 4;
     if (types & 0x00008000)     
         buf[5] |= 8;  
+}
+
+IAXURIParameters parseIAXURI(const char* uri) {
+
+    // Starts off in invalid state
+    IAXURIParameters result = { 0 };
+    // Defaults
+    result.port = 4569;
+
+    int state = 0;
+    unsigned optr = 0;
+    char acc[64] = { 0 };
+
+    // Make sure the schema is right
+    bool schemaValid = (strlen(uri) > 4 && uri[0] == 'i' && uri[1] == 'a' && uri[2] == 'x' &&
+        uri[3] == ':');
+    if (!schemaValid)
+        return result;
+
+    for (unsigned i = 4; i < strlen(uri); i++) {
+
+        char c = uri[i];        
+        //cout << i << " " << state << " [" << c << "]" << endl;
+
+        // This is the state at the start
+        if (state == 0) {
+            if (c == '@') {
+                strcpyLimited(result.username, acc, sizeof(result.username));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 1;
+            }
+            else if (c == ':') {
+                strcpyLimited(result.hostname, acc, sizeof(result.hostname));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 2;
+            }
+            else if (c == '/') {
+                strcpyLimited(result.hostname, acc, sizeof(result.hostname));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 3;
+            }
+            else if (c == ' ') { }
+            else {
+                if (optr < sizeof(acc) - 1) 
+                    acc[optr++] = c;
+            }
+        }
+        // Have seen @
+        else if (state == 1) {
+            if (c == '@') {
+                return result;
+            }
+            else if (c == ':') {
+                strcpyLimited(result.hostname, acc, sizeof(result.hostname));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 2;
+            }
+            else if (c == '/') {
+                strcpyLimited(result.hostname, acc, sizeof(result.hostname));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 3;
+            }
+            else if (c == ' ') { }
+            else {
+                if (optr < sizeof(acc) - 1) 
+                    acc[optr++] = c;
+            }
+        }
+        // Have seen :
+        else if (state == 2) {
+            if (c == '@' || c == ':') {
+                return result;
+            }
+            else if (c == '/') {
+                result.port = std::atoi(acc);
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 3;
+            }
+            else if (c == ' ') { }
+            else {
+                if (optr < sizeof(acc) - 1) 
+                    acc[optr++] = c;
+            }
+        }
+        // Have seen /
+        else if (state == 3) {
+            if (c == ',') {
+                strcpyLimited(result.number, acc, sizeof(result.number));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 4;
+            }
+            else if (c == ' ') { }
+            else {
+                if (optr < sizeof(acc) - 1) 
+                    acc[optr++] = c;
+            }
+        }
+        // Have seen first ,
+        else if (state == 4) {
+            if (c == ',') {
+                strcpyLimited(result.password, acc, sizeof(result.password));
+                memset(acc, 0, sizeof(acc));
+                optr = 0;
+                state = 5;
+            }
+            else if (c == ' ') { }
+            else {
+                if (optr < sizeof(acc) - 1) 
+                    acc[optr++] = c;
+            }
+        }
+        // Have seen second ,
+        else if (state == 5) {
+            if (c == ' ') { }
+            else if (optr < sizeof(acc) - 1) 
+                acc[optr++] = c;
+        }
+    }
+
+    // Deal with the final part
+
+    if (state == 0 || state == 1)
+        strcpyLimited(result.hostname, acc, sizeof(result.hostname));
+    // Have seen :
+    else if (state == 2)
+        result.port = std::atoi(acc);
+    // Have seen /
+    else if (state == 3)
+        strcpyLimited(result.number, acc, sizeof(result.number));
+    // Have seen first ,
+    else if (state == 4)
+        strcpyLimited(result.password, acc, sizeof(result.password));
+
+    result.valid = true;
+    return result;
 }
 
 }
