@@ -62,16 +62,22 @@ public:
 class LocalRegistry {
 public:
     /**
-     * @param addr Will be populated with the node's address
-     * @param user Will be populated with the user to use for the call
-     * @param password Will be populated with the password to use for the call
+     * @param targetNumber The node number being called
+     * @param targetIAXURI The explicit IAX URI of the target
 
      * @returns true if the number is listed in the local registry.
-     * If found, the addr is filled in with the address/port number
-     * of the destination.
+     * If found, the targetIAXURI is filled in.
      */
-    virtual bool lookup(const char* destNumber, sockaddr_storage& addr,
-        fixedstring& user, fixedstring& password) = 0;
+    virtual bool lookup(const char* targetNumber, fixedstring& targetIAXURI) = 0;
+};
+
+/** 
+ * Used for local authentication of inbound connections to private nodes.
+ */
+class LocalAuthenticator {
+public:
+
+    virtual fixedstring getSecret(const char* targetNode, const char* username) const = 0;
 };
 
 /**
@@ -99,7 +105,8 @@ public:
      */
     LineIAX2(Log& log, Log& traceLog, Clock& clock, int lineId, MessageConsumer& consumer,
         NumberAuthorizer* destAuthorizer, NumberAuthorizer* sourceAuthorizer, 
-        LocalRegistry* locReg, unsigned destLineId, const char* publicUser,
+        LocalRegistry* locReg, LocalAuthenticator* locAuth,
+        unsigned destLineId, const char* publicUser,
         LineIAX2::Call* callSpace, unsigned callSpaceLen);
     ~LineIAX2();
 
@@ -308,7 +315,7 @@ public:
         fixedstring localNumber;
         fixedstring remoteNumber;
         fixedstring callUser;
-        fixedstring callPassword;
+        fixedstring password;
         fixedstring calltoken;
         // Optional, used when an inbound caller should be authenticated using
         // a public/private key pair.
@@ -322,6 +329,9 @@ public:
         CODECType desiredCodec = CODECType::IAX2_CODEC_SLIN_16K;
         // This is the CODEC that was actually assigned to the call
         CODECType codec = CODECType::IAX2_CODEC_UNKNOWN;
+
+        int authMethod = 0;
+        fixedstring authChallenge;
 
         uint32_t lastFrameRxMs = 0;
         uint32_t terminationMs = 0;
@@ -420,8 +430,10 @@ private:
     NumberAuthorizer* _destAuthorizer = 0;
     // Used to determine whether the source number is allowed
     NumberAuthorizer* _sourceAuthorizer = 0;
-    // Used to resolve targets using a local file
+    // Used to resolve outbound targets using a local file
     LocalRegistry* _locReg = 0;
+    // Used to authenticate incoming calls to private nodes
+    LocalAuthenticator* _locAuth = 0;
     // The line that all messages are directed to
     const unsigned _destLineId;
     const fixedstring _publicUser;

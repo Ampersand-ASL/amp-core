@@ -100,7 +100,8 @@ static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
 
 LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     MessageConsumer& bus, NumberAuthorizer* destAuth, NumberAuthorizer* sourceAuth,
-    LocalRegistry* locReg, unsigned destLineId, const char* publicUser,
+    LocalRegistry* locReg, LocalAuthenticator* locAuth,
+    unsigned destLineId, const char* publicUser,
     LineIAX2::Call* callSpace, unsigned callSpaceLen)
 :   _log(log),
     _traceLog(traceLog),
@@ -110,6 +111,7 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _destAuthorizer(destAuth),
     _sourceAuthorizer(sourceAuth),
     _locReg(locReg),
+    _locAuth(locAuth),
     _destLineId(destLineId),
     _publicUser(publicUser),
     _startTime(clock.time()),
@@ -311,14 +313,26 @@ void LineIAX2::close() {
 int LineIAX2::call(const char* localNumber, const char* targetNode,
     CODECType desiredCodec) {  
 
+    _log.info("Request to call %s -> %s", localNumber, targetNode);
+
     // It's possible that the node has been specified in explicit 
     // format: iax:radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
     // pieces too.
     IAXURIParameters targetParams;
     if (strncmp(targetNode, "iax:", 4) == 0)
         targetParams = parseIAXURI(targetNode);
-    else
-        strcpyLimited(targetParams.number, targetNode, sizeof(targetParams.number));
+    else {
+        // Check to see if there is a mapping in the local registry.
+        // Presumably this would be used for private nodes.
+        fixedstring localTarget;
+        if (_locReg && _locReg->lookup(targetNode, localTarget)) {
+            _log.info("Local registry was used %s -> %s", targetNode, localTarget.c_str());
+            targetParams = parseIAXURI(localTarget.c_str());
+        }
+        // If there is no local mapping then all we have is the node number
+        else 
+            strcpyLimited(targetParams.number, targetNode, sizeof(targetParams.number));
+    }
 
     // At the very least, a target number needs to have been specified
     if (targetParams.number[0] == 0)
@@ -327,8 +341,6 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     // Handle defaults
     if (targetParams.username[0] == 0)
         strcpyLimited(targetParams.username, _publicUser.c_str(), sizeof(targetParams.username));
-
-    _log.info("Request to call %s -> %s", localNumber, targetParams.number);
 
     // Make sure we don't have an active call already to the same target number.
     bool found = false;
@@ -365,7 +377,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     call.localNumber = localNumber;
     call.remoteNumber = targetParams.number;
     call.callUser = targetParams.username;
-    call.callPassword = targetParams.password;
+    call.password = targetParams.password;
     call.callingName = _callSign;
     call.desiredCodec = desiredCodec;
     call.side = Call::Side::SIDE_CALLER;
@@ -386,30 +398,6 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
         memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
         call.state = Call::State::STATE_INITIATION_WAIT;
         call.active = true;
-    }
-    // Check the local registration (if available) to see if we can resolve the target 
-    // without going out to the DNS/directory.
-    else if (_locReg) {
-        struct sockaddr_storage targetAddr;
-        memset(&targetAddr, 0, sizeof(sockaddr_storage));
-        fixedstring targetUser, targetPassword;
-        if (_locReg->lookup(call.remoteNumber.c_str(), targetAddr, targetUser, targetPassword)) { 
-            char addr[64];
-            formatIPAddrAndPort((const sockaddr&)targetAddr, addr, 64);
-            _log.info("Resolved %s locally -> %s", call.remoteNumber.c_str(), addr);
-            memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
-            // This method will override the username/password
-            call.callUser = targetUser;
-            call.callPassword = targetPassword;
-            call.state = Call::State::STATE_INITIATION_WAIT;
-            call.active = true;
-        }
-        // If there's nothing in the local registry then assume this is a public
-        // node and trigger a DNS.
-        else {
-            call.state = Call::State::STATE_LOOKUP_0;
-            call.active = true;
-        }
     }
     // Otherwise, we're in a state that will trigger a DNS lookup
     else {
@@ -748,7 +736,9 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 }
             }
 
-            // Pull out the important information and validate it. 
+            // At this point a NEW has been received that has passed the CALLTOKEN
+            // stage. Proceed with the next level of authentication.
+
             // IMPORTANT: The target number comes in with a leading "3"
             // which is removed here.
             fixedstring targetNumber;
@@ -838,8 +828,6 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             uint32_t desiredCodec = 0;
             frame.getIE_uint32(IEType::IAX2_IE_FORMAT, &desiredCodec);
 
-            _log.info("Caller capable/desired CODEC %08X/%08X", capableCodecs, desiredCodec);
-
             // Get the caller's CODEC preferences (optional). This is represented a 
             // string which gets converted to a list of masks.
             char codecPrefs[8] = { 0 };
@@ -889,7 +877,16 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 getSupportedCodecs(),
                 ourPreferredCodecs, ourPreferredCodecCount);
 
-            // All good, allocate the call
+            _log.info("Call target %s capable/desired/assigned CODEC %08X/%08X/%08X", 
+                targetNumber.c_str(),
+                capableCodecs, desiredCodec, assignedCodec);
+
+            // At this point we allocate a call. But keep in mind that the caller hasn't
+            // necessarily been fully authenticated yet!
+            //
+            // TODO: This is not a good design. An unauthenticated caller shouldn't be 
+            // consuming any resources. Need to rework this a bit.
+
             int callIx = _allocateCallIx();
             if (callIx == -1) {
                 _log.error("No calls available, ignoring");
@@ -899,6 +896,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
             assert((unsigned)callIx < _maxCalls);
             Call& call = _calls[callIx];
+
             call.reset();
             call.side = Call::Side::SIDE_CALLED;
             call.trusted = false;
@@ -919,17 +917,71 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             call.lastFrameRxMs = _clock.time();
             call.codec = (CODECType)assignedCodec;
 
-            // Explicit ACK 
+            // Explicit ACK for the NEW
             _sendACK(0, call);
 
-            if (_authenticationRequired) {
-                if (!callingName.empty()) {
-                    call.state = Call::State::STATE_AUTH_WAIT_0a;
-                    call.active = true;
+            // At this point we need to decide how to deal with authentication. There
+            // are a few cases:
+            //
+            // 1. If the node is "open" then we skip authentication complete.
+            // 2. If the node requires authentication then:
+            //   a. If the user has requested public authentication (ie USERNAME=radio)
+            //      then we go down the path of either a public-key authentication or a 
+            //      source-IP address authentication.
+            //   b. If the user has requested private authentication (ie USERNAME!=radio)
+            //      then we perform a local authentication.
+
+            if (!_authenticationRequired) {
+                _log.info("No authentication required");
+                call.state = Call::State::STATE_CALLER_VALIDATED;
+            }
+            else {
+                // Look for the public authentication case
+                if (call.callUser == "radio") {
+                   _log.info("Using public authentication");
+                    if (!callingName.empty()) {
+                        call.state = Call::State::STATE_AUTH_WAIT_0a;
+                        call.active = true;
+                    } else {
+                        call.state = Call::State::STATE_AUTH_WAIT_0c;
+                        call.active = true;
+                    }
                 }
+                // Use the private authentication 
+                else if (_locAuth) {
+
+                    _log.info("Using private authentication for user %s", callingUser.c_str());
+
+                    // MD5 method
+                    call.authMethod = 0x02;
+                    // Make a challenge nonce that uses some things that are unique to the call
+                    char challenge[32];
+                    snprintf(challenge, sizeof(challenge), "%u%u", call.localCallId, call.localStartMs);
+                    call.authChallenge = challenge;
+                    // Authenticator is the shared secret in this case
+                    call.password = _locAuth->getSecret(targetNumber.c_str(),
+                        callingUser.c_str());
+                    if (!call.password.empty()) {
+                        IAX2FrameFull authreqFrame;
+                        authreqFrame.setHeader(call.localCallId, call.remoteCallId, 
+                            call.dispenseElapsedMs(_clock), 
+                            call.outSeqNo, call.expectedInSeqNo, 
+                            FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREQ);
+                        authreqFrame.addIE_uint16(IEType::IAX2_IE_AUTHMETHODS, call.authMethod);
+                        authreqFrame.addIE_str(IEType::IAX2_IE_CHALLENGE, call.authChallenge);
+
+                        _sendFrameToPeer(authreqFrame, call);
+
+                        call.state = Call::State::STATE_AUTHREP_WAIT_1;                
+                        call.active = true;
+                    }
+                    else {
+                        _log.info("No local for node/user %s/%s", 
+                            targetNumber.c_str(), callingUser.c_str());
+                    }
+                }
+                // No authentication possible
                 else {
-                    call.state = Call::State::STATE_AUTH_WAIT_0c;
-                    call.active = true;
                 }
             }
         }
@@ -1138,34 +1190,68 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP) &&
                 untrustedCall.remoteCallId == frame.getSourceCallId()) {
 
-                // Make a challenge that uses some things that are unique to the call
-                char challengeTxt[32];
-                snprintf(challengeTxt, 31, "%u%u", 
-                    untrustedCall.localCallId, untrustedCall.localStartMs);
+                // Ed25519 authentication
 
-                // Only supporting ED25519 challenge, which is found in the 0x20 IE.
-                char sigHex[129];
-                // NOTE: The getIE includes space for the null termination.
-                if (!frame.getIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 129) || sigHex[0] == 0) {
-                    _log.error("Call %u no challenge response", destCallId);
-                    return;
+                if (untrustedCall.authMethod == 0x08) {
+                    char sigHex[129];
+                    // NOTE: The getIE includes space for the null termination.
+                    if (!frame.getIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 129) || sigHex[0] == 0) {
+                        _log.error("Call %u no challenge response", destCallId);
+                        return;
+                    }
+                    if (strlen(sigHex) != 128) {
+                        _log.error("Call %u invalid challenge response", destCallId);
+                        return;
+                    }
+                    // #### TODO ADD CHARACTER VALIDATION HERE
+                    unsigned char sigBin[64];
+                    asciiHexToBin(sigHex, 128, sigBin, 64);
+                    // Do the actual public key validation 
+                    if (_isValidEd25519Signature(sigBin, untrustedCall.authChallenge.c_str(), 
+                        untrustedCall.publicKeyBin)) {
+                        untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        _log.info("Call %u good signature", destCallId);                   
+                    }
+                    else {
+                        _log.info("Call %u authentication failed", destCallId);
+                        return;
+                    }
                 }
-                if (strlen(sigHex) != 128) {
-                    _log.error("Call %u invalid challenge response", destCallId);
-                    return;
-                }
+                // MD5 authentication
+                else if (untrustedCall.authMethod == 0x02) {
 
-                // #### TODO ADD CHARACTER VALIDATION HERE
-                unsigned char sigBin[64];
-                asciiHexToBin(sigHex, 128, sigBin, 64);
+                    char sigHex[33];
+                    // NOTE: The getIE includes space for the null termination.
+                    if (!frame.getIE_str(IEType::IAX2_IE_MD5_RESULT, sigHex, sizeof(sigHex)) || sigHex[0] == 0) {
+                        _log.error("Call %u no challenge response", destCallId);
+                        return;
+                    }
 
-                // Do the actual public key validation 
-                if (_isValidEd25519Signature(sigBin, challengeTxt, untrustedCall.publicKeyBin)) {
-                    untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
-                    _log.info("Call %u good signature", destCallId);                   
+                    // The caller hashes the challenge string + the secret password. Replicate
+                    // this process here and then compare to see if the response is correct.
+                    MD5_CTX md5Ctx;
+                    MD5Init(&md5Ctx);
+                    MD5Update(&md5Ctx, (unsigned char*)untrustedCall.authChallenge.c_str(), 
+                        untrustedCall.authChallenge.size());
+                    MD5Update(&md5Ctx, (unsigned char*)untrustedCall.password.c_str(), 
+                        untrustedCall.password.size());
+                    unsigned char tokenHashed[16];
+                    char tokenHashedText[33];
+                    MD5Final(tokenHashed, &md5Ctx);
+                    MD5DigestToText(tokenHashed, tokenHashedText);
+
+                    if (strcmp(sigHex, tokenHashedText) == 0) {
+                        untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        _log.info("Call %u good signature", destCallId);                   
+                    }
+                    else {
+                        _log.info("Call %u authentication failed", destCallId);
+                        return;
+                    }
                 }
                 else {
-                    _log.info("Call %u authentication failed", destCallId);
+                    _log.error("Call %u unsupported authmethod", destCallId);
+                    return;
                 }
 
                 // Normally the sequence/ACK would be handled later, but this message
@@ -1387,19 +1473,20 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         }
 
         // Pull out the challenge token, leaving room for a null-termination
-        char token[33];
-        if (!frame.getIE_str(IEType::IAX2_IE_CHALLENGE, token, sizeof(token)) || token[0] == 0) {
+        char challenge[33];
+        if (!frame.getIE_str(IEType::IAX2_IE_CHALLENGE, challenge, sizeof(challenge)) || 
+            challenge[0] == 0) {
             _log.error("Unable to get challenge token");
             return;
         }
 
         // NOTE: We are assuming the 0x08 bit signifies ED25519 method (not in the official
         // RFC document)
-        if ((authmethod & 0x08) == 0x08) {
+        if (authmethod & 0x08) {
 
             // Sign the challenge token using our private key
             unsigned char sig[64];
-            _signEd25519(sig, token, _privateKeyHex);
+            _signEd25519(sig, challenge, _privateKeyHex);
             char sigHex[129];
             binToAsciiHex(sig, 64, sigHex, 128);
             sigHex[128] = 0;
@@ -1411,6 +1498,28 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
                 call.outSeqNo, call.expectedInSeqNo, 
                 FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
             authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
+
+            _sendFrameToPeer(authrepFrame, call);
+        }
+        else if (authmethod & 0x02) {
+
+            // The caller hashes the challenge string + the secret password.
+            MD5_CTX md5Ctx;
+            MD5Init(&md5Ctx);
+            MD5Update(&md5Ctx, (unsigned char*)challenge, strlen(challenge)); 
+            MD5Update(&md5Ctx, (unsigned char*)call.password.c_str(), call.password.size());
+            unsigned char tokenHashed[16];
+            char tokenHashedText[33];
+            MD5Final(tokenHashed, &md5Ctx);
+            MD5DigestToText(tokenHashed, tokenHashedText);
+
+            // Make the AUTHREP response
+            IAX2FrameFull authrepFrame;
+            authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
+                call.dispenseElapsedMs(_clock), 
+                call.outSeqNo, call.expectedInSeqNo, 
+                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
+            authrepFrame.addIE_str(IEType::IAX2_IE_MD5_RESULT, tokenHashedText);
 
             _sendFrameToPeer(authrepFrame, call);
         }
@@ -2044,21 +2153,22 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
     // Convert the hex public key to binary 
     asciiHexToBin(txt, 64, call.publicKeyBin, 32);
 
-    // Make a challenge that uses some things that are unique to the call
+    // Make a challenge nonce that uses some things that are unique to the call
     char challenge[32];
-    snprintf(challenge, 31, "%u%u", call.localCallId, call.localStartMs);
+    snprintf(challenge, sizeof(challenge), "%u%u", call.localCallId, call.localStartMs);
+    // NOTE: We are requiring AUTHMETHOD 0x08, which is ED25519. This authentication
+    // method is not yet supported in the official IANA documentation but a formal
+    // request has been raised to get it added.
+    call.authMethod = 0x08;
+    call.authChallenge = challenge;
 
     IAX2FrameFull authreqFrame;
     authreqFrame.setHeader(call.localCallId, call.remoteCallId, 
         call.dispenseElapsedMs(_clock), 
         call.outSeqNo, call.expectedInSeqNo, 
         FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREQ);
-
-    // NOTE: We are requiring AUTHMETHOD 0x08, which is ED25519. This authentication
-    // method is not yet supported in the official IANA documentation but a formal
-    // request has been raised to get it added.
-    authreqFrame.addIE_uint16(IEType::IAX2_IE_AUTHMETHODS, 0x08);
-    authreqFrame.addIE_str(IEType::IAX2_IE_CHALLENGE, challenge);
+    authreqFrame.addIE_uint16(IEType::IAX2_IE_AUTHMETHODS, call.authMethod);
+    authreqFrame.addIE_str(IEType::IAX2_IE_CHALLENGE, call.authChallenge);
 
     _sendFrameToPeer(authreqFrame, call);
 
@@ -2965,7 +3075,7 @@ void LineIAX2::Call::reset() {
     localNumber.clear();
     remoteNumber.clear();
     callUser.clear();
-    callPassword.clear();
+    password.clear();
     calltoken.clear();
     memset(publicKeyBin, 0, sizeof(publicKeyBin));
     memset(&peerAddr, 0, sizeof(peerAddr));
@@ -2989,6 +3099,8 @@ void LineIAX2::Call::reset() {
     lastTxVoiceFrameMs = 0;
     _callInitiatedMs = 0;
     _rxSeqErrorCount = 0;
+    authMethod = 0;
+    authChallenge.clear();
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
@@ -3107,6 +3219,11 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
                 localCallId, remoteCallId);
             line._hangupCall(*this);
         }
+        else if (reTx.count() > RETRANSMIT_COUNT_LIMIT) {
+            log.info("Re-transmit count exceeded on call %d/%d", 
+            localCallId, remoteCallId);
+            line._hangupCall(*this);
+        }
     }
 
     // Reviewing for defect reported by N2DYI
@@ -3130,12 +3247,6 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
             }
         }
     );
-
-    if (reTx.count() > RETRANSMIT_COUNT_LIMIT) {
-        log.info("Re-transmit count exceeded on call %d/%d", 
-            localCallId, remoteCallId);
-        line._hangupCall(*this);
-    }
 }
 
 void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
