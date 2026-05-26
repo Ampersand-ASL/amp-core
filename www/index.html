@@ -156,7 +156,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
         </div>
         <div class="content-row" role="tabpanel">
             <form id="status-form">
-                <div id="favorites-div" class="wrap-container">
+                <div id="favorites-div" class="wrap-container" role="group" aria-label="Favorites">
                 </div>
                 <br/>
                 <input id="node" name="node" type="text" placeholder="Node Number"/>
@@ -348,39 +348,25 @@ function setAudioLevel(meterClass, levelDb) {
     }
 }
 
-// Favorites are in node[:label] format
-function parse_favorites(data) {
-    result = []
-    for (const f of data) {
-        tokens = f.split(":");
-        nodeNumber = tokens[0].trim();
-        label = nodeNumber;
-        if (tokens.length >= 2) {
-            label = tokens[1].trim() + " (" + nodeNumber + ")"
-        }
-        result.push({ "node": nodeNumber, "label": label })
-    }
-    return result
-}
-
 async function favorites_update() {
     const response = await fetch('favorites');
     if (response.ok) {
+
         const data = await response.json();
         div = document.getElementById("favorites-div")
         div.replaceChildren();
 
-        for (const f of parse_favorites(data)) {
+        // Favorites are in [ { "n": "number", "l": "label" }, ... ] format
+        for (const f of data) {
             // Make a button that generates the call
-            b = document.createElement("input")
-            b.classList.add("green-button")
-            b.classList.add("favorite-button")
-            b.type = "submit"
-            b.value = f.label
-            // Attach the command that will be send on press
+            b = document.createElement("input");
+            b.classList.add("green-button", "favorite-button");
+            b.type = "submit";
+            b.value = f["l"] + " (" + f["n"] + ")";
+            // Attach the command that will be sent on press
             b.setAttribute('data-user-info', JSON.stringify({
                 "action": "call",
-                "node": f.node
+                "node": f["n"]
             }));
             div.appendChild(b);
         }

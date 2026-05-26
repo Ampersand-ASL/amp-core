@@ -52,7 +52,6 @@ extern "C" {
 #define CMEDIA_VENDOR_ID ("0d8c")
 
 using namespace std;
-using namespace kc1fsz;
 
 using json = nlohmann::json;
 
@@ -188,22 +187,15 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
     svr.Get("/favorites", [ui](const httplib::Request &, httplib::Response &res) {
         auto l = json::array();
-        // Parse
+        // Parse the comma-separated list
         json cfg = ui->_config.getCopy();
-        if (cfg.contains("favorites")) {
-            string favorites = cfg["favorites"].get<std::string>();
-            // This is a comma-delimited list
-            std::istringstream tokenStream(favorites);
-            string token;
-            while (std::getline(tokenStream, token, ',')) {
-                trim(token);
-                if (token.empty())
-                    continue;
-                l.push_back(token);
+        if (cfg.contains("favorites"))
+            for (auto p : parseFavorites(cfg["favorites"].get<std::string>())) {
+                json o;
+                o["n"] = p.first;
+                o["l"] = p.second;
+                l.push_back(o);
             }
-        }
-
-        // The levels document gets posted in periodically
         res.set_content(l.dump(), "application/json");
     });
 

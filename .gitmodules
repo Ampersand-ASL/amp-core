@@ -28,3 +28,9 @@
 [submodule "g726-codec"]
 	path = g726-codec
 	url = https://github.com/brucemack/g726-codec.git
+[submodule "cpp-httplib"]
+	path = cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "base64.c"]
+	path = base64.c
+	url = https://github.com/joedf/base64.c.git

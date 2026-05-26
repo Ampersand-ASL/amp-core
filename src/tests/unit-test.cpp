@@ -27,9 +27,9 @@
 #include "KerchunkFilter.h"
 #include "LineIAX2.h"
 #include "voter/VoterUtil.h"
-
 #include "TestUtil.h"
 #include "dsp_util.h"
+#include "WebUi.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -409,6 +409,21 @@ static void iaxParseTest1() {
     }
 }
 
+static void parseTest1() {
+    {
+        vector<pair<string,string>> r = WebUi::parseFavorites("a:1, b:2, c:\"3,4:5\"");
+        assert(r.size() == 3);
+        assert(r.at(0).first == "a");
+        assert(r.at(0).second == "1");
+        assert(r.at(1).first == "b");
+        assert(r.at(2).second == "3,4:5");
+    }
+    {
+        vector<pair<string,string>> r = WebUi::parseFavorites("a:1,");
+        assert(r.size() == 1);
+    }
+}
+
 int main(int, const char**) {
     crcTest1();
     wrapTest1();
@@ -426,5 +441,6 @@ int main(int, const char**) {
     timerTest2();
     frameTest1();
     iaxParseTest1();
+    parseTest1();
     return 0;
 }

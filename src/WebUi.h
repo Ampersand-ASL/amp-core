@@ -17,6 +17,9 @@
 #pragma once
 
 #include <atomic>
+#include <string>
+#include <vector>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -51,6 +54,20 @@ public:
     void setBridgeStatus(const json& j) { _status.set(j); }
     void setBridgeLevels(const json& j) { _levels.set(j); }
     void setUiPWd(const std::string& uipwd) { _uiPwd = uipwd; }
+
+    /**
+     * A utility that takes a comma-separated list and makes a vector,
+     * including support for quoted strings. Also removes leading/trailing
+     * whitespace on tokens. So, for example:
+     * 
+     * a:1, b:"2,3"
+     *
+     * Result in two pairs:
+     * 
+     *  first=a second=1
+     *  first=b second=2,3
+     */
+    static std::vector<std::pair<std::string, std::string>> parseFavorites(const std::string& fav);
 
     /**
      * Start this on a background thread since the HTTP server listen call 

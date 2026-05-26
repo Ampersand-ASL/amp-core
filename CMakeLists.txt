@@ -604,6 +604,7 @@ add_executable(unit-test
   src/Transcoder_SLIN_16K.cpp
   src/Transcoder_SLIN_8K.cpp
   src/Transcoder_G726.cpp
+  src/WebUi_2.cpp
   src/voter/VoterUtil.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
@@ -635,6 +636,11 @@ target_include_directories(unit-test PRIVATE
   json/include
   argparse/include
   g726-codec/src
+  cpp-httplib
+  base64.c
+  sound-map/include
+  kc1fsz-sdrc/sw/src
+  kc1fsz-sdrc/sw/include
 )
 
 # ----- voter-test
