@@ -976,7 +976,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                         call.active = true;
                     }
                     else {
-                        _log.info("No local for node/user %s/%s", 
+                        _log.info("Node/user %s/%s not found", 
                             targetNumber.c_str(), callingUser.c_str());
                     }
                 }

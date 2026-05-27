@@ -96,6 +96,7 @@ void ConfigPoller::_populateDefaults(json& j) {
     setDefault(j, "aslStatUrl", "http://stats.allstarlink.org/uhandler.php");
     setDefault(j, "aslRegUrl", "https://register.allstarlink.org");
     setDefault(j, "aslDnsRoot", "nodes.allstarlink.org");
+    setDefault(j, "authFile", "/etc/ampersand/auth.txt");
 
     // If there is no USB sound device selected, default to the first C-Media 
     // device we can find.
