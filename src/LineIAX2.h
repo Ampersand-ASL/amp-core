@@ -257,28 +257,33 @@ public:
 
         Call();
 
-        void init(LineIAX2* l) {
+        void init(LineIAX2* l, Clock* c) {
             line = l;
+            clock = c;
         }
 
         enum State {
             STATE_NONE,
             // (CALLER) Waiting to trigger a DNS SRV query to locate target node
-            STATE_LOOKUP_0,
-            // (CALLER) Waiting for the DNS SRC response
-            STATE_LOOKUP_0A,
+            STATE_LOOKUP_REQUESTED,
+            // (CALLER) Waiting for the DNS SRV response
+            STATE_LOOKUP_WAIT_0,
             // (CALLER) Waiting for the DNS A response when locating target node
-            STATE_LOOKUP_1A,
+            STATE_LOOKUP_WAIT_1,
+            // (CALLER) The lookup process failed
+            STATE_LOOKUP_FAILED,
             // Go into this state when ready to start initiating a call
-            STATE_INITIATION_WAIT,
+            STATE_INITIATION_REQUESTED,
             // (CALLER) After a NEW has been sent and waiting for a response
             STATE_WAITING,
+            // (CALLER) Never got a response to the NEW
+            STATE_WAITING_TIMEOUT,
             // (CALLED) Need to to send out the DNS request to get the caller's public key
-            STATE_AUTH_WAIT_0a,
+            STATE_AUTH_REQUESTED_0a,
             // (CALLED) Sent out the DNS request to get the caller's public key
             STATE_AUTH_WAIT_0b,
             // (CALLED) Need to send out a DNS request to get caller's registered IP
-            STATE_AUTH_WAIT_0c,
+            STATE_AUTH_REQUESTED_0c,
             // (CALLED) Sent out a DNS request to get caller's registered IP
             STATE_AUTH_WAIT_0d,
             // Sent out the AUTHREQ challenge and waiting for the response
@@ -290,11 +295,13 @@ public:
             // Normal operation
             STATE_UP,
             // This is the state that requests a termination. 
-            STATE_TERMINATE_WAITING,
+            STATE_TERMINATE_REQUESTED,
             // This is a state that we enter to shutdown a connection.
             // We stay here for a short time to allow the retransmission of any 
             // unACKd messages. Once the retransmit buffer empties the connection
             // is closed.
+            STATE_TERMINATE_WAIT,
+            // This is the final state
             STATE_TERMINATED
         };
 
@@ -305,9 +312,13 @@ public:
         };
 
         LineIAX2* line = 0;
+        Clock* clock = 0;
         bool active = false;
         Side side = Side::SIDE_NONE;
         State state = State::STATE_NONE;
+        uint64_t stateStartMs = 0;
+        unsigned stateTimeoutMs = 0;
+        State timeoutState = State::STATE_NONE;
         bool trusted = false;
         bool isRegistered = false;
         unsigned localCallId = 0;
@@ -341,7 +352,6 @@ public:
         fixedstring authChallenge;
 
         uint32_t lastFrameRxMs = 0;
-        uint32_t terminationMs = 0;
         
         // Used to smooth/estimate network delay
         int32_t networkDelayEstimateMs = 0;
@@ -370,16 +380,16 @@ public:
 
         uint64_t lastRxVoiceFrameMs = 0;
         uint64_t lastTxVoiceFrameMs = 0;
-        // When a NEW request is sent out during call initiation
-        uint32_t _callInitiatedMs = 0;
         // The number of times we have received an out-of-sequence message
         unsigned _rxSeqErrorCount = 0;
         
         void reset();
 
+        void setState(State state);
+        void setState(State state, unsigned timeoutMs, State timeoutState);
         void oneSecTick(Log& log, Clock& clock, LineIAX2& line);
-
         void tenSecTick(Log& log, Clock& clock, LineIAX2& line);
+        bool terminateInProcess() const;
 
         /**
          * @returns The milliseconds since the start of the call, based on

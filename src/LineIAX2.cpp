@@ -119,7 +119,7 @@ LineIAX2::LineIAX2(Log& log, Log& traceLog, Clock& clock, int busId,
     _maxCalls(callSpaceLen) {
     // One-time initialization of calls
     for (unsigned i = 0; i < callSpaceLen; i++)
-        _calls[i].init(this);
+        _calls[i].init(this, &_clock);
     _privateKeyHex[0] = 0;
     _pokeAddr[0] = 0;
     _pokeNodeNumber[0] = 0;
@@ -354,10 +354,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
         },
         // Predicate
         [&localNumber, &targetParams](const Call& call) {
-            return 
-              call.remoteNumber == targetParams.number && 
-              call.state != Call::State::STATE_TERMINATE_WAITING && 
-              call.state != Call::State::STATE_TERMINATED;
+            return call.remoteNumber == targetParams.number && !call.terminateInProcess();
         }
     );
 
@@ -396,12 +393,12 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
         setIPAddr(targetAddr, targetParams.hostname);
         setIPPort(targetAddr, targetParams.port);
         memcpy(&call.peerAddr, &targetAddr, getIPAddrSize((const sockaddr&)targetAddr));
-        call.state = Call::State::STATE_INITIATION_WAIT;
+        call.setState(Call::State::STATE_INITIATION_REQUESTED);
         call.active = true;
     }
     // Otherwise, we're in a state that will trigger a DNS lookup
     else {
-        call.state = Call::State::STATE_LOOKUP_0;
+        call.setState(Call::State::STATE_LOOKUP_REQUESTED);
         call.active = true;
     }
 
@@ -434,8 +431,7 @@ int LineIAX2::drop(const char* localNumber, const char* targetNumber) {
         [localNumber, targetNumber](const Call& call) {
             return call.remoteNumber == targetNumber && 
               (strcmp("*", localNumber) == 0 || call.localNumber == localNumber) && 
-              call.state != Call::State::STATE_TERMINATE_WAITING && 
-              call.state != Call::State::STATE_TERMINATED;
+               !call.terminateInProcess();
         }
     );
     return count > 0 ? 0 : -1;
@@ -447,9 +443,7 @@ int LineIAX2::dropCall(unsigned callId) {
 
     unsigned count = _dropIf(
         [callId](const Call& call) {
-            return call.localCallId == callId && 
-              call.state != Call::State::STATE_TERMINATE_WAITING && 
-              call.state != Call::State::STATE_TERMINATED;
+            return call.localCallId == callId && !call.terminateInProcess();
         }
     );
     return count > 0 ? 0 : -1;
@@ -457,15 +451,14 @@ int LineIAX2::dropCall(unsigned callId) {
 
 void LineIAX2::dropAllNonPermanent() {
     _dropIf([](const Call& call) {
-            return call.state != Call::State::STATE_TERMINATED;
+            return !call.terminateInProcess();
         }
     );
 }
 
 void LineIAX2::dropAllOutbound() {
     _dropIf([](const Call& call) {
-            return call.state != Call::State::STATE_TERMINATED &&
-                call.side == Call::Side::SIDE_CALLER;
+            return !call.terminateInProcess();;
         }
     );
 }
@@ -933,17 +926,17 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
             if (!_authenticationRequired && !_authenticationChecked) {
                 _log.info("No authentication");
-                call.state = Call::State::STATE_CALLER_VALIDATED;
+                call.setState(Call::State::STATE_CALLER_VALIDATED);
             }
             else {
                 // Look for the public authentication case
                 if (call.callUser == "radio") {
                    _log.info("Using public authentication");
                     if (!callingName.empty()) {
-                        call.state = Call::State::STATE_AUTH_WAIT_0a;
+                        call.setState(Call::State::STATE_AUTH_REQUESTED_0a);
                         call.active = true;
                     } else {
-                        call.state = Call::State::STATE_AUTH_WAIT_0c;
+                        call.setState(Call::State::STATE_AUTH_REQUESTED_0c);
                         call.active = true;
                     }
                 }
@@ -972,7 +965,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                         _sendFrameToPeer(authreqFrame, call);
 
-                        call.state = Call::State::STATE_AUTHREP_WAIT_1;                
+                        call.setState(Call::State::STATE_AUTHREP_WAIT_1, CALL_INITIATION_TIMEOUS_MS,
+                            Call::State::STATE_TERMINATED);
                         call.active = true;
                     }
                     else {
@@ -1172,7 +1166,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                 // Save the token for the NEW retry
                 untrustedCall.calltoken = token;
                 // Go back to the beginning and send a NEW again.
-                untrustedCall.state = Call::State::STATE_INITIATION_WAIT;
+                untrustedCall.setState(Call::State::STATE_INITIATION_REQUESTED);
                 return;   
             }
             // Look for the cases where we should be locking in the peer's call ID
@@ -1210,7 +1204,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     if (_isValidEd25519Signature(sigBin, untrustedCall.authChallenge.c_str(), 
                         untrustedCall.publicKeyBin)) {
                         _log.info("Call %u good signature", destCallId);                   
-                        untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        untrustedCall.setState(Call::State::STATE_CALLER_VALIDATED);
                         untrustedCall.isRegistered = true;
                     }
                     else {
@@ -1219,7 +1213,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                         }
                         else {
                             _log.info("Call %u bad signature, not required", destCallId);                   
-                            untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                            untrustedCall.setState(Call::State::STATE_CALLER_VALIDATED);
                         }
                     }
                 }
@@ -1248,7 +1242,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
 
                     if (strcmp(sigHex, tokenHashedText) == 0) {
                         _log.info("Call %u good signature", destCallId);
-                        untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        untrustedCall.setState(Call::State::STATE_CALLER_VALIDATED);
                         untrustedCall.isRegistered = true;
                     }
                     else {
@@ -1258,7 +1252,7 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                         }
                         else {
                             _log.info("Call %u bad signature, not required", destCallId);                   
-                            untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                            untrustedCall.setState(Call::State::STATE_CALLER_VALIDATED);
                         }
                     }
                 }
@@ -1462,8 +1456,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // Process the frame based on the type and state
 
     // Ignore frames for terminated calls.
-    if (call.state == Call::State::STATE_TERMINATED ||
-        call.state == Call::State::STATE_TERMINATE_WAITING) {
+    if (call.terminateInProcess()) {
         IAX2FrameFull invalFrame;
         invalFrame.setHeader(call.localCallId, call.remoteCallId, 
             call.dispenseElapsedMs(_clock), 
@@ -1496,23 +1489,31 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         // NOTE: We are assuming the 0x08 bit signifies ED25519 method (not in the official
         // RFC document)
         if (authmethod & 0x08) {
+            if (_privateKeyHex[0] != 0) {
 
-            // Sign the challenge token using our private key
-            unsigned char sig[64];
-            _signEd25519(sig, challenge, _privateKeyHex);
-            char sigHex[129];
-            binToAsciiHex(sig, 64, sigHex, 128);
-            sigHex[128] = 0;
+                // Sign the challenge token using our private key
+                unsigned char sig[64];
+                _signEd25519(sig, challenge, _privateKeyHex);
+                char sigHex[129];
+                binToAsciiHex(sig, 64, sigHex, 128);
+                sigHex[128] = 0;
 
-            // Make the AUTHREP response
-            IAX2FrameFull authrepFrame;
-            authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
-                call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 
-                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
-            authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
+                // Make the AUTHREP response
+                IAX2FrameFull authrepFrame;
+                authrepFrame.setHeader(call.localCallId, call.remoteCallId, 
+                    call.dispenseElapsedMs(_clock), 
+                    call.outSeqNo, call.expectedInSeqNo, 
+                    FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_AUTHREP);
+                authrepFrame.addIE_str(IEType::IAX2_IE_ED25519_RESULT, sigHex, 128);
 
-            _sendFrameToPeer(authrepFrame, call);
+                _sendFrameToPeer(authrepFrame, call);
+            }
+            else {
+                _log.error("No private key available");
+                // Since we didn't respond to the AUTHREQ this call is stuck and will
+                // eventually be timed out.
+                return;
+            }
         }
         else if (authmethod & 0x02) {
 
@@ -1597,7 +1598,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
         respFrame3.setBody((const uint8_t*)strmsg, strlen(strmsg) + 1);
         _sendFrameToPeer(respFrame3, call);
 
-        call.state = Call::State::STATE_LINKED;
+        call.setState(Call::State::STATE_LINKED);
 
         // Generate an internal message to announce the new call
         PayloadCallStart payload;
@@ -1620,7 +1621,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
 
         if (call.side == Call::Side::SIDE_CALLER) {
             if (call.state == Call::State::STATE_LINKED)
-                call.state = Call::State::STATE_UP;
+                call.setState(Call::State::STATE_UP);
             else 
                 _log.info("State unexpected");
         }
@@ -1914,7 +1915,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // HANGUP
     else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_HANGUP)) {
         _log.info("Call %u got HANGUP", call.localCallId); 
-        call.state = Call::State::STATE_TERMINATE_WAITING;
+        _terminateCall(call);
     }
     // COMFORT NOISE
     else if (frame.getType() == 10) {
@@ -2013,9 +2014,9 @@ void LineIAX2::_processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen,
     _visitActiveCallsIf(
         // Visitor
         [buf, bufLen, &log=_log, line=this](Call& call) { 
-            if (call.state == Call::State::STATE_LOOKUP_0A)
+            if (call.state == Call::State::STATE_LOOKUP_WAIT_0)
                 line->_processDNSResponse0(call, buf, bufLen);
-            else if (call.state == Call::State::STATE_LOOKUP_1A)
+            else if (call.state == Call::State::STATE_LOOKUP_WAIT_1)
                 line->_processDNSResponse1(call, buf, bufLen);
             else if (call.state == Call::State::STATE_AUTH_WAIT_0b)
                 line->_processDNSResponsePublicKey(call, buf, bufLen);
@@ -2062,13 +2063,11 @@ void LineIAX2::_processDNSResponse0(Call& call,
 
     // Start a second DNS request
     call.dnsRequestId = _dnsRequestIdCounter++;
-    if (_sendDNSRequestA(call.dnsRequestId, srvHost) != 0) {
-        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-            "DNS error (A2)");
-        _terminateCall(call);
-    } else {
-        call.state = Call::State::STATE_LOOKUP_1A;
-    }
+    if (_sendDNSRequestA(call.dnsRequestId, srvHost) != 0) 
+        call.setState(Call::State::STATE_LOOKUP_FAILED);
+    else
+        call.setState(Call::State::STATE_LOOKUP_WAIT_1, CALL_INITIATION_TIMEOUS_MS, 
+            Call::State::STATE_LOOKUP_FAILED);
 }
 
 void LineIAX2::_processDNSResponse1(Call& call, 
@@ -2081,9 +2080,7 @@ void LineIAX2::_processDNSResponse1(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-            "DNS error (A)");
-        _terminateCall(call);
+        call.setState(Call::State::STATE_LOOKUP_FAILED);
         return;
     }
 
@@ -2096,7 +2093,7 @@ void LineIAX2::_processDNSResponse1(Call& call,
 
     call.dnsRequestId = 0;
     // Now in a state to start connecting
-    call.state = Call::State::STATE_INITIATION_WAIT;
+    call.setState(Call::State::STATE_INITIATION_REQUESTED);
 }
 
 void LineIAX2::_processDNSResponseIPValidation(Call& call, 
@@ -2109,8 +2106,6 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-            "DNS error (A)");
         _terminateCall(call);
         return;
     }
@@ -2125,7 +2120,7 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
 
     if (strcmp(addrStr, addrStrPeer) == 0) {
         _log.info("Call %u IP validation succeeded", call.localCallId);
-        call.state = Call::State::STATE_CALLER_VALIDATED;
+        call.setState(Call::State::STATE_CALLER_VALIDATED);
         call.isRegistered = true;
     } 
     else {
@@ -2135,7 +2130,7 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
         }
         else {
             _log.info("IP address not authenticated, but not required");
-            call.state = Call::State::STATE_CALLER_VALIDATED;
+            call.setState(Call::State::STATE_CALLER_VALIDATED);
         }
     }
 }
@@ -2153,13 +2148,13 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
     if (rc1 < 0) {
         _log.info("No public key registered, falling back to IP address authentication");
         // If the TXT lookup fails then go to regular IP address validation
-        call.state = Call::State::STATE_AUTH_WAIT_0c;
+        call.setState(Call::State::STATE_AUTH_REQUESTED_0c);
         return;
     }
     if (strlen(txt) != 64) {
         _log.info("Invalid public key registered, falling back to IP address authentication");
         // If the TXT lookup fails then go to regular IP address validation
-        call.state = Call::State::STATE_AUTH_WAIT_0c;
+        call.setState(Call::State::STATE_AUTH_REQUESTED_0c);
         return;
     }
     _log.info("Got Public: %s", txt);
@@ -2190,7 +2185,8 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
 
     _sendFrameToPeer(authreqFrame, call);
 
-    call.state = Call::State::STATE_AUTHREP_WAIT_1;                
+    call.setState(Call::State::STATE_AUTHREP_WAIT_1, 
+        CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_TERMINATED);                
 }
 
 bool LineIAX2::_progressCalls() {
@@ -2218,25 +2214,36 @@ bool LineIAX2::_progressCall(Call& call) {
 
     const Call::State originalState = call.state;
 
+    // Check for timeout
+    if (call.stateTimeoutMs != 0) {
+        if (_clock.isPastWindow(call.stateStartMs, call.stateTimeoutMs)) {
+            _log.info("Timeout for call to %s", call.remoteNumber.c_str());
+            call.state = call.timeoutState;
+        }
+    }
+
     // State-dependent activity
     if (call.side == Call::Side::SIDE_CALLER) {
-        if (call.state == Call::State::STATE_LOOKUP_0) {
+        if (call.state == Call::State::STATE_LOOKUP_REQUESTED) {
             // Generate a new DNS ID
             call.dnsRequestId = _dnsRequestIdCounter++;
-            // Create the SRV query hostname
+            // Create the SRV query
             char srvHostName[256];
             snprintf(srvHostName, sizeof(srvHostName), 
                 "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
             // Start the DNS lookup process
-            if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) {
-                _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-                    "DNS error (SRV2)");
-                _terminateCall(call);
-            } else {
-                call.state = Call::State::STATE_LOOKUP_0A;
-            }
+            if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) 
+                call.setState(Call::State::STATE_LOOKUP_FAILED);
+            else 
+                call.setState(Call::State::STATE_LOOKUP_WAIT_0,
+                    CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_LOOKUP_FAILED);
         }
-        else if (call.state == Call::State::STATE_INITIATION_WAIT) { 
+        else if (call.state == Call::State::STATE_LOOKUP_FAILED) {
+            _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+                "DNS lookup error");
+            _terminateCall(call);
+        }
+        else if (call.state == Call::State::STATE_INITIATION_REQUESTED) { 
             
             char addr[64];
             formatIPAddrAndPort((const sockaddr&)call.peerAddr, addr, 64);
@@ -2311,27 +2318,21 @@ bool LineIAX2::_progressCall(Call& call) {
 
             _sendFrameToPeer(frame, call);
 
-            call.state = Call::State::STATE_WAITING;
-            call._callInitiatedMs = _clock.time();
+            call.setState(Call::State::STATE_WAITING, 
+                CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_WAITING_TIMEOUT);
         }
-        else if (call.state == Call::State::STATE_WAITING) { 
-            // Check to see if we should give up on a new call that isn't
-            // responding.
+        else if (call.state == Call::State::STATE_WAITING_TIMEOUT) { 
             // #### TODO: Investigate whether the REJECT/HANGUP cases are 
             // #### handled explicitly since the error message would be 
             // #### different in that case.
-            if (_clock.isPast(call._callInitiatedMs + CALL_INITIATION_TIMEOUS_MS)) {
-                _publishCallFailed(call.localNumber.c_str(),call.remoteNumber.c_str(), 
-                    "Node not responding");
-                _terminateCall(call);
-                // #### WHY ISN'T THIS BEING SET IN ALL TERMINATED CASES?
-                call.terminationMs = _clock.time();
-            }
+            _publishCallFailed(call.localNumber.c_str(),call.remoteNumber.c_str(), 
+                "Node not responding");
+            _terminateCall(call);
         }
     }
     else if (call.side == Call::Side::SIDE_CALLED) {
 
-        if (call.state == Call::State::STATE_AUTH_WAIT_0a) {
+        if (call.state == Call::State::STATE_AUTH_REQUESTED_0a) {
             // Make an public key lookup request. 
             call.dnsRequestId = _dnsRequestIdCounter++;
             char dnsName[256];
@@ -2345,10 +2346,11 @@ bool LineIAX2::_progressCall(Call& call) {
                 _log.error("Unable to start PK lookup, ignoring call");
                 call.active = false;
             } else {
-                call.state = Call::State::STATE_AUTH_WAIT_0b;
+                call.setState(Call::State::STATE_AUTH_WAIT_0b, CALL_INITIATION_TIMEOUS_MS,
+                    Call::State::STATE_TERMINATED);
             }
         }
-        else if (call.state == Call::State::STATE_AUTH_WAIT_0c) {
+        else if (call.state == Call::State::STATE_AUTH_REQUESTED_0c) {
             // Make an IP address lookup request. 
             call.dnsRequestId = _dnsRequestIdCounter++;
             char hostName[128];
@@ -2359,7 +2361,8 @@ bool LineIAX2::_progressCall(Call& call) {
                 _log.error("Unable to start address validation, ignoring call");
                 call.active = false;
             } else {
-                call.state = Call::State::STATE_AUTH_WAIT_0d;
+                call.setState(Call::State::STATE_AUTH_WAIT_0d, CALL_INITIATION_TIMEOUS_MS,
+                    Call::State::STATE_TERMINATED);
             }
         }
         else if (call.state == Call::State::STATE_CALLER_VALIDATED) {
@@ -2381,7 +2384,7 @@ bool LineIAX2::_progressCall(Call& call) {
                 call.remoteNumber.c_str(), call.callUser.c_str(), call.codec);
 
             call.trusted = true;
-            call.state = Call::State::STATE_LINKED;
+            call.setState(Call::State::STATE_LINKED);
 
             PayloadCallStart payload;
             payload.codec = call.codec;
@@ -2419,13 +2422,13 @@ bool LineIAX2::_progressCall(Call& call) {
                 ControlSubclass::IAX2_SUBCLASS_CONTROL_STOP_SOUNDS);
             _sendFrameToPeer(stopSoundsFrame, call);
 
-            call.state = Call::State::STATE_UP;
+            call.setState(Call::State::STATE_UP);
         }
     }
 
     // Doesn't matter whether we called or was called for these tasks.
 
-    if (call.state == Call::State::STATE_TERMINATE_WAITING) {
+    if (call.state == Call::State::STATE_TERMINATE_REQUESTED) {
 
         // Broadcast a message on the bus to inform listeners that 
         // the call was terminated.
@@ -2440,17 +2443,17 @@ bool LineIAX2::_progressCall(Call& call) {
         msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
         _bus.consume(msg);
 
-        _terminateCall(call);
+        call.setState(Call::State::STATE_TERMINATE_WAIT, 1000, Call::State::STATE_TERMINATED);
+    }
+    else if (call.state == Call::State::STATE_TERMINATE_WAIT) {
+        // Calls are allowed to hangout in terminated state until the retransmit buffer is clear, 
+        // or until a timeout has expired.
+        if (call.reTx.isEmpty())
+            call.setState(Call::State::STATE_TERMINATED);
     }
     else if (call.state == Call::State::STATE_TERMINATED) {
-        // Calls are allowed to hangout in terminated state
-        // until the retransmit buffer is clear, or until
-        // a timeout has expired.
-        if (call.reTx.isEmpty() || 
-            _clock.isPast(call.terminationMs + TERMINATION_TIMEOUT_MS)) {
-            _log.info("Call %u/%d has ended", call.localCallId, call.remoteCallId);
-            call.reset();
-        }
+        _log.info("Call %u/%d has ended", call.localCallId, call.remoteCallId);
+        call.reset();
     }
 
     // If the state changes then its possible that more work is 
@@ -2465,12 +2468,11 @@ void LineIAX2::_hangupCall(Call& call) {
         call.outSeqNo, call.expectedInSeqNo, IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_HANGUP);
     _sendFrameToPeer(hangupFrame, call);
     // Go into a state that will publish a CALL_END message
-    call.state = Call::State::STATE_TERMINATE_WAITING;
+    call.setState(Call::State::STATE_TERMINATE_REQUESTED);
 }
 
 void LineIAX2::_terminateCall(Call& call) {
-    call.state = Call::State::STATE_TERMINATED;
-    call.terminationMs = _clock.time();
+    call.setState(Call::State::STATE_TERMINATE_WAIT, 1000, Call::State::STATE_TERMINATED);
 }
 
 void LineIAX2::_dtmfGen(char symbol) {
@@ -3081,6 +3083,9 @@ void LineIAX2::Call::reset() {
     active = false;
     side = Side::SIDE_NONE;
     state = State::STATE_NONE;
+    stateStartMs = 0;
+    stateTimeoutMs = 0;
+    timeoutState = State::STATE_NONE;
     trusted = false;
     isRegistered = false;
     localCallId = 0;
@@ -3100,7 +3105,6 @@ void LineIAX2::Call::reset() {
     desiredCodec = CODECType::IAX2_CODEC_SLIN_16K;
     codec = CODECType::IAX2_CODEC_UNKNOWN;
     lastFrameRxMs = 0;
-    terminationMs = 0;
     networkDelayEstimateMs = 0;
     _ndi = 0;
     _ndi_1 = 0;
@@ -3115,10 +3119,28 @@ void LineIAX2::Call::reset() {
     lastLagrqMs = 0;
     lastRxVoiceFrameMs = 0;
     lastTxVoiceFrameMs = 0;
-    _callInitiatedMs = 0;
     _rxSeqErrorCount = 0;
     authMethod = 0;
     authChallenge.clear();
+}
+
+void LineIAX2::Call::setState(State s) {
+    state = s;
+    stateStartMs = clock->timeMs();
+    stateTimeoutMs = 0;
+    timeoutState = State::STATE_NONE;
+}
+
+void LineIAX2::Call::setState(State s, unsigned tms, State ts) {
+    setState(s);
+    stateTimeoutMs = tms;
+    timeoutState = ts;
+}
+
+bool LineIAX2::Call::terminateInProcess() const {
+    return state == STATE_TERMINATE_REQUESTED ||
+        state == STATE_TERMINATE_WAIT ||
+        state == STATE_TERMINATED;
 }
 
 // #### TODO: THINK ABOUT THE NEGATIVE CASE HERE?
@@ -3230,8 +3252,7 @@ void LineIAX2::Call::oneSecTick(Log& log, Clock& clock, LineIAX2& line) {
     }
 
     // Inactive call?
-    if (state != Call::State::STATE_TERMINATED &&
-        state != Call::State::STATE_TERMINATE_WAITING) {
+    if (!terminateInProcess()) {
         if (clock.isPast(lastFrameRxMs + INACTIVITY_TIMEOUT_MS)) {
             log.info("Hanging up inactive call %d/%d", 
                 localCallId, remoteCallId);
