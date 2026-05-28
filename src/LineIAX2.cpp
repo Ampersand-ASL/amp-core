@@ -931,8 +931,8 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
             //   b. If the user has requested private authentication (ie USERNAME!=radio)
             //      then we perform a local authentication.
 
-            if (!_authenticationRequired) {
-                _log.info("No authentication required");
+            if (!_authenticationRequired && !_authenticationChecked) {
+                _log.info("No authentication");
                 call.state = Call::State::STATE_CALLER_VALIDATED;
             }
             else {
@@ -1209,12 +1209,18 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     // Do the actual public key validation 
                     if (_isValidEd25519Signature(sigBin, untrustedCall.authChallenge.c_str(), 
                         untrustedCall.publicKeyBin)) {
-                        untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
                         _log.info("Call %u good signature", destCallId);                   
+                        untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        untrustedCall.isRegistered = true;
                     }
                     else {
-                        _log.info("Call %u authentication failed", destCallId);
-                        return;
+                        if (_authenticationRequired) {
+                            _terminateCall(untrustedCall);
+                        }
+                        else {
+                            _log.info("Call %u bad signature, not required", destCallId);                   
+                            untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        }
                     }
                 }
                 // MD5 authentication
@@ -1241,12 +1247,19 @@ void LineIAX2::_processFullFrame(const uint8_t* potentiallyDangerousBuf,
                     MD5DigestToText(tokenHashed, tokenHashedText);
 
                     if (strcmp(sigHex, tokenHashedText) == 0) {
+                        _log.info("Call %u good signature", destCallId);
                         untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
-                        _log.info("Call %u good signature", destCallId);                   
+                        untrustedCall.isRegistered = true;
                     }
                     else {
-                        _log.info("Call %u authentication failed", destCallId);
-                        return;
+                        if (_authenticationRequired) {
+                            _log.info("Call %u authentication failed", destCallId);
+                            return;
+                        }
+                        else {
+                            _log.info("Call %u bad signature, not required", destCallId);                   
+                            untrustedCall.state = Call::State::STATE_CALLER_VALIDATED;
+                        }
                     }
                 }
                 else {
@@ -2113,12 +2126,17 @@ void LineIAX2::_processDNSResponseIPValidation(Call& call,
     if (strcmp(addrStr, addrStrPeer) == 0) {
         _log.info("Call %u IP validation succeeded", call.localCallId);
         call.state = Call::State::STATE_CALLER_VALIDATED;
-        call.sourceAddrValidated = true;
+        call.isRegistered = true;
     } 
     else {
-        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-            "IP address validation failed");
-        _terminateCall(call);
+        if (_authenticationRequired) {
+            _log.info("Call %u IP validation failed", call.localCallId);
+            _terminateCall(call);
+        }
+        else {
+            _log.info("IP address not authenticated, but not required");
+            call.state = Call::State::STATE_CALLER_VALIDATED;
+        }
     }
 }
 
@@ -2368,7 +2386,7 @@ bool LineIAX2::_progressCall(Call& call) {
             PayloadCallStart payload;
             payload.codec = call.codec;
             payload.startMs = call.localStartMs;
-            payload.sourceAddrValidated = call.sourceAddrValidated;
+            payload.sourceAddrValidated = call.isRegistered;
             strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
             strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
             payload.originated = false;
@@ -3064,7 +3082,7 @@ void LineIAX2::Call::reset() {
     side = Side::SIDE_NONE;
     state = State::STATE_NONE;
     trusted = false;
-    sourceAddrValidated = false;
+    isRegistered = false;
     localCallId = 0;
     remoteCallId = 0;
     localStartMs = 0;

@@ -38,12 +38,6 @@ namespace kc1fsz {
 
     namespace amp {
 
-static const unsigned AUDIO_RATE = 48000;
-static const unsigned BLOCK_SIZE_8K = 160;
-static const unsigned BLOCK_SIZE_16K = 160 * 2;
-static const unsigned BLOCK_SIZE_48K = 160 * 6;
-static const unsigned BLOCK_PERIOD_MS = 20;
-
 /**
  * Converts one block of 16K PCM to an audio Message (TTS_AUDIO) that is encoded in 48K LE.
  */

@@ -159,6 +159,13 @@ public:
     void setAuthenticationRequired(bool ar) { _authenticationRequired = ar; }
 
     /**
+     * Sets whether authentication is checked for inbound calls. There
+     * are cases where we might want to check authentication even it it isn't
+     * required.
+     */
+    void setAuthenticationChecked(bool ac) { _authenticationChecked = ac; }
+
+    /**
      * Opens the network connection for in/out traffic for this line.
      *  
      * NOTE: At the moment listening happens on all local interfaces.
@@ -302,7 +309,7 @@ public:
         Side side = Side::SIDE_NONE;
         State state = State::STATE_NONE;
         bool trusted = false;
-        bool sourceAddrValidated = false;
+        bool isRegistered = false;
         unsigned localCallId = 0;
         unsigned remoteCallId = 0;
         uint32_t localStartMs = 0;
@@ -480,6 +487,9 @@ private:
     bool _authorizeWithCalltoken = true;
     // Determines whether an authentication step is required
     bool _authenticationRequired = true;
+    // Determines whether authentication is checked. This might be used for stations
+    // (like the parrot) where the authentication is validated but not required.
+    bool _authenticationChecked = true;
 
     bool _pokeEnabled = false;
     char _pokeAddr[65];
