@@ -2185,8 +2185,10 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
 
     _sendFrameToPeer(authreqFrame, call);
 
+    // If there is no response to the Ed25519 AUTHREQ request then we fall back
+    // to the usual source IP address validation scheme.
     call.setState(Call::State::STATE_AUTHREP_WAIT_1, 
-        CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_TERMINATED);                
+        CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_AUTH_REQUESTED_0c);                
 }
 
 bool LineIAX2::_progressCalls() {
