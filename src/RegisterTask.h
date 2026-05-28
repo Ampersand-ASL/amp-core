@@ -16,9 +16,8 @@
  */
 #pragma once
 
+#include <string>
 #include <curl/curl.h>
-
-#include "kc1fsz-tools/fixedstring.h"
 
 #include "Runnable2.h"
 
@@ -55,9 +54,9 @@ private:
     Log& _log;
     Clock& _clock;
 
-    fixedstring _regServerUrl;
-    fixedstring _nodeNumber;
-    fixedstring _password;
+    std::string _regServerUrl;
+    std::string _nodeNumber;
+    std::string _password;
     unsigned _iaxPort;
 
     // Here is were we accumulate the received data
