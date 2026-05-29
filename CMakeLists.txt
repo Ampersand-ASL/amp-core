@@ -589,10 +589,11 @@ add_executable(unit-test
   src/tests/dsp_util.cpp
   src/Message.cpp
   src/Line.cpp
+  src/LineParrot.cpp
+  src/LineRadio.cpp
   src/IAX2FrameFull.cpp
   src/IAX2Util.cpp
   src/Resampler.cpp
-  src/LineParrot.cpp
   src/Bridge.cpp
   src/BridgeCall.cpp
   src/BridgeIn.cpp
@@ -608,6 +609,7 @@ add_executable(unit-test
   src/voter/VoterUtil.cpp
   kc1fsz-tools-cpp/src/Common.cpp
   kc1fsz-tools-cpp/src/NetUtils.cpp
+  kc1fsz-tools-cpp/src/StateMachine.cpp
   kc1fsz-tools-cpp/src/DTMFDetector2.cpp
   kc1fsz-tools-cpp/src/StdPollTimer.cpp
   kc1fsz-tools-cpp/src/linux/StdClock.cpp

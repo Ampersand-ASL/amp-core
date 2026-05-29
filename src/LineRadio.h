@@ -18,8 +18,10 @@
 
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "kc1fsz-tools/DTMFDetector2.h"
+#include "kc1fsz-tools/StateMachine.h"
 
 #include "amp/Ampersand.h"
 #include "amp/Resampler.h"
@@ -57,11 +59,29 @@ public:
         return 20.0 * log10(fv);
     }
 
+    /**
+     * Represents one step in a tone sequence.
+     */
+    struct ToneStep {
+        unsigned f0;
+        unsigned f1;
+        unsigned durMs;
+        unsigned amp;
+    };
+
+    /**
+     * A utility function that takes a sequence of tone steps in (f0,f1,dur,amp) format
+     * and returns a vector of steps;
+     */
+    static std::vector<ToneStep> parseToneSeq(const char* toneSeq);
+
     LineRadio(Log&, Clock&, MessageConsumer& consumer, unsigned busId, unsigned callId,
         unsigned audioDestLineId, unsigned audioDestCallId, 
         unsigned signalDestLineId, unsigned networkDestLineId);
 
     void resetStatistics();
+
+    // ------ Configuration ---------------------------------------------------
 
     /**
      * @brief Sets the callsign that is transmitted as the talker ID for this
@@ -69,7 +89,9 @@ public:
      */
     void setCallsign(const char* c) { _callsign = c; }
 
-    void setLocalNode(const char* localNode) { _localNode = localNode; }
+    void setHangDelay(unsigned ms) { _hangDelayMs = ms; }
+    void setCourtesyDelay(unsigned ms) { _courtesyDelayMs = ms; }
+    void setCourtesyTone(const char* ct) { _courtesyToneSteps = parseToneSeq(ct); }
 
     // ----- MessageConsumer -------------------------------------------------
     
@@ -82,7 +104,7 @@ public:
 
     // ----- AudioCoreOutputPort ------------------------------------------------
 
-    virtual bool isAudioActive() const { return _playing; }
+    virtual bool isAudioActive() const { return _isPlaying(); }
     virtual void setToneEnabled(bool b);
     virtual void setToneFreq(float hz);
     virtual void setToneLevel(float dbv);
@@ -165,6 +187,10 @@ protected:
     void _signalOpen(bool echo, float echoGainDb);
     void _signalClose();
 
+    bool _isPlaying() const { return _playState == PlayState::STATE_COURTESY_PLAYING || 
+        _playState == PlayState::STATE_TONE_PLAYING ||
+        _playState == PlayState::STATE_PLAYING; }
+
     Log& _log;
     Clock& _clock;
     MessageConsumer& _captureConsumer;
@@ -179,8 +205,6 @@ protected:
 
     // Primarily used for setting the talker ID
     std::string _callsign;
-    // Primarily used for initiating calls via DTMF
-    std::string _localNode;
 
     // This resampler is configured to go from 48K->8K ahead of the DTMF detection
     amp::Resampler _resampler;
@@ -189,7 +213,6 @@ protected:
     bool _cosActive = false;
     bool _ctcssActive = true;
 
-    bool _playing = false;
     unsigned _tsFrameCount = 0;
 
     bool _capturing = false;
@@ -206,15 +229,9 @@ protected:
     unsigned _playRecordCounter = 0;
     unsigned _captureRecordCounter = 0;
 
-    bool _toneActive = false;
     float _toneAmpTarget = dbvToPeak(-10);
-    float _toneAmpRamp = 0;
-    float _toneRampIncrement = 0;
     float _toneOmega = 0;
     float _tonePhi = 0;
-    // Controls the length of the amplitude transition in order to avoid clicks.
-    const float _toneTransitionLength = 0.015f;
-    unsigned _toneTicks = 0;
 
     // Statistical analysis
     uint32_t _captureClipCount = 0;
@@ -245,6 +262,31 @@ protected:
     bool _fftTrigger = false;
 
     bool _triggerTone = false;
+
+private:
+
+    void _runPlayStateMachine();
+
+    enum PlayState {
+        STATE_IDLE,
+        STATE_PLAYING,
+        STATE_TONE_PLAYING,
+        STATE_COURTESY_WAIT,
+        STATE_COURTESY_START,
+        STATE_COURTESY_SEQ,
+        STATE_COURTESY_PLAYING,
+        STATE_HANG_START,
+        STATE_HANG_WAIT
+    };
+
+    StateMachine _playState;
+
+    unsigned _hangDelayMs = 0;
+    unsigned _courtesyDelayMs = 0;
+    //std::string _courtesyTone;
+
+    std::vector<ToneStep> _courtesyToneSteps;
+    unsigned _courtesyToneStepPtr = 0;
 };
 
 }

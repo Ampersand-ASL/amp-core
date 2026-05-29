@@ -26,8 +26,6 @@
 #include "Transcoder_SLIN_48K.h"
 #include "LineRadio.h"
 
-#define DEST_CALL_ID (1)
-
 using namespace std;
 
 namespace kc1fsz {
@@ -87,6 +85,71 @@ static void simpleDFT(cf32* in, cf32* out, uint16_t n) {
     }
 }
 
+// A very nice tool for testing/building:
+// https://naturalstatenetwork.com/atb.html
+
+vector<LineRadio::ToneStep> LineRadio::parseToneSeq(const char* toneSeq) {
+    
+    vector<ToneStep> result;
+    int state = 0;
+    string acc;
+    ToneStep step;
+
+    for (unsigned i = 0; i < strlen(toneSeq); i++) {
+
+        char c = toneSeq[i];
+
+        if (state == 0) {
+            if (c == '(') {
+                state = 1;
+            }
+        }
+        else if (state == 1) {
+            if (c == ',') {
+                step.f0 = atoi(acc.c_str());
+                acc.clear();
+                state = 2;
+            }
+            else {
+                acc += c;
+            }
+        }
+        else if (state == 2) {
+            if (c == ',') {
+                step.f1 = atoi(acc.c_str());
+                acc.clear();
+                state = 3;
+            }
+            else {
+                acc += c;
+            }
+        }
+        else if (state == 3) {
+            if (c == ',') {
+                step.durMs = atoi(acc.c_str());
+                acc.clear();
+                state = 4;
+            }
+            else {
+                acc += c;
+            }
+        }
+        else if (state == 4) {
+            if (c == ')') {
+                step.amp = atoi(acc.c_str());
+                result.push_back(step);
+                acc.clear();
+                state = 0;
+            }
+            else {
+                acc += c;
+            }
+        }
+    }
+
+    return result;
+}
+
 LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer, 
     unsigned busId, unsigned callId,
     unsigned destBusId, unsigned destCallId, 
@@ -103,7 +166,8 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _startTimeMs(_clock.time()),
     _dtmfDetector(clock, BLOCK_SIZE_8K / 2),
     _tonePhi(0),
-    _injectTonePhi(0) {
+    _injectTonePhi(0),
+    _playState(&_clock, PlayState::STATE_IDLE) {
 
     _resampler.setRates(48000, 8000);
 
@@ -141,13 +205,17 @@ void LineRadio::consume(const Message& msg) {
     // NOTE: Tone generation will override. 
     else if (msg.getType() == Message::Type::AUDIO) {
 
-        // TODO: MIX INBOUND AUDIO WITH TONE?
-        if (_toneActive) 
+        // If a tone was requested we ignore inbound audio
+        if (_playState == PlayState::STATE_TONE_PLAYING)
             return;
 
         // Detect transitions from silence to playing
-        if (!_playing)
+        if (_playState == PlayState::STATE_IDLE)
             _playSpurtStart();
+
+        // Once some audio comes along then we switch into play state regardless of
+        // what the state machine might have been doing before.
+        _playState = PlayState::STATE_PLAYING;
 
         assert(msg.size() == BLOCK_SIZE_48K * 2);
 
@@ -177,16 +245,21 @@ void LineRadio::consume(const Message& msg) {
             _log.error("Play buffer overflow");
 
         _lastPlayedFrameMs = _clock.time();
-        _playing = true;
     }
     else if (msg.isSignal(Message::SignalType::TONE)) {
+
         PayloadTone payload;
         assert(msg.size() == sizeof(payload));
         memcpy(&payload, msg.body(), msg.size());
+
         // Enable some tone generation
-        _toneActive = true;
-        _toneTicks = payload.durationMs / 20;
         _toneOmega = 2.0f * 3.1415926f * payload.freq / 48000.0f;
+
+        // This takes priority over whatever the state machine was doing
+        if (_playState == PlayState::STATE_IDLE)
+            _playSpurtStart();
+        _playState.setState(PlayState::STATE_TONE_PLAYING, payload.durationMs, 
+            PlayState::STATE_HANG_START);
     }    
     else if (msg.isSignal(Message::SignalType::DTMF_GEN)) {
         
@@ -239,7 +312,6 @@ void LineRadio::_generateToneFrame() {
         _log.error("Tone play error");
 
     _lastPlayedFrameMs = _clock.time();
-    _playing = true;
 }
 
 void LineRadio::oneSecTick() {
@@ -249,7 +321,7 @@ void LineRadio::oneSecTick() {
     
     if (_capturePcmValueCount) {
         uint32_t avg = _capturePcmValueSum / _capturePcmValueCount;
-        float magDb = 20.0 * std::log10(2.0f * _fftMaxMag / 32767.0f);
+        //float magDb = 20.0 * std::log10(2.0f * _fftMaxMag / 32767.0f);
         //_log.info("RXLEVEL %6u %5.1f %5.1f %6.0f at %4.0f Hz", 
         //    _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg),
         //    magDb, _fftMaxFreq);
@@ -294,27 +366,15 @@ void LineRadio::_sendSignal(Message::SignalType type, void* body, unsigned len,
 void LineRadio::audioRateTick(uint32_t tickMs) {
 
     _checkTimeouts();
+    _runPlayStateMachine();
 
-    // Handle audio synthesis if necessary
-    if (_toneActive) {     
-        if (--_toneTicks == 0) 
-            _toneActive = false;
-        else {
-            if (!_playing) 
-                _playSpurtStart();
-            _generateToneFrame();
-        }
-    }
+    // If necessary, push tone into the audio system
+    if (_playState == PlayState::STATE_TONE_PLAYING || 
+        _playState == PlayState::STATE_COURTESY_PLAYING)
+        _generateToneFrame();
 }
 
 void LineRadio::_checkTimeouts() {
-
-    // Detect transitions from audio to silence
-    if (_playing &&
-        _clock.isPast(_lastPlayedFrameMs + _playSilenceIntervalMs)) {
-        _playing = false;
-        _playSpurtEnd();
-    }
 
     if (_capturing &&
         _clock.isPast(_lastCapturedFrameMs + _captureSilenceIntervalMs)) {
@@ -351,7 +411,6 @@ void LineRadio::_signalClose() {
     snprintf(payload.remoteNumber, sizeof(payload.remoteNumber), "radio");
     _sendSignal(Message::SignalType::CALL_END, &payload, sizeof(payload));
 }
-
 
 void LineRadio::_processCapturedAudio(const int16_t* pcm48k_1, unsigned frameLen) {
 
@@ -535,7 +594,6 @@ void LineRadio::_playSpurtStart() {
 
 void LineRadio::_playSpurtEnd() {
     // Generate a PTT OFF signal
-    // #### TODO: SHOULD WE BE DOING THIS ANYMORE?
     _sendSignal(Message::SignalType::PTT_OFF, 0, 0, _signalDestLineId, 
         Message::UNKNOWN_CALL_ID);
 }
@@ -564,7 +622,13 @@ void LineRadio::_setCosStatus(bool cosActive) {
 }
 
 void LineRadio::setToneEnabled(bool b) {
-    _toneActive = b;
+    if (b) {
+        if (_playState == PlayState::STATE_IDLE)
+            _playSpurtStart();
+        _playState.setState(PlayState::STATE_TONE_PLAYING);
+    }
+    else 
+        _playState.setState(PlayState::STATE_HANG_START);
 }
 
 void LineRadio::setToneFreq(float hz) {
@@ -576,17 +640,44 @@ void LineRadio::setToneFreq(float hz) {
  * harsh transitions (i.e. "clicks").
  */
 void LineRadio::setToneLevel(float dbv) {
-    // A linear transition is used
-    _toneRampIncrement = 1.0f / (_toneTransitionLength * (float)AUDIO_RATE);
-    // The ramp starts at the previous target
-    _toneAmpRamp = _toneAmpTarget;
     _toneAmpTarget = dbvToPeak(dbv);
-    // Make sure the ramp is flowing in the right direction
-    if (_toneAmpTarget < _toneAmpRamp) 
-        _toneRampIncrement *= -1.0f;
 }
 
 void LineRadio::resetDelay() {
+}
+
+void LineRadio::_runPlayStateMachine() {
+
+    if (_playState == PlayState::STATE_PLAYING) {
+        // Detect transitions from audio to silence
+        if (_clock.isPast(_lastPlayedFrameMs + _playSilenceIntervalMs))
+            _playState.setState(PlayState::STATE_COURTESY_WAIT, _courtesyDelayMs, 
+                PlayState::STATE_COURTESY_START);
+    }
+    else if (_playState == PlayState::STATE_COURTESY_START) {
+        _courtesyToneStepPtr = 0;
+        _playState.setState(PlayState::STATE_COURTESY_SEQ);
+    }
+    else if (_playState == PlayState::STATE_COURTESY_SEQ) {
+        // Finished with the tone sequence?
+        if (_courtesyToneStepPtr == _courtesyToneSteps.size())
+            _playState.setState(PlayState::STATE_HANG_START);
+        else {
+            // Move to the next step in the sequence
+            setToneFreq(_courtesyToneSteps[_courtesyToneStepPtr].f0);
+            _toneAmpTarget = (float)_courtesyToneSteps[_courtesyToneStepPtr].amp /
+                32767.0f;
+            _playState.setState(PlayState::STATE_COURTESY_PLAYING, 
+                _courtesyToneSteps[_courtesyToneStepPtr].durMs, 
+                PlayState::STATE_COURTESY_SEQ);
+            _courtesyToneStepPtr++;
+        }
+    }
+    else if (_playState == PlayState::STATE_HANG_START) {
+        _playSpurtEnd();
+        _playState.setState(PlayState::STATE_HANG_WAIT, _hangDelayMs, 
+            PlayState::STATE_IDLE);
+    }
 }
 
 }

@@ -30,6 +30,7 @@
 #include "TestUtil.h"
 #include "dsp_util.h"
 #include "WebUi.h"
+#include "LineRadio.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -424,6 +425,15 @@ static void parseTest1() {
     }
 }
 
+static void courtesyToneTest() {
+    vector<LineRadio::ToneStep> steps = LineRadio::parseToneSeq("(0,0,250,2048)t(800,0,200,2048)(400,0,200,2048)");
+    assert(steps.size() == 3);
+    assert(steps.at(1).f0 == 800);
+    assert(steps.at(1).f1 == 0);
+    assert(steps.at(1).durMs == 200);
+    assert(steps.at(1).amp == 2048);
+}
+
 int main(int, const char**) {
     crcTest1();
     wrapTest1();
@@ -442,5 +452,6 @@ int main(int, const char**) {
     frameTest1();
     iaxParseTest1();
     parseTest1();
+    courtesyToneTest();
     return 0;
 }

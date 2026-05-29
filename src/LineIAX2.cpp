@@ -2219,7 +2219,8 @@ bool LineIAX2::_progressCall(Call& call) {
     // Check for timeout
     if (call.stateTimeoutMs != 0) {
         if (_clock.isPastWindow(call.stateStartMs, call.stateTimeoutMs)) {
-            _log.info("Timeout for call to %s", call.remoteNumber.c_str());
+            //_log.info("Timer-driven state transition for call to %s %d -> %d", 
+            //    call.remoteNumber.c_str(), call.state, call.timeoutState);
             call.state = call.timeoutState;
         }
     }
@@ -2320,8 +2321,9 @@ bool LineIAX2::_progressCall(Call& call) {
 
             _sendFrameToPeer(frame, call);
 
+            // The timeout is a bit longer here
             call.setState(Call::State::STATE_WAITING, 
-                CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_WAITING_TIMEOUT);
+                CALL_INITIATION_TIMEOUS_MS * 2, Call::State::STATE_WAITING_TIMEOUT);
         }
         else if (call.state == Call::State::STATE_WAITING_TIMEOUT) { 
             // #### TODO: Investigate whether the REJECT/HANGUP cases are 
