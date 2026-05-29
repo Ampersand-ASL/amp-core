@@ -258,6 +258,7 @@ void LineRadio::consume(const Message& msg) {
         // This takes priority over whatever the state machine was doing
         if (_playState == PlayState::STATE_IDLE)
             _playSpurtStart();
+
         _playState.setState(PlayState::STATE_TONE_PLAYING, payload.durationMs, 
             PlayState::STATE_HANG_START);
     }    
@@ -674,9 +675,12 @@ void LineRadio::_runPlayStateMachine() {
         }
     }
     else if (_playState == PlayState::STATE_HANG_START) {
-        _playSpurtEnd();
         _playState.setState(PlayState::STATE_HANG_WAIT, _hangDelayMs, 
-            PlayState::STATE_IDLE);
+            PlayState::STATE_HANG_END);
+    }
+    else if (_playState == PlayState::STATE_HANG_END) {
+        _playSpurtEnd();
+        _playState.setState(PlayState::STATE_IDLE);
     }
 }
 

@@ -276,7 +276,8 @@ private:
         STATE_COURTESY_SEQ,
         STATE_COURTESY_PLAYING,
         STATE_HANG_START,
-        STATE_HANG_WAIT
+        STATE_HANG_WAIT,
+        STATE_HANG_END
     };
 
     StateMachine _playState;
