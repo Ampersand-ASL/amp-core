@@ -172,6 +172,13 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _resampler.setRates(48000, 8000);
 
     _injectToneOmega = 2.0f * 3.1415926f * 400.0f / 48000.0f;
+
+    _plToneOmega = 2.0f * 3.1415926f * 88.5f / 48000.0f;
+    _plTonePhi = 0;
+    _plTonePhiAdjust = 0;
+    _plToneAmp = 2048;
+    _plToneEnabled = true;
+    _chickenDelayMs = 0;
 }
 
 void LineRadio::resetStatistics() {
@@ -243,6 +250,9 @@ void LineRadio::consume(const Message& msg) {
         // place for diagnostic purposes.
         _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
 
+        // Augment the audio with the PL tone
+        _addPlTone(pcm48k_2, BLOCK_SIZE_48K);
+
         // Call down to do the actual play on the hardware
         PlayStatus ps = _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
         if (ps == PlayStatus::STATUS_ERROR)
@@ -313,6 +323,9 @@ void LineRadio::_generateToneFrame() {
     // Here is where statistical analysis and/or local recording can take 
     // place for diagnostic purposes.
     _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
+
+    // Augment the audio with the PL tone
+    _addPlTone(pcm48k_2, BLOCK_SIZE_48K);
 
     // Call down to do the actual play on the hardware
     if (_playPCM48k(pcm48k_2, BLOCK_SIZE_48K) != PlayStatus::STATUS_OK)
@@ -609,6 +622,8 @@ void LineRadio::_captureEnd() {
 
 void LineRadio::_playSpurtStart() {
 
+    _plToneOn();
+
     // Generate a PTT ON signal
     _sendSignal(Message::SignalType::PTT_ON, 0, 0, _signalDestLineId, 
         Message::UNKNOWN_CALL_ID);
@@ -624,6 +639,7 @@ void LineRadio::_playSpurtEnd() {
     // Generate a PTT OFF signal
     _sendSignal(Message::SignalType::PTT_OFF, 0, 0, _signalDestLineId, 
         Message::UNKNOWN_CALL_ID);
+    _plToneOff();
 }
 
 void LineRadio::_setCosStatus(bool cosActive) {   
@@ -671,6 +687,28 @@ void LineRadio::setToneLevel(float dbv) {
     _toneAmpTarget = dbvToPeak(dbv);
 }
 
+void LineRadio::_plToneOn() {
+    _plToneEnabled = true;
+    _plTonePhiAdjust = 0;
+}
+
+void LineRadio::_plToneOff() {
+    _plToneEnabled = false;
+}
+
+void LineRadio::_plToneChicken() {
+    _plToneEnabled = false;
+}
+
+void LineRadio::_addPlTone(int16_t* pcm48k, unsigned blockSize) {    
+    if (_plToneEnabled) 
+        for (unsigned i = 0; i < blockSize; i++) {
+            float a = (float)_plToneAmp * std::cos(_plTonePhi + _plTonePhiAdjust);
+            pcm48k[i] += (int16_t)a;
+            _plTonePhi += _plToneOmega;
+        }
+}
+
 void LineRadio::_runPlayStateMachine() {
 
     if (_playState == PlayState::STATE_PLAYING) {
@@ -703,6 +741,11 @@ void LineRadio::_runPlayStateMachine() {
             PlayState::STATE_HANG_END);
     }
     else if (_playState == PlayState::STATE_HANG_END) {
+        _plToneChicken();
+        _playState.setState(PlayState::STATE_CHICKEN_WAIT, _chickenDelayMs, 
+            PlayState::STATE_CHICKEN_END);
+    }
+    else if (_playState == PlayState::STATE_CHICKEN_END) {
         _playSpurtEnd();
         _playState.setState(PlayState::STATE_IDLE);
     }

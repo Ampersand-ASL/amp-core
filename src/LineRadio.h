@@ -274,6 +274,15 @@ protected:
 
 private:
 
+    void _plToneOn();
+    void _plToneOff();
+    void _plToneChicken();
+
+    /**
+     * This takes the existing audio and adds the PL tone
+     */
+    void _addPlTone(int16_t* pcm48k, unsigned blockSize);
+
     void _runPlayStateMachine();
 
     enum PlayState {
@@ -287,7 +296,9 @@ private:
         STATE_COURTESY_PLAYING,
         STATE_HANG_START,
         STATE_HANG_WAIT,
-        STATE_HANG_END
+        STATE_HANG_END,
+        STATE_CHICKEN_WAIT,
+        STATE_CHICKEN_END
     };
 
     StateMachine _playState;
@@ -302,6 +313,13 @@ private:
     std::queue<PCM16Frame> _captureDelayLine;
     // This controls the minimum size of the capture delay line
     unsigned _captureDelayLineThreshold = 0;
+
+    unsigned _chickenDelayMs = 0;
+    float _plToneOmega = 0;
+    float _plTonePhi = 0;
+    float _plTonePhiAdjust = 0;
+    unsigned _plToneAmp = 0;
+    bool _plToneEnabled = false;
 };
 
 }
