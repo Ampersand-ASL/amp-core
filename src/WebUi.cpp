@@ -429,10 +429,16 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
             string sa818portQuery = cfg["sa818port"].get<std::string>().c_str();
             if (!sa818portQuery.empty()) {
 
-                string sa818Device;
                 ui->_log.info("SA818 port config [%s]", sa818portQuery.c_str());
-                // NOTE: The "usbser " part gets ignored
-                if (resolveUSBSerialDevice(sa818portQuery.substr(7).c_str(), sa818Device) == 0) {
+
+                string sa818Device;
+                if (sa818portQuery.starts_with("usbser")) 
+                    // NOTE: The "usbser " part gets ignored
+                   resolveUSBSerialDevice(sa818portQuery.substr(7).c_str(), sa818Device);
+                else if (sa818portQuery.starts_with("stdser"))
+                    sa818Device = sa818portQuery.substr(7);
+
+                if (!sa818Device.empty()) {
 
                     ui->_log.info("Resolved to SA818 device %s", sa818Device.c_str());
 
@@ -730,8 +736,14 @@ json enumSerialDevice() {
         }
     );
 #endif
+
+    // Add non-USB serial
+    json o2;
+    o2["value"] = "stdser /dev/ttyAMA0";
+    o2["desc"] = "Serial [/dev/ttyAMA0]";
+    a.push_back(o2);
+
     return a;
 }
-
     }
 }

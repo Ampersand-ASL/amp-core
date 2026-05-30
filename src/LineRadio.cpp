@@ -349,11 +349,11 @@ void LineRadio::oneSecTick() {
             _captureClipCount, dbVfs(_capturePcmValueMax), dbVfs(avg));
     }
 
-    if (_playPcmValueCount) {
-        uint32_t avg = _playPcmValueSum / _playPcmValueCount;
-        _log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
-        radioTxDb = dbVfs(_playPcmValueMax);
-    }
+    //if (_playPcmValueCount) {
+    //    uint32_t avg = _playPcmValueSum / _playPcmValueCount;
+    //    _log.info("TXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
+    //    radioTxDb = dbVfs(_playPcmValueMax);
+    //}
 
     PayloadCallLevels payload;
     payload.rx0Db = radioRxDb;
