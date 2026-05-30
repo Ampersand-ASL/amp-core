@@ -176,8 +176,8 @@ LineRadio::LineRadio(Log& log, Clock& clock, MessageConsumer& captureConsumer,
     _plToneOmega = 2.0f * 3.1415926f * 88.5f / 48000.0f;
     _plTonePhi = 0;
     _plTonePhiAdjust = 0;
-    _plToneAmp = 2048;
-    _plToneEnabled = true;
+    _plToneAmp = 0;
+    _plToneEnabled = false;
     _chickenDelayMs = 0;
 }
 
@@ -251,7 +251,7 @@ void LineRadio::consume(const Message& msg) {
         _analyzePlayedAudio(pcm48k_2, BLOCK_SIZE_48K);
 
         // Augment the audio with the PL tone
-        _addPlTone(pcm48k_2, BLOCK_SIZE_48K);
+        //_addPlTone(pcm48k_2, BLOCK_SIZE_48K);
 
         // Call down to do the actual play on the hardware
         PlayStatus ps = _playPCM48k(pcm48k_2, BLOCK_SIZE_48K);
@@ -350,8 +350,8 @@ void LineRadio::oneSecTick() {
     }
 
     if (_playPcmValueCount) {
-        //uint32_t avg = _playPcmValueSum / _playPcmValueCount;
-        //_log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
+        uint32_t avg = _playPcmValueSum / _playPcmValueCount;
+        _log.info("RXLEVEL %6u %5.1f %5.1f", _playClipCount, dbVfs(_playPcmValueMax), dbVfs(avg));
         radioTxDb = dbVfs(_playPcmValueMax);
     }
 

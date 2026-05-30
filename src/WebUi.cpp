@@ -431,7 +431,8 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 
                 string sa818Device;
                 ui->_log.info("SA818 port config [%s]", sa818portQuery.c_str());
-                if (resolveUSBSerialDevice(sa818portQuery.c_str(), sa818Device) == 0) {
+                // NOTE: The "usbser " part gets ignored
+                if (resolveUSBSerialDevice(sa818portQuery.substr(7).c_str(), sa818Device) == 0) {
 
                     ui->_log.info("Resolved to SA818 device %s", sa818Device.c_str());
 

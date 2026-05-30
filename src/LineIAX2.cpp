@@ -14,6 +14,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+/*
+Problems noted:
+
+ASL parrot is not able to move forward after the DNS query fails for an 
+unregistered node.
+
+This is possibly related to confusion around DNS type A requests. There are
+two cases here:
+1. As caller, looking up a target node to get IP address. If this fails the 
+call ends.
+2. As callee, doing node->IP mapping as part of the source IP validation. If this
+fails it doesn't necessarily mean that the call fails.
+*/
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -1915,7 +1929,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // HANGUP
     else if (frame.isTypeClass(FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_HANGUP)) {
         _log.info("Call %u got HANGUP", call.localCallId); 
-        _terminateCall(call);
+        call.setState(Call::State::STATE_TERMINATE_REQUESTED);
     }
     // COMFORT NOISE
     else if (frame.getType() == 10) {

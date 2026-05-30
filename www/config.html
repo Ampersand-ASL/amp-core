@@ -651,6 +651,11 @@ function configStore() {
     );
 }
 
+const RadioControls = [ 
+    [ "sa818port", "sa818bw", "sa818txf", "sa818txpl", "sa818rxf", "sa818rxpl", "sa818sq", "sa818vol", "sa818emp", "sa818lpf", "sa818hpf" ],
+    [ "sa818port_1", "sa818bw_1", "sa818txf_1", "sa818txpl_1", "sa818rxf_1", "sa818rxpl_1", "sa818sq_1", "sa818vol_1", "sa818emp_1", "sa818lpf_1", "sa818hpf_1" ]
+];
+
 function programSA818(radioId) {
 
     if (radioId != 0 && radioId != 1)

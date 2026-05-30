@@ -66,7 +66,10 @@ int SignalIn::openHid(const char* deviceName, const char* signalName) {
 
     int fd;
     if ((fd = ::open(deviceName, O_RDWR | O_NONBLOCK)) < 0) {
-        _log.error("Cannot open HID device %d", errno);
+        if (errno == EACCES)
+            _log.error("Cannot open HID device, permission denied");
+        else 
+            _log.error("Cannot open HID device %s %d", deviceName, errno);
         return -1;
     }
 
