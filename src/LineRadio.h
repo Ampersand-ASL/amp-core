@@ -19,10 +19,12 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <queue>
 
 #include "kc1fsz-tools/DTMFDetector2.h"
 #include "kc1fsz-tools/StateMachine.h"
 
+#include "PCM16Frame.h"
 #include "amp/Ampersand.h"
 #include "amp/Resampler.h"
 
@@ -92,6 +94,7 @@ public:
     void setHangDelay(unsigned ms) { _hangDelayMs = ms; }
     void setCourtesyDelay(unsigned ms) { _courtesyDelayMs = ms; }
     void setCourtesyTone(const char* ct) { _courtesyToneSteps = parseToneSeq(ct); }
+    void setCaptureDelay(unsigned ms);
 
     // ----- MessageConsumer -------------------------------------------------
     
@@ -108,7 +111,7 @@ public:
     virtual void setToneEnabled(bool b);
     virtual void setToneFreq(float hz);
     virtual void setToneLevel(float dbv);
-    virtual void resetDelay();
+    virtual void resetDelay() { }
 
     // ----- Tx ------------------------------------------------------------------
 
@@ -151,12 +154,13 @@ protected:
      */
     virtual PlayStatus _playPCM48k(int16_t* pcm48k_2, unsigned blockSize) = 0;
 
+    virtual void _playSpurtStart();
+    virtual void _playSpurtEnd();
+
     void _checkTimeouts();
 
     void _generateToneFrame();
     void _analyzePlayedAudio(const int16_t* frame, unsigned frameLen);
-    virtual void _playSpurtStart();
-    virtual void _playSpurtEnd();
 
     /**
      * This should be called whenever the hardware as captured a complete 
@@ -169,6 +173,11 @@ protected:
      * Performs any requested statistical analysis.
      */
     void _analyzeCapturedAudio(const int16_t* frame, unsigned frameLen);
+
+    /**
+     * Performs DTMF detection
+     */
+    void _detectDTMF(const int16_t* block, unsigned blockLen);
 
     /**
      * This method takes a block of audio and passes it out for distribution
@@ -269,6 +278,7 @@ private:
 
     enum PlayState {
         STATE_IDLE,
+        // In this state audio is actually being played
         STATE_PLAYING,
         STATE_TONE_PLAYING,
         STATE_COURTESY_WAIT,
@@ -284,10 +294,14 @@ private:
 
     unsigned _hangDelayMs = 0;
     unsigned _courtesyDelayMs = 0;
-    //std::string _courtesyTone;
-
     std::vector<ToneStep> _courtesyToneSteps;
     unsigned _courtesyToneStepPtr = 0;
+
+    // All captured audio packets get passed through this delay. This enables features
+    // like DTMF mute and squelch tail elimination.
+    std::queue<PCM16Frame> _captureDelayLine;
+    // This controls the minimum size of the capture delay line
+    unsigned _captureDelayLineThreshold = 0;
 };
 
 }

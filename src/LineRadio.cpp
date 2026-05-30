@@ -189,6 +189,12 @@ void LineRadio::resetStatistics() {
     _fftTrigger = true;
 }
 
+void LineRadio::setCaptureDelay(unsigned ms) { 
+    _captureDelayLineThreshold = ms / BLOCK_PERIOD_MS; 
+    // Here we clear existing content in case the new delay is shorter
+    _captureDelayLine = queue<PCM16Frame>();
+}
+
 /**
  * This is where played audio comes in from the outside.
  */
@@ -215,7 +221,7 @@ void LineRadio::consume(const Message& msg) {
 
         // Once some audio comes along then we switch into play state regardless of
         // what the state machine might have been doing before.
-        _playState = PlayState::STATE_PLAYING;
+        _playState.setState(PlayState::STATE_PLAYING);
 
         assert(msg.size() == BLOCK_SIZE_48K * 2);
 
@@ -413,9 +419,28 @@ void LineRadio::_signalClose() {
     _sendSignal(Message::SignalType::CALL_END, &payload, sizeof(payload));
 }
 
+// This method is called by the hardware interface when a complete frame of PCM
+// audio has been captured.
+
 void LineRadio::_processCapturedAudio(const int16_t* pcm48k_1, unsigned frameLen) {
 
-    bool audioCaptureEnabled = (_cosActive && _ctcssActive);
+    const bool audioCaptureEnabled = (_cosActive && _ctcssActive);
+
+    // DTMF always runs on non-delayed data in case we need to mute
+    if (audioCaptureEnabled)
+        _detectDTMF(pcm48k_1, BLOCK_SIZE_48K);
+       
+    // Let the delay build up 
+    while (_captureDelayLine.size() < _captureDelayLineThreshold) 
+        _captureDelayLine.push(PCM16Frame::makeSilence(BLOCK_SIZE_48K));
+
+    // Put the new frame onto the delay line
+    _captureDelayLine.push(PCM16Frame(pcm48k_1, frameLen));
+
+    // Pull off the delayed frame for processing
+    const PCM16Frame activeFrame = _captureDelayLine.front();
+    _captureDelayLine.pop();
+
     uint32_t nowMs = _clock.time();
     uint32_t idealNowMs = _captureStartMs + (_captureCount * BLOCK_PERIOD_MS);
     _captureCount++;
@@ -437,10 +462,10 @@ void LineRadio::_processCapturedAudio(const int16_t* pcm48k_1, unsigned frameLen
         _lastCapturedFrameMs = _clock.time();
 
         // Here is where statistics and possibly recording happens
-        _analyzeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K);
-        
-        // Here is where the actual processing of the new block happens
-        _distributeCapturedAudio(pcm48k_1, BLOCK_SIZE_48K, nowMs, idealNowMs);
+        _analyzeCapturedAudio(activeFrame.data(), BLOCK_SIZE_48K);
+
+        // Here is where distribution of the new block through the rest of the system happens
+        _distributeCapturedAudio(activeFrame.data(), BLOCK_SIZE_48K, nowMs, idealNowMs);
     }
 }
 
@@ -490,10 +515,7 @@ void LineRadio::_analyzeCapturedAudio(const int16_t* frame, unsigned frameLen) {
     }
 }
 
-void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen,
-    uint32_t actualCaptureMs, uint32_t idealCaptureMs) {
-
-    assert(blockLen == BLOCK_SIZE_48K);
+void LineRadio::_detectDTMF(const int16_t* block, unsigned blockLen) {
 
     // Decimate from 48k to 8k
     int16_t pcm8k[BLOCK_SIZE_8K];
@@ -525,10 +547,15 @@ void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen
         msg.setSource(_busId, _callId);
         msg.setDest(_destBusId, _destCallId);
         _captureConsumer.consume(msg);
-
     }
+}
 
-    // Make an SLIN_48K buffer in CODEC format.5
+void LineRadio::_distributeCapturedAudio(const int16_t* block, unsigned blockLen,
+    uint32_t actualCaptureMs, uint32_t idealCaptureMs) {
+
+    assert(blockLen == BLOCK_SIZE_48K);
+
+    // Make an SLIN_48K buffer in CODEC format.
     uint8_t outBuffer[BLOCK_SIZE_48K * 2];
     Transcoder_SLIN_48K transcoder;
 
@@ -642,9 +669,6 @@ void LineRadio::setToneFreq(float hz) {
  */
 void LineRadio::setToneLevel(float dbv) {
     _toneAmpTarget = dbvToPeak(dbv);
-}
-
-void LineRadio::resetDelay() {
 }
 
 void LineRadio::_runPlayStateMachine() {

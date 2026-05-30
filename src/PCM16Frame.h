@@ -30,6 +30,11 @@ public:
     // Space for a 48K PCM16 frame in samples (not bytes)
     static const unsigned MAX_SIZE = 160 * 6;
 
+    static PCM16Frame makeSilence(unsigned size) {
+        int16_t silence[MAX_SIZE] = { 0 };
+        return PCM16Frame(silence, size);
+    }
+
     PCM16Frame() : _size(0) { }
     
     /**

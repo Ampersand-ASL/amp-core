@@ -99,12 +99,12 @@ public:
     /**
      * @returns Peak power reading seen across trailing second in dBFS
      */
-    float getPeakPower() const;
+    //float getPeakPower() const;
 
     /**
      * @returns Average power across trailing second in dBFS
      */
-    float getAvgPower() const;
+    //float getAvgPower() const;
 
     /**
      * @returns The last time any audio was processed
