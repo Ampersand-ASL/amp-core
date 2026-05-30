@@ -463,9 +463,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
                         checkJSON(cfg, "sa818emp");
                         bool emp = cfg["sa818emp"].get<std::string>() == "1";
                         checkJSON(cfg, "sa818lpf");
-                        bool lpf = cfg["sa818lpf"].get<std::string>() == "1";
+                        bool lpf = cfg["sa818lpf"].get<std::string>() == "0";
                         checkJSON(cfg, "sa818hpf");
-                        bool hpf = cfg["sa818hpf"].get<std::string>() == "1";
+                        bool hpf = cfg["sa818hpf"].get<std::string>() == "0";
 
                         int rc = SerialUtil::configureSA818(ui->_log, sa818Device.c_str(), bw, txKhz, rxKhz,
                             txPl, rxPl, sq, vol, emp, lpf, hpf);
