@@ -2767,8 +2767,11 @@ void LineIAX2::_sendFrameToPeer(const uint8_t* b, unsigned len,
             char temp[64];
             formatIPAddrAndPort(peerAddr, temp, 64);
             _log.error("Network is unreachable to %s", temp);
-        } else 
-            _log.error("Send error %d", errno);
+        } else {
+            char temp[64];
+            formatIPAddrAndPort(peerAddr, temp, 64);
+            _log.error("Send error %d %s %d", errno, temp, len);
+        }
     }
     else {
         _captureTxPacket(b, len, peerAddr);

@@ -741,9 +741,14 @@ void LineRadio::_runPlayStateMachine() {
             PlayState::STATE_HANG_END);
     }
     else if (_playState == PlayState::STATE_HANG_END) {
-        _plToneChicken();
-        _playState.setState(PlayState::STATE_CHICKEN_WAIT, _chickenDelayMs, 
-            PlayState::STATE_CHICKEN_END);
+        if (_chickenDelayMs) {
+            _plToneChicken();
+            _playState.setState(PlayState::STATE_CHICKEN_WAIT, _chickenDelayMs, 
+                PlayState::STATE_CHICKEN_END);
+        } 
+        else {
+            _playState.setState(PlayState::STATE_CHICKEN_END);
+        }
     }
     else if (_playState == PlayState::STATE_CHICKEN_END) {
         _playSpurtEnd();
