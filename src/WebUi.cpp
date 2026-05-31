@@ -739,10 +739,10 @@ json enumSerialDevice() {
 
     // Add non-USB serial ports
     visitDir("/dev", [&a](const string& fn) {
-        if (fn.starts_with("/dev/ttyAMA")) {
+        if (fn.starts_with("ttyAMA")) {
             json o2;
-            o2["value"] = string("stdser ") + fn;
-            o2["desc"] = string("Serial [") + fn + string("]");
+            o2["value"] = string("stdser /dev/") + fn;
+            o2["desc"] = string("Serial [/dev/") + fn + string("]");
             a.push_back(o2);
         }
     });
