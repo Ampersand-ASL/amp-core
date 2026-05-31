@@ -14,7 +14,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "httplib.h"
+#include <iostream>
+#include <thread>
+#include <fstream>
+#include <sstream>
 
 extern "C" {
     #include "base64.h"
@@ -24,17 +27,14 @@ extern "C" {
 #include <process.h>
 #endif
 
-#include <iostream>
-#include <thread>
-#include <fstream>
-#include <sstream>
-
 // 3rd Party
 #include <nlohmann/json.hpp>
+#include "httplib.h"
 
 #include "kc1fsz-tools/Log.h"
 #include "kc1fsz-tools/Clock.h"
 #include "kc1fsz-tools/threadsafequeue.h"
+#include "kc1fsz-tools/linux/FileUtils.h"
 
 #ifndef _WIN32
 #include "sound-map.h"
@@ -737,11 +737,15 @@ json enumSerialDevice() {
     );
 #endif
 
-    // Add non-USB serial
-    json o2;
-    o2["value"] = "stdser /dev/ttyAMA0";
-    o2["desc"] = "Serial [/dev/ttyAMA0]";
-    a.push_back(o2);
+    // Add non-USB serial ports
+    visitDir("/dev", [&a](const string& fn) {
+        if (fn.starts_with("/dev/ttyAMA")) {
+            json o2;
+            o2["value"] = string("stdser ") + fn;
+            o2["desc"] = string("Serial [") + fn + string("]");
+            a.push_back(o2);
+        }
+    });
 
     return a;
 }
