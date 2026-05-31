@@ -76,6 +76,8 @@ static const uint32_t FAST_PING_INTERVAL_MS = 2 * 1000;
 static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
 // How long we wait for a callee to respond to our NEW
 #define CALL_INITIATION_TIMEOUS_MS (2000)
+// How long we wait for a DNS response
+#define DNS_REQUEST_TIMEOUT_MS (2000)
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
@@ -1316,6 +1318,7 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // sends back might have lower ISeqNos than expected, meaning other 
     // previous messages have acknowledge more receipts already. This 
     // condition is ignored.
+    _log.info("Clearing RETX with %d", frame.getISeqNo());
     call.reTx.removeIf([this, &frame]
         (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
         IAX2FrameFull reTxFrame(packet, packetLen);
@@ -2071,7 +2074,7 @@ void LineIAX2::_processDNSResponseSRV(Call& call,
     if (_sendDNSRequestA(call.dnsRequestId, srvHost) != 0) 
         call.setState(Call::State::STATE_LOOKUP_FAILED);
     else
-        call.setState(Call::State::STATE_LOOKUP_WAIT_1, CALL_INITIATION_TIMEOUS_MS, 
+        call.setState(Call::State::STATE_LOOKUP_WAIT_1, DNS_REQUEST_TIMEOUT_MS, 
             Call::State::STATE_LOOKUP_FAILED);
 }
 
@@ -2277,7 +2280,7 @@ void LineIAX2::_progressCaller(Call& call) {
             call.setState(Call::State::STATE_LOOKUP_FAILED);
         else 
             call.setState(Call::State::STATE_LOOKUP_WAIT_0,
-                CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_LOOKUP_FAILED);
+                DNS_REQUEST_TIMEOUT_MS, Call::State::STATE_LOOKUP_FAILED);
     }
     else if (call.state == Call::State::STATE_LOOKUP_FAILED) {
         _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
@@ -2359,6 +2362,10 @@ void LineIAX2::_progressCaller(Call& call) {
 
         _sendFrameToPeer(frame, call);
 
+        // ### TODO CLEAR RETRANSMIT?
+
+
+
         // The timeout is a bit longer here
         call.setState(Call::State::STATE_WAITING, 
             CALL_INITIATION_TIMEOUS_MS * 2, Call::State::STATE_WAITING_TIMEOUT);
@@ -2392,7 +2399,7 @@ void LineIAX2::_progressCallee(Call& call) {
         if (_sendDNSRequestTXT(call.dnsRequestId, dnsName) != 0)
             call.setState(Call::State::STATE_AUTH_REQUESTED_0c);
         else
-            call.setState(Call::State::STATE_AUTH_WAIT_0b, CALL_INITIATION_TIMEOUS_MS,
+            call.setState(Call::State::STATE_AUTH_WAIT_0b, DNS_REQUEST_TIMEOUT_MS,
                 Call::State::STATE_AUTH_REQUESTED_0c);
     }
     else if (call.state == Call::State::STATE_AUTH_REQUESTED_0c) {
@@ -2407,7 +2414,16 @@ void LineIAX2::_progressCallee(Call& call) {
         // authentication was even required. If not required we just proceed without
         // the DNS validation.
 
-        if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
+        if (_sendDNSRequestA(call.dnsRequestId, hostName) == 0) {
+            if (_authenticationRequired)
+                call.setState(Call::State::STATE_AUTH_WAIT_0d, DNS_REQUEST_TIMEOUT_MS,
+                    Call::State::STATE_TERMINATED);
+            else 
+                // In the timeout case act as if everything was fine
+                call.setState(Call::State::STATE_AUTH_WAIT_0d, DNS_REQUEST_TIMEOUT_MS,
+                    Call::State::STATE_CALLER_VALIDATED);
+        } 
+        else {
             if (_authenticationRequired) {
                 _log.error("Unable to start address validation, ignoring call");
                 call.active = false;
@@ -2418,15 +2434,6 @@ void LineIAX2::_progressCallee(Call& call) {
                 call.setState(Call::State::STATE_CALLER_VALIDATED);
             }
         } 
-        else {
-            if (_authenticationRequired)
-                call.setState(Call::State::STATE_AUTH_WAIT_0d, CALL_INITIATION_TIMEOUS_MS,
-                    Call::State::STATE_TERMINATED);
-            else 
-                // In the timeout case act as if everything was fine
-                call.setState(Call::State::STATE_AUTH_WAIT_0d, CALL_INITIATION_TIMEOUS_MS,
-                    Call::State::STATE_CALLER_VALIDATED);
-        }
     }
     else if (call.state == Call::State::STATE_CALLER_VALIDATED) {
 
