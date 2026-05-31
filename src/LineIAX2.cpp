@@ -1318,7 +1318,6 @@ void LineIAX2::_processFullFrameInCall(const IAX2FrameFull& frame, Call& call,
     // sends back might have lower ISeqNos than expected, meaning other 
     // previous messages have acknowledge more receipts already. This 
     // condition is ignored.
-    _log.info("Clearing RETX with %d", frame.getISeqNo());
     call.reTx.removeIf([this, &frame]
         (uint32_t, unsigned, const uint8_t* packet, unsigned packetLen) {
         IAX2FrameFull reTxFrame(packet, packetLen);
