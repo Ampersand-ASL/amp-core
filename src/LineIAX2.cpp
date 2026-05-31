@@ -14,20 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-/*
-Problems noted:
-
-ASL parrot is not able to move forward after the DNS query fails for an 
-unregistered node.
-
-This is possibly related to confusion around DNS type A requests. There are
-two cases here:
-1. As caller, looking up a target node to get IP address. If this fails the 
-call ends.
-2. As callee, doing node->IP mapping as part of the source IP validation. If this
-fails it doesn't necessarily mean that the call fails.
-*/
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -410,7 +396,8 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
         call.setState(Call::State::STATE_INITIATION_REQUESTED);
         call.active = true;
     }
-    // Otherwise, we're in a state that will trigger a DNS lookup
+    // Otherwise, we're in a state that will trigger a DNS lookup that will convert
+    // the node number into a host/port number.
     else {
         call.setState(Call::State::STATE_LOOKUP_REQUESTED);
         call.active = true;
@@ -2029,13 +2016,12 @@ void LineIAX2::_processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen,
         // Visitor
         [buf, bufLen, &log=_log, line=this](Call& call) { 
             if (call.state == Call::State::STATE_LOOKUP_WAIT_0)
-                line->_processDNSResponse0(call, buf, bufLen);
-            else if (call.state == Call::State::STATE_LOOKUP_WAIT_1)
-                line->_processDNSResponse1(call, buf, bufLen);
+                line->_processDNSResponseSRV(call, buf, bufLen);
+            else if (call.state == Call::State::STATE_LOOKUP_WAIT_1 ||
+                call.state == Call::State::STATE_AUTH_WAIT_0d)
+                line->_processDNSResponseA(call, buf, bufLen);
             else if (call.state == Call::State::STATE_AUTH_WAIT_0b)
                 line->_processDNSResponsePublicKey(call, buf, bufLen);
-            else if (call.state == Call::State::STATE_AUTH_WAIT_0d)
-                line->_processDNSResponseIPValidation(call, buf, bufLen);
             // Otherwise ignore
             else 
                 log.info("Ignoring unexpected DNS response");
@@ -2048,7 +2034,12 @@ void LineIAX2::_processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen,
     );
 }
 
-void LineIAX2::_processDNSResponse0(Call& call, 
+// This function gets called on a DNS response during node_number->SRV record lookup 
+// for the call origination case. We are in STATE_LOOKUP_WAIT_0 state. 
+//
+// On failure the call is terminated. On success we move to the DNS A record lookup.
+
+void LineIAX2::_processDNSResponseSRV(Call& call, 
     const uint8_t* buf, unsigned bufLen) {
 
     if (_trace)
@@ -2084,7 +2075,15 @@ void LineIAX2::_processDNSResponse0(Call& call,
             Call::State::STATE_LOOKUP_FAILED);
 }
 
-void LineIAX2::_processDNSResponse1(Call& call, 
+// This function is called for the DNS response to an A lookup during the nodenumber->address
+// resolution process used for call initiation. 
+//
+// OR:
+//
+// This function is called for the DNS response to an A lookup during the nodenumber->address
+// resolution process used by a called node to validate a caller.
+
+void LineIAX2::_processDNSResponseA(Call& call, 
     const uint8_t* buf, unsigned bufLen) {
 
     if (_trace)
@@ -2098,53 +2097,39 @@ void LineIAX2::_processDNSResponse1(Call& call,
         return;
     }
 
-    // #### TODO: AVOID STRING CONVERSION?
     char addrStr[64];
     formatIP4Address(addr, addrStr, 64);
-    setIPAddr(call.peerAddr, addrStr);
-
     _log.info("DNS responded with %s", addrStr);
-
     call.dnsRequestId = 0;
-    // Now in a state to start connecting
-    call.setState(Call::State::STATE_INITIATION_REQUESTED);
-}
 
-void LineIAX2::_processDNSResponseIPValidation(Call& call, 
-    const uint8_t* buf, unsigned bufLen) {
-
-    if (_trace)
-        _log.infoDump("DNS response (A)", buf, bufLen);
-
-    // Pull the IP address out of the DNS response
-    uint32_t addr;
-    int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
-    if (rc1 < 0) {
-        _terminateCall(call);
-        return;
+    if (call.state == Call::State::STATE_LOOKUP_WAIT_1) {
+        // Lock in the peer address
+        setIPAddr(call.peerAddr, addrStr);
+        // Now in a state to start actually connecting
+        call.setState(Call::State::STATE_INITIATION_REQUESTED);
     }
+    else if (call.state == Call::State::STATE_AUTH_WAIT_0d) {
 
-    // NOTE: All of this is assuming IPv4!
-    // Get the address returned by DNS
-    char addrStr[64];
-    formatIP4Address(addr, addrStr, 64);
-    // Get the address of the peer
-    char addrStrPeer[64];
-    formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
+        // Get the address of the peer and compare it to what DNS is claiming
+        // to see if there is a match.
 
-    if (strcmp(addrStr, addrStrPeer) == 0) {
-        _log.info("Call %u IP validation succeeded", call.localCallId);
-        call.setState(Call::State::STATE_CALLER_VALIDATED);
-        call.isRegistered = true;
-    } 
-    else {
-        if (_authenticationRequired) {
-            _log.info("Call %u IP validation failed", call.localCallId);
-            _terminateCall(call);
-        }
-        else {
-            _log.info("IP address not authenticated, but not required");
+        char addrStrPeer[64];
+        formatIPAddr((const sockaddr&)call.peerAddr, addrStrPeer, 64);
+
+        if (strcmp(addrStr, addrStrPeer) == 0) {
+            _log.info("Call %u IP validation succeeded", call.localCallId);
             call.setState(Call::State::STATE_CALLER_VALIDATED);
+            call.isRegistered = true;
+        } 
+        else {
+            if (_authenticationRequired) {
+                _log.info("Call %u IP validation failed", call.localCallId);
+                _terminateCall(call);
+            }
+            else {
+                _log.info("IP address not authenticated, but not required");
+                call.setState(Call::State::STATE_CALLER_VALIDATED);
+            }
         }
     }
 }
@@ -2231,221 +2216,17 @@ bool LineIAX2::_progressCall(Call& call) {
     const Call::State originalState = call.state;
 
     // Check for timeout
-    if (call.stateTimeoutMs != 0) {
-        if (_clock.isPastWindow(call.stateStartMs, call.stateTimeoutMs)) {
-            //_log.info("Timer-driven state transition for call to %s %d -> %d", 
-            //    call.remoteNumber.c_str(), call.state, call.timeoutState);
+    if (call.stateTimeoutMs != 0)
+        if (_clock.isPastWindow(call.stateStartMs, call.stateTimeoutMs))
             call.state = call.timeoutState;
-        }
-    }
+        
+    // Deal with side-specific states
+    if (call.side == Call::Side::SIDE_CALLER)
+        _progressCaller(call);
+    else if (call.side == Call::Side::SIDE_CALLED)
+        _progressCallee(call);
 
-    // State-dependent activity
-    if (call.side == Call::Side::SIDE_CALLER) {
-        if (call.state == Call::State::STATE_LOOKUP_REQUESTED) {
-            // Generate a new DNS ID
-            call.dnsRequestId = _dnsRequestIdCounter++;
-            // Create the SRV query
-            char srvHostName[256];
-            snprintf(srvHostName, sizeof(srvHostName), 
-                "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
-            // Start the DNS lookup process
-            if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) 
-                call.setState(Call::State::STATE_LOOKUP_FAILED);
-            else 
-                call.setState(Call::State::STATE_LOOKUP_WAIT_0,
-                    CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_LOOKUP_FAILED);
-        }
-        else if (call.state == Call::State::STATE_LOOKUP_FAILED) {
-            _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
-                "DNS lookup error");
-            _terminateCall(call);
-        }
-        else if (call.state == Call::State::STATE_INITIATION_REQUESTED) { 
-            
-            char addr[64];
-            formatIPAddrAndPort((const sockaddr&)call.peerAddr, addr, 64);
-            _log.info("Initiating a call %s -> %s (%s)", 
-                call.localNumber.c_str(), call.remoteNumber.c_str(), addr); 
-            
-            // Put sequence back to the beginning and generate a new call ID
-            // #### TODO: THIS IS PROBLEMATIC BECAUSE SOME THINGS IN THE 
-            // #### STATE NEED TO BE ESTABLISHED IN THE call() FUNCTION
-            // #### AND SOME THINGS HERE.  KEEP THE RECONNECT CASE IN MIND
-            // #### (WHICH DOESN'T GO THROUGH call() AGAIN).
-            call.outSeqNo = 0;
-            call.expectedInSeqNo = 0;
-            call.localCallId = _localCallIdCounter++;
-            call.remoteCallId = 0;
-            call.reTx.clear();
-
-            // Make a NEW frame
-            //
-            // A NEW message MUST include the 'version' IE, and it MUST be the first
-            // IE; the order of other IEs is unspecified.  A NEW SHOULD generally
-            // include IEs to indicate routing on the remote peer, e.g., via the
-            // 'called number' IE or to indicate a peer partition or ruleset, the
-            // 'called context' IE.  Caller identification and CODEC negotiation IEs
-            // MAY also be included.
-            IAX2FrameFull frame;
-            frame.setHeader(call.localCallId, call.remoteCallId, 
-                call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 
-                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_NEW);
-            // From RFC: A NEW message MUST include the 'version' IE, and it MUST 
-            // be the first IE; the order of other IEs is unspecified. 
-            frame.addIE_uint16(IEType::IAX2_IE_VERSION, 0x0002);
-            frame.addIE_str(1, call.remoteNumber);
-            // CODECs are mapped to letters staring with "B". D means ulaw.
-            // This code means SLIN16, ULAW, G726_AAL2, SLIN8
-            frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "QDFH", 3);
-            frame.addIE_str(IEType::IAX2_IE_CALLING_NUMBER, call.localNumber);
-            // Not sure what these are for?
-            frame.addIE_uint8(38, 0x00);
-            frame.addIE_uint8(39, 0x00);
-            frame.addIE_uint16(40, 0x0000);
-            // Unknown what this is, seen in WireShark when connecting to 55553
-            // Per the IANA, this is unassigned.
-            frame.addIE_uint32(57, 0x00000000);
-            // Name of caller, not sent by Asterisk but used by Ampersand for advanced 
-            // authentication
-            if (!call.callingName.empty())
-                frame.addIE_str(IEType::IAX2_IE_CALLING_NAME, call.callingName);
-            frame.addIE_str(IEType::IAX2_IE_LANGUAGE, "en", 2);
-            frame.addIE_str(IEType::IAX2_IE_USERNAME, call.callUser);
-
-            // Desired CODEC
-            frame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.desiredCodec);
-            char desiredCodecWide[9];
-            fillCodecWide(call.desiredCodec, desiredCodecWide);
-            frame.addIE_str(0x38, desiredCodecWide, 9);        
-
-            // CODEC capabilities
-            frame.addIE_uint32(IEType::IAX2_IE_CAPABILITY, getSupportedCodecs());
-            char capabilityCodecWide[9];
-            fillCodecWide(getSupportedCodecs(), capabilityCodecWide);
-            frame.addIE_str(0x37, capabilityCodecWide, 9);
-
-            // CPE ADSI - "Analog display services interface (ADSI)"
-            // TODO: WHAT IS THIS FOR?
-            frame.addIE_uint16(12, 0x0002);
-            frame.addIE_uint32(31, makeIAX2Time());
-            // Setup the call token.  NOTE: This will be blank 
-            // the first time through.
-            frame.addIE_str(54, call.calltoken);        
-
-            _sendFrameToPeer(frame, call);
-
-            // The timeout is a bit longer here
-            call.setState(Call::State::STATE_WAITING, 
-                CALL_INITIATION_TIMEOUS_MS * 2, Call::State::STATE_WAITING_TIMEOUT);
-        }
-        else if (call.state == Call::State::STATE_WAITING_TIMEOUT) { 
-            // #### TODO: Investigate whether the REJECT/HANGUP cases are 
-            // #### handled explicitly since the error message would be 
-            // #### different in that case.
-            _publishCallFailed(call.localNumber.c_str(),call.remoteNumber.c_str(), 
-                "Node not responding");
-            _terminateCall(call);
-        }
-    }
-    else if (call.side == Call::Side::SIDE_CALLED) {
-
-        if (call.state == Call::State::STATE_AUTH_REQUESTED_0a) {
-            // Make an public key lookup request. 
-            call.dnsRequestId = _dnsRequestIdCounter++;
-            char dnsName[256];
-            //snprintf(dnsName, sizeof(dnsName), 
-            //    "asl%s.%s.%s", call.remoteNumber.c_str(), call.callingName.c_str(), _amprDnsRoot);
-            snprintf(dnsName, sizeof(dnsName), 
-                "aslpk.%s.%s", call.callingName.c_str(), _amprDnsRoot);
-            _log.info("TXT lookup %s", dnsName);
-            // Start the DNS lookup process
-            if (_sendDNSRequestTXT(call.dnsRequestId, dnsName) != 0) {
-                _log.error("Unable to start PK lookup, ignoring call");
-                call.active = false;
-            } else {
-                call.setState(Call::State::STATE_AUTH_WAIT_0b, CALL_INITIATION_TIMEOUS_MS,
-                    Call::State::STATE_TERMINATED);
-            }
-        }
-        else if (call.state == Call::State::STATE_AUTH_REQUESTED_0c) {
-            // Make an IP address lookup request. 
-            call.dnsRequestId = _dnsRequestIdCounter++;
-            char hostName[128];
-            snprintf(hostName, sizeof(hostName), 
-                "%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
-            // Start the DNS lookup process
-            if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
-                _log.error("Unable to start address validation, ignoring call");
-                call.active = false;
-            } else {
-                call.setState(Call::State::STATE_AUTH_WAIT_0d, CALL_INITIATION_TIMEOUS_MS,
-                    Call::State::STATE_TERMINATED);
-            }
-        }
-        else if (call.state == Call::State::STATE_CALLER_VALIDATED) {
-
-            // Send the ACCEPT message
-            IAX2FrameFull acceptFrame;
-            acceptFrame.setHeader(call.localCallId, call.remoteCallId, 
-                call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, 
-                FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_ACCEPT);
-            acceptFrame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.codec);
-            char codecWide[9];
-            fillCodecWide(call.codec, codecWide);
-            acceptFrame.addIE_str(IEType::IAX2_IE_FORMAT_WIDE, codecWide, 9);
-            _sendFrameToPeer(acceptFrame, call);
-
-            _log.info("Call %u accepted from %s %s using CODEC %08X",
-                call.localCallId,
-                call.remoteNumber.c_str(), call.callUser.c_str(), call.codec);
-
-            call.trusted = true;
-            call.setState(Call::State::STATE_LINKED);
-
-            PayloadCallStart payload;
-            payload.codec = call.codec;
-            payload.startMs = call.localStartMs;
-            payload.sourceAddrValidated = call.isRegistered;
-            strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
-            strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
-            payload.originated = false;
-
-            MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
-                sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
-            msg.setSource(_busId, call.localCallId);
-            msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
-            _bus.consume(msg);
-        }
-
-        // In the ACCEPTED state we let the caller know 
-        // and then switch into LINKED mode until the 
-        // application accepts the call.
-        else if (call.state == Call::State::STATE_LINKED) {
-
-            // Send the ANSWER message
-            IAX2FrameFull answerFrame;
-            answerFrame.setHeader(call.localCallId, call.remoteCallId, 
-                call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_CONTROL, 
-                ControlSubclass::IAX2_SUBCLASS_CONTROL_ANSWER);
-            _sendFrameToPeer(answerFrame, call);
-
-            // Send the STOP_SOUNDS message
-            IAX2FrameFull stopSoundsFrame;
-            stopSoundsFrame.setHeader(call.localCallId, call.remoteCallId, 
-                call.dispenseElapsedMs(_clock), 
-                call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_CONTROL, 
-                ControlSubclass::IAX2_SUBCLASS_CONTROL_STOP_SOUNDS);
-            _sendFrameToPeer(stopSoundsFrame, call);
-
-            call.setState(Call::State::STATE_UP);
-        }
-    }
-
-    // Doesn't matter whether we called or was called for these tasks.
-
+    // Deal with states that apply to both sides
     if (call.state == Call::State::STATE_TERMINATE_REQUESTED) {
 
         // Broadcast a message on the bus to inform listeners that 
@@ -2477,6 +2258,235 @@ bool LineIAX2::_progressCall(Call& call) {
     // If the state changes then its possible that more work is 
     // needed immediately.
     return call.state != originalState;
+}
+
+// This function does the call-level state machine that is specific to 
+// a caller (i.e. originating an outbound call).
+
+void LineIAX2::_progressCaller(Call& call) {
+
+    if (call.state == Call::State::STATE_LOOKUP_REQUESTED) {
+        // Generate a new DNS ID
+        call.dnsRequestId = _dnsRequestIdCounter++;
+        // Create the SRV query
+        char srvHostName[256];
+        snprintf(srvHostName, sizeof(srvHostName), 
+            "_iax._udp.%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
+        // Start the DNS lookup process
+        if (_sendDNSRequestSRV(call.dnsRequestId, srvHostName) != 0) 
+            call.setState(Call::State::STATE_LOOKUP_FAILED);
+        else 
+            call.setState(Call::State::STATE_LOOKUP_WAIT_0,
+                CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_LOOKUP_FAILED);
+    }
+    else if (call.state == Call::State::STATE_LOOKUP_FAILED) {
+        _publishCallFailed(call.localNumber.c_str(), call.remoteNumber.c_str(),
+            "DNS lookup error");
+        _terminateCall(call);
+    }
+    else if (call.state == Call::State::STATE_INITIATION_REQUESTED) { 
+        
+        char addr[64];
+        formatIPAddrAndPort((const sockaddr&)call.peerAddr, addr, 64);
+        _log.info("Initiating a call %s -> %s (%s)", 
+            call.localNumber.c_str(), call.remoteNumber.c_str(), addr); 
+        
+        // Put sequence back to the beginning and generate a new call ID
+        // #### TODO: THIS IS PROBLEMATIC BECAUSE SOME THINGS IN THE 
+        // #### STATE NEED TO BE ESTABLISHED IN THE call() FUNCTION
+        // #### AND SOME THINGS HERE.  KEEP THE RECONNECT CASE IN MIND
+        // #### (WHICH DOESN'T GO THROUGH call() AGAIN).
+        call.outSeqNo = 0;
+        call.expectedInSeqNo = 0;
+        call.localCallId = _localCallIdCounter++;
+        call.remoteCallId = 0;
+        call.reTx.clear();
+
+        // Make a NEW frame
+        //
+        // A NEW message MUST include the 'version' IE, and it MUST be the first
+        // IE; the order of other IEs is unspecified.  A NEW SHOULD generally
+        // include IEs to indicate routing on the remote peer, e.g., via the
+        // 'called number' IE or to indicate a peer partition or ruleset, the
+        // 'called context' IE.  Caller identification and CODEC negotiation IEs
+        // MAY also be included.
+        IAX2FrameFull frame;
+        frame.setHeader(call.localCallId, call.remoteCallId, 
+            call.dispenseElapsedMs(_clock), 
+            call.outSeqNo, call.expectedInSeqNo, 
+            FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_NEW);
+        // From RFC: A NEW message MUST include the 'version' IE, and it MUST 
+        // be the first IE; the order of other IEs is unspecified. 
+        frame.addIE_uint16(IEType::IAX2_IE_VERSION, 0x0002);
+        frame.addIE_str(1, call.remoteNumber);
+        // CODECs are mapped to letters staring with "B". D means ulaw.
+        // This code means SLIN16, ULAW, G726_AAL2, SLIN8
+        frame.addIE_str(IEType::IAX2_IE_CODEC_PREFS, "QDFH", 3);
+        frame.addIE_str(IEType::IAX2_IE_CALLING_NUMBER, call.localNumber);
+        // Not sure what these are for?
+        frame.addIE_uint8(38, 0x00);
+        frame.addIE_uint8(39, 0x00);
+        frame.addIE_uint16(40, 0x0000);
+        // Unknown what this is, seen in WireShark when connecting to 55553
+        // Per the IANA, this is unassigned.
+        frame.addIE_uint32(57, 0x00000000);
+        // Name of caller, not sent by Asterisk but used by Ampersand for advanced 
+        // authentication
+        if (!call.callingName.empty())
+            frame.addIE_str(IEType::IAX2_IE_CALLING_NAME, call.callingName);
+        frame.addIE_str(IEType::IAX2_IE_LANGUAGE, "en", 2);
+        frame.addIE_str(IEType::IAX2_IE_USERNAME, call.callUser);
+
+        // Desired CODEC
+        frame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.desiredCodec);
+        char desiredCodecWide[9];
+        fillCodecWide(call.desiredCodec, desiredCodecWide);
+        frame.addIE_str(0x38, desiredCodecWide, 9);        
+
+        // CODEC capabilities
+        frame.addIE_uint32(IEType::IAX2_IE_CAPABILITY, getSupportedCodecs());
+        char capabilityCodecWide[9];
+        fillCodecWide(getSupportedCodecs(), capabilityCodecWide);
+        frame.addIE_str(0x37, capabilityCodecWide, 9);
+
+        // CPE ADSI - "Analog display services interface (ADSI)"
+        // TODO: WHAT IS THIS FOR?
+        frame.addIE_uint16(12, 0x0002);
+        frame.addIE_uint32(31, makeIAX2Time());
+        // Setup the call token.  NOTE: This will be blank 
+        // the first time through.
+        frame.addIE_str(54, call.calltoken);        
+
+        _sendFrameToPeer(frame, call);
+
+        // The timeout is a bit longer here
+        call.setState(Call::State::STATE_WAITING, 
+            CALL_INITIATION_TIMEOUS_MS * 2, Call::State::STATE_WAITING_TIMEOUT);
+    }
+    else if (call.state == Call::State::STATE_WAITING_TIMEOUT) { 
+        // #### TODO: Investigate whether the REJECT/HANGUP cases are 
+        // #### handled explicitly since the error message would be 
+        // #### different in that case.
+        _publishCallFailed(call.localNumber.c_str(),call.remoteNumber.c_str(), 
+            "Node not responding");
+        _terminateCall(call);
+    }
+}
+
+// This function does the call-level state machine that is specific to 
+// a callee (i.e. receiving an inbound call).
+
+void LineIAX2::_progressCallee(Call& call) {
+
+    if (call.state == Call::State::STATE_AUTH_REQUESTED_0a) {
+        // Make an public key lookup request. 
+        call.dnsRequestId = _dnsRequestIdCounter++;
+
+        char dnsName[256];
+        snprintf(dnsName, sizeof(dnsName), 
+            "aslpk.%s.%s", call.callingName.c_str(), _amprDnsRoot);
+        _log.info("TXT lookup %s", dnsName);
+
+        // Start the DNS lookup process. If this process fails (or times out) then we revert
+        // to the source-IP-addressed based validation.
+        if (_sendDNSRequestTXT(call.dnsRequestId, dnsName) != 0)
+            call.setState(Call::State::STATE_AUTH_REQUESTED_0c);
+        else
+            call.setState(Call::State::STATE_AUTH_WAIT_0b, CALL_INITIATION_TIMEOUS_MS,
+                Call::State::STATE_AUTH_REQUESTED_0c);
+    }
+    else if (call.state == Call::State::STATE_AUTH_REQUESTED_0c) {
+        // Make an IP address lookup request. 
+        call.dnsRequestId = _dnsRequestIdCounter++;
+        char hostName[128];
+        snprintf(hostName, sizeof(hostName), 
+            "%s.nodes.%s", call.remoteNumber.c_str(), _aslDnsRoot);
+
+        // Start the DNS lookup process. There is an important subtlety going on here:
+        // if the DNS lookup process fails (or times out) the result depends on whether
+        // authentication was even required. If not required we just proceed without
+        // the DNS validation.
+
+        if (_sendDNSRequestA(call.dnsRequestId, hostName) != 0) {
+            if (_authenticationRequired) {
+                _log.error("Unable to start address validation, ignoring call");
+                call.active = false;
+            }
+            else {
+                _log.error("Unable to start address validation, not required");
+                // Act as if everything was fine
+                call.setState(Call::State::STATE_CALLER_VALIDATED);
+            }
+        } 
+        else {
+            if (_authenticationRequired)
+                call.setState(Call::State::STATE_AUTH_WAIT_0d, CALL_INITIATION_TIMEOUS_MS,
+                    Call::State::STATE_TERMINATED);
+            else 
+                // In the timeout case act as if everything was fine
+                call.setState(Call::State::STATE_AUTH_WAIT_0d, CALL_INITIATION_TIMEOUS_MS,
+                    Call::State::STATE_CALLER_VALIDATED);
+        }
+    }
+    else if (call.state == Call::State::STATE_CALLER_VALIDATED) {
+
+        // Send the ACCEPT message
+        IAX2FrameFull acceptFrame;
+        acceptFrame.setHeader(call.localCallId, call.remoteCallId, 
+            call.dispenseElapsedMs(_clock), 
+            call.outSeqNo, call.expectedInSeqNo, 
+            FrameType::IAX2_TYPE_IAX, IAXSubclass::IAX2_SUBCLASS_IAX_ACCEPT);
+        acceptFrame.addIE_uint32(IEType::IAX2_IE_FORMAT, call.codec);
+        char codecWide[9];
+        fillCodecWide(call.codec, codecWide);
+        acceptFrame.addIE_str(IEType::IAX2_IE_FORMAT_WIDE, codecWide, 9);
+        _sendFrameToPeer(acceptFrame, call);
+
+        _log.info("Call %u accepted from %s %s using CODEC %08X",
+            call.localCallId,
+            call.remoteNumber.c_str(), call.callUser.c_str(), call.codec);
+
+        call.trusted = true;
+        call.setState(Call::State::STATE_LINKED);
+
+        PayloadCallStart payload;
+        payload.codec = call.codec;
+        payload.startMs = call.localStartMs;
+        payload.sourceAddrValidated = call.isRegistered;
+        strcpyLimited(payload.localNumber, call.localNumber.c_str(), sizeof(payload.localNumber));
+        strcpyLimited(payload.remoteNumber, call.remoteNumber.c_str(), sizeof(payload.remoteNumber));
+        payload.originated = false;
+
+        MessageWrapper msg(Message::Type::SIGNAL, Message::SignalType::CALL_START, 
+            sizeof(payload), (const uint8_t*)&payload, 0, _clock.time());
+        msg.setSource(_busId, call.localCallId);
+        msg.setDest(_destLineId, Message::UNKNOWN_CALL_ID);
+        _bus.consume(msg);
+    }
+
+    // In the ACCEPTED state we let the caller know 
+    // and then switch into LINKED mode until the 
+    // application accepts the call.
+    else if (call.state == Call::State::STATE_LINKED) {
+
+        // Send the ANSWER message
+        IAX2FrameFull answerFrame;
+        answerFrame.setHeader(call.localCallId, call.remoteCallId, 
+            call.dispenseElapsedMs(_clock), 
+            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_CONTROL, 
+            ControlSubclass::IAX2_SUBCLASS_CONTROL_ANSWER);
+        _sendFrameToPeer(answerFrame, call);
+
+        // Send the STOP_SOUNDS message
+        IAX2FrameFull stopSoundsFrame;
+        stopSoundsFrame.setHeader(call.localCallId, call.remoteCallId, 
+            call.dispenseElapsedMs(_clock), 
+            call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_CONTROL, 
+            ControlSubclass::IAX2_SUBCLASS_CONTROL_STOP_SOUNDS);
+        _sendFrameToPeer(stopSoundsFrame, call);
+
+        call.setState(Call::State::STATE_UP);
+    }
 }
 
 void LineIAX2::_hangupCall(Call& call) {
@@ -3366,9 +3376,6 @@ void LineIAX2::Call::tenSecTick(Log& log, Clock& clock, LineIAX2& line) {
             return remove;
         }
     );
-}
-
-void LineIAX2::Call::logStats(Log& log) {
 }
 
 void LineIAX2::Call::dtmfGen(Log& log, Clock& clock, LineIAX2& line, char symbol) {

@@ -664,6 +664,11 @@ function programSA818(radioId) {
     const form = document.getElementById('config-form');
     const formData = new FormData(form);
     const formObject = Object.fromEntries(formData.entries());
+    const msgDiv = document.getElementById("program-" + radioId + "-message-div");
+    const msgSpan = document.getElementById("program-" + radioId + "-message");
+
+    // Put the div into "normal" mode
+    msgDiv.className = "message-div";
 
     // Pull out the relevant radio parameters
     param = { 
@@ -672,6 +677,8 @@ function programSA818(radioId) {
     for (var i = 0; i < RadioControls[0].length; i++)
         // Always using the "plain" radio 0 names
         param[RadioControls[0][i]] = formObject[RadioControls[radioId][i]];
+
+    msgSpan.innerHTML = "Programming ...";
 
     fetch('/program-sa818', {
         method: 'POST',
@@ -688,10 +695,6 @@ function programSA818(radioId) {
         return response.json(); 
     }).then(data => {
         
-        msgDiv = document.getElementById("program-" + radioId + "-message-div");
-        msgDiv.className = "message-div";
-        msgSpan = document.getElementById("program-" + radioId + "-message");
-
         if (data["status"] == "ok") {
             msgSpan.innerHTML = "Program OK";
         } else if (data["status"] == "fail") {

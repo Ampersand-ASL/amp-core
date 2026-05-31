@@ -219,13 +219,7 @@ public:
     unsigned getActiveCalls() const;
 
     void processManagementCommand(const char* msg);
-
-    /**
-     * Used to identify the active talker for outbound voice 
-     * traffic for the designed local call.
-     */
-    //void setLocalTalkerName(unsigned localCallId, const char* name);
-    
+   
     /**
      * @returns The name of who is talking on the other side of the 
      * designated call.
@@ -425,7 +419,6 @@ public:
          */
         bool isPeerAddr(const sockaddr& addr) const;
 
-        void logStats(Log& log);
         void resetStats();
 
         void setNetworkDelayEstimate(unsigned ms, bool first = false);
@@ -525,6 +518,8 @@ private:
      * @return true if there might be more work to be done
      */
     bool _progressCall(Call& call);
+    void _progressCaller(Call& call);
+    void _progressCallee(Call& call);
 
     /**
      * @return true if there might be more work to be done
@@ -574,9 +569,8 @@ private:
      */
     bool _processInboundDNSData();
     void _processReceivedDNSPacket(const uint8_t* buf, unsigned bufLen, const sockaddr& peerAddr);
-    void _processDNSResponse0(Call& call, const uint8_t* buf, unsigned bufLen);
-    void _processDNSResponse1(Call& call, const uint8_t* buf, unsigned bufLen);
-    void _processDNSResponseIPValidation(Call& call, const uint8_t* buf, unsigned bufLen);
+    void _processDNSResponseSRV(Call& call, const uint8_t* buf, unsigned bufLen);
+    void _processDNSResponseA(Call& call, const uint8_t* buf, unsigned bufLen);
     void _processDNSResponsePublicKey(Call& call, const uint8_t* buf, unsigned bufLen);
 
     int _allocateCallIx();   
