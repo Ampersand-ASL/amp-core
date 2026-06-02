@@ -320,7 +320,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
     // It's possible that the node has been specified in explicit 
     // format: iax:radio@127.0.0.1:4569/1951,NONE. If so, parse out the other
     // pieces too.
-    IAXURIParameters targetParams;
+    IAXURIParameters targetParams = { 0 };
     if (strncmp(targetNode, "iax:", 4) == 0)
         targetParams = parseIAXURI(targetNode);
     else {
@@ -388,6 +388,7 @@ int LineIAX2::call(const char* localNumber, const char* targetNode,
 
     // If an explicit address was specified 
     if (targetParams.hostname[0] != 0) {
+        _log.info("Address provided");
         struct sockaddr_storage targetAddr;
         memset(&targetAddr, 0, sizeof(sockaddr_storage));
         // #### TODO: IPv6
