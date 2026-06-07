@@ -77,7 +77,7 @@ static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
 // How long we wait for a callee to respond to our NEW
 #define CALL_INITIATION_TIMEOUS_MS (2000)
 // How long we wait for a DNS response
-#define DNS_REQUEST_TIMEOUT_MS (250)
+#define DNS_REQUEST_TIMEOUT_MS (500)
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
