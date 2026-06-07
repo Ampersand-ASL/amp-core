@@ -77,7 +77,7 @@ static const uint32_t TERMINATION_TIMEOUT_MS = 5 * 1000;
 // How long we wait for a callee to respond to our NEW
 #define CALL_INITIATION_TIMEOUS_MS (2000)
 // How long we wait for a DNS response
-#define DNS_REQUEST_TIMEOUT_MS (2000)
+#define DNS_REQUEST_TIMEOUT_MS (250)
 
 // #### TODO: CONFIGURATION
 static const char* DNS_IP_ADDR = "208.67.222.222";
@@ -2362,9 +2362,9 @@ void LineIAX2::_progressCaller(Call& call) {
 
         _sendFrameToPeer(frame, call);
 
-        // ### TODO CLEAR RETRANSMIT?
-
-
+        // Clear the re-transmit queue to avoid having the NEW message 
+        // sent again.
+        call.reTx.clear();
 
         // The timeout is a bit longer here
         call.setState(Call::State::STATE_WAITING, 
