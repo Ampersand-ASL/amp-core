@@ -180,9 +180,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-            "text/html");
-        //res.set_file_content("../amp-core/www/index.html");
+        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+        //    "text/html");
+        res.set_file_content("../amp-core/www/index.html");
     });
 
     svr.Get("/favorites", [ui](const httplib::Request &, httplib::Response &res) {
@@ -497,15 +497,31 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
 #endif
 
     svr.Get("/log", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+        res.set_content((const char*)_amp_core_www_log_html, _amp_core_www_log_html_len,
             "text/html");
         //res.set_file_content("../amp-core/www/log.html");
     });
 
-    svr.Get("/log-data", [ui](const httplib::Request &, httplib::Response &res) {
+    static int c = 0;
+
+    svr.Get("/log-data", [ui](const httplib::Request& req, httplib::Response &res) {
+        json o;
+        if (req.has_param("log_state") && req.get_param_value("log_state") == "0") {
+            o["clear"] = true;
+        }
+        else {
+            o["clear"] = false;
+        }
+        o["log_state"] = 1;
         auto a = json::array();
-        // GO FAST! This is blocking the multi-threaded logger
-        res.set_content(a.dump(), "application/json");
+        for (unsigned i = 0; i < 10; i++) {
+            char temp[64];
+            snprintf(temp, sizeof(temp), "line %d", c++);
+            a.push_back(temp);
+        }
+        o["lines"] = a;
+            // GO FAST! This is blocking the multi-threaded logger
+        res.set_content(o.dump(), "application/json");
     });
 
     // OK to use this const
