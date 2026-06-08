@@ -2508,6 +2508,7 @@ void LineIAX2::_hangupCall(Call& call) {
     // a reconnect loop.
     const char causeCode[] = { 16 };
     hangupFrame.addIE_str(IEType::IAX2_IE_CAUSECODE, causeCode, 1);
+    hangupFrame.addIE_str(IEType::IAX2_IE_CAUSE, "Call ended");
 
     _sendFrameToPeer(hangupFrame, call);
     // Go into a state that will publish a CALL_END message

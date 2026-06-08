@@ -133,6 +133,7 @@ enum IEType {
     IAX2_IE_CHALLENGE = 0x0f,
     IAX2_IE_MD5_RESULT = 0x10,
     IAX2_IE_APPARENT_ADDR = 0x12,
+    IAX2_IE_CAUSE = 0x16,
     // NOTE: Not in IANA yet, working on getting this registered
     IAX2_IE_ED25519_RESULT = 0x20,
     // NOTE: Not in IANA yet
