@@ -2099,7 +2099,19 @@ void LineIAX2::_processDNSResponseA(Call& call,
     uint32_t addr;
     int rc1 = microdns::parseDNSAnswer_A(buf, bufLen, &addr);
     if (rc1 < 0) {
-        call.setState(Call::State::STATE_LOOKUP_FAILED);
+        if (call.state == Call::State::STATE_LOOKUP_WAIT_1) {
+            call.setState(Call::State::STATE_LOOKUP_FAILED);
+        }
+        else if (call.state == Call::State::STATE_AUTH_WAIT_0d) {
+            if (_authenticationRequired) {
+                _log.info("Call %u IP validation failed", call.localCallId);
+                _terminateCall(call);
+            }
+            else {
+                _log.info("IP address not authenticated, but not required");
+                call.setState(Call::State::STATE_CALLER_VALIDATED);
+            }
+        }
         return;
     }
 
