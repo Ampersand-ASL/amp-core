@@ -87,6 +87,8 @@ extern unsigned char _amp_core_www_config_html[];
 extern unsigned int _amp_core_www_config_html_len;
 extern unsigned char _amp_core_www_main_css[];
 extern unsigned int _amp_core_www_main_css_len;
+extern unsigned char _amp_core_www_log_html[];
+extern unsigned int _amp_core_www_log_html_len;
 
 namespace kc1fsz {
 
@@ -516,7 +518,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         auto a = json::array();
         for (unsigned i = 0; i < 10; i++) {
             char temp[64];
-            snprintf(temp, sizeof(temp), "line %d", c++);
+            snprintf(temp, sizeof(temp), "Development in process (%d)", c++);
             a.push_back(temp);
         }
         o["lines"] = a;
