@@ -2230,8 +2230,10 @@ bool LineIAX2::_progressCall(Call& call) {
         _progressCallee(call);
 
     // Deal with states that apply to both sides
-    if (call.state == Call::State::STATE_TERMINATE_REQUESTED) {
-
+    if (call.state == Call::State::STATE_HANGUP_REQUESTED) {
+        _hangupCall(call);
+    }
+    else if (call.state == Call::State::STATE_TERMINATE_REQUESTED) {
         // Broadcast a message on the bus to inform listeners that 
         // the call was terminated.
         PayloadCallEnd payload;
@@ -2496,7 +2498,7 @@ void LineIAX2::_progressCallee(Call& call) {
     }
 }
 
-void LineIAX2::_hangupCall(Call& call) {
+void LineIAX2::_disconnectCall(Call& call) {
 
     // On 8-June-2026 Patrick N2DYI observed that HamVOIP nodes will automatically
     // reconnect a call that does not use the !!DISCONNECT!! text message. This is 
@@ -2510,6 +2512,14 @@ void LineIAX2::_hangupCall(Call& call) {
     textFrame.setBody((const uint8_t*)"!!DISCONNECT!!", 15);
     _sendFrameToPeer(textFrame, call);
 
+    // Wait for a few seconds to see if we get a hangup from the side
+
+    call.setState(Call::State::STATE_DISCONNECT_WAIT, 5000, 
+        Call::State::STATE_HANGUP_REQUESTED);
+}
+
+void LineIAX2::_hangupCall(Call& call) {
+
     IAX2FrameFull hangupFrame;
     hangupFrame.setHeader(call.localCallId, call.remoteCallId, 
         call.dispenseElapsedMs(_clock), 
@@ -2519,7 +2529,7 @@ void LineIAX2::_hangupCall(Call& call) {
     hangupFrame.addIE_str(IEType::IAX2_IE_CAUSECODE, causeCode, 1);
     hangupFrame.addIE_str(IEType::IAX2_IE_CAUSE, "Call ended");
     _sendFrameToPeer(hangupFrame, call);
-
+    
     // Go into a state that will publish a CALL_END message
     call.setState(Call::State::STATE_TERMINATE_REQUESTED);
 }
@@ -2667,7 +2677,7 @@ void LineIAX2::consume(const Message& msg) {
                 }
                 else if (msg.getType() == Message::Type::SIGNAL) {
                     if (msg.getFormat() == Message::SignalType::CALL_TERMINATE) {
-                        line->_hangupCall(call);
+                        line->_disconnectCall(call);
                     } 
                     // This is the case where an UNKEY is requested by something 
                     // on the internal bus. Create an UNKEY frame and send it out.

@@ -288,6 +288,11 @@ public:
             STATE_LINKED,
             // Normal operation
             STATE_UP,
+            // A !!DISCONNECT!! has been sent to the peer, if nothing happens
+            // in a few seconds then we go to proactive HANGUP
+            STATE_DISCONNECT_WAIT,
+            // Request to send a HANGUP request and go into termination
+            STATE_HANGUP_REQUESTED, 
             // This is the state that requests a termination. 
             STATE_TERMINATE_REQUESTED,
             // This is a state that we enter to shutdown a connection.
@@ -536,7 +541,18 @@ private:
 
     void _sendACK(uint32_t timeStamp, Call& call); 
     void _sendREJECT(uint16_t destCall, const sockaddr& peerAddr, const char* cause);
+
+    /**
+     * Sends a TEXT !!DISCONNECT!! to the peer. If nothing happens after a few seconds
+     * we go into the hangup process.
+     */
+    void _disconnectCall(Call& call);
+
+    /**
+     * Sends an IAX HANGUP and starts the tear-down process.
+     */
     void _hangupCall(Call& call);
+
     /**
      * Puts the call in terminate mode. The call will 
      * continue to be active long enough for the peer
