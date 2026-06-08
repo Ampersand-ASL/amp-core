@@ -2697,6 +2697,7 @@ void LineIAX2::consume(const Message& msg) {
                             ControlSubclass::IAX2_SUBCLASS_CONTROL_UNKEY);
                         line->_sendFrameToPeer(frame, call);
                     }
+                    /*
                     // This is the case when the TALKERID is being asserted
                     else if (msg.getFormat() == Message::SignalType::CALL_TALKERID) {                        
                         // A text telemetry frame is used for this control
@@ -2716,6 +2717,7 @@ void LineIAX2::consume(const Message& msg) {
                         frame.setBody((const uint8_t*)text, strlen(text) + 1);
                         line->_sendFrameToPeer(frame, call);
                     }
+                    */
                 }
             },
             // Predicate (filters the calls)
