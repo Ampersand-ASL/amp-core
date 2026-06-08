@@ -138,6 +138,7 @@ enum IEType {
     // NOTE: Not in IANA yet
     IAX2_IE_TARGET_ADDR = 0x21,
     IAX2_IE_TARGET_ADDR2 = 0x22,
+    IAX2_IE_CAUSECODE = 0x2a,
     IAX2_IE_CODEC_PREFS = 0x2d,
     // NOTE: NOT IN IANA!
     IAX2_IE_FORMAT_WIDE = 0x38
