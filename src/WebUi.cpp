@@ -182,9 +182,9 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
     // ------ Main Page --------------------------------------------------------
 
     svr.Get("/", [](const httplib::Request &, httplib::Response &res) {
-        //res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
-        //    "text/html");
-        res.set_file_content("../amp-core/www/index.html");
+        res.set_content((const char*)_amp_core_www_index_html, _amp_core_www_index_html_len,
+            "text/html");
+        //res.set_file_content("../amp-core/www/index.html");
     });
 
     svr.Get("/favorites", [ui](const httplib::Request &, httplib::Response &res) {
