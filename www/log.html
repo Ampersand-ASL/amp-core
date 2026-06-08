@@ -10,8 +10,58 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
 .log-div {
     font-family: monospace;
     height: calc(100vh - 150px);
-     overflow: auto;
+    overflow: auto;
 }            
+/* Terminal container */
+.terminal-window {
+    width: 100%;
+    x-height: 100%;
+    height: calc(100vh - 150px);
+    background-color: #000000;
+    border: 2px solid #333;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Header bar */
+.terminal-header {
+    background-color: #222;
+    padding: 8px 15px;
+    color: #aaa;
+    font-size: 13px;
+    border-bottom: 1px solid #333;
+}
+
+/* The scrollable text body */
+.terminal-body {
+    flex: 1;
+    padding: 10px;
+    color: #33ff33; /* Classic terminal green */
+    font-size: 14px;
+    line-height: 1.25;
+    overflow-y: auto; /* Enables vertical scrolling */
+    white-space: pre-wrap; /* Preserves line breaks and spaces */
+    word-break: break-all;
+    scrollbar-color: #f1f1f1 #222; /* Format: thumb_color track_color */
+}
+    /* Blinking terminal cursor effect */
+.cursor {
+    display: inline-block;
+    width: 10px;
+    height: 17px;
+    background-color: #33ff33;
+    animation: blink 0.8s infinite;
+    vertical-align: middle;
+    margin-left: 0px;
+}
+
+@keyframes blink {
+    0%, 49% { background-color: #33ff33; }
+    50%, 100% { background-color: transparent; }
+}
         </style>
     </head>
     <body>
@@ -30,42 +80,70 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
             </div>
         </div>
         <div class="content-row" role="tabpanel">
+            <div class="terminal-window">
+                <div class="terminal-header">bash - user@system:~</div>
+                <!-- Content will build up inside this container -->
+                <div class="terminal-body" id="output"></div>
+            </div>
+            <!--
             <div id="log-container" class="log-div">
             </div>
+            -->
         </div> <!-- /content-row -->
         <div class="footer-row">
             <span><i><a href="https://www.qrz.com/db/KC1FSZ">Bruce MacKinnon KC1FSZ bruce@mackinnon.com</a></i></span>
         </div> <!-- /footer-row -->
     </body>
     <script>
-async function log_update() {
-    container = document.getElementById("log-container")
-    container.replaceChildren();
+log_state = "0";
+const lineLimit = 1024;
+
+async function log_update(initialLoad) {
+    const outputDiv = document.getElementById("output");
+    atBottom = Math.abs(outputDiv.scrollHeight - outputDiv.scrollTop - outputDiv.clientHeight) < 1
+    if (initialLoad)
+        log_state = "0";
     try {
-        const response = await fetch('log-data');
+        const response = await fetch("log-data?log_state=" + log_state);
         if (response.ok) {
             const data = await response.json();
-            for (i of data) {
-                var lineDiv = document.createElement('div');
-                //lineDiv.classList.add("logline");
-                //var sp = document.createElement('span');
-                lineDiv.innerHTML = i["text"];
-                container.appendChild(lineDiv);
-            }
+            // Grab the cookie for next time
+            log_state = data["log_state"];
+            // Remove existing cursor if it exists
+            const oldCursor = outputDiv.querySelector(".cursor");
+            if (oldCursor) 
+                oldCursor.remove();               
+            // Clear all text?
+            if (data["clear"])
+                outputDiv.replaceChildren();
+            // Prune off old lines that are above the limit
+            while (outputDiv.childNodes.length > lineLimit)
+                if (outputDiv.firstChild)
+                    outputDiv.removeChild(outputDiv.firstChild);
+            // Add new lines
+            for (i of data["lines"])
+                outputDiv.appendChild(document.createTextNode(`${i}\n`));
+            // Create a new cursor container and insert it at the end
+            const cursorSpan = document.createElement("span");
+            cursorSpan.className = "cursor";
+            outputDiv.appendChild(cursorSpan);
+            // Auto-scroll mechanism to snap the scroll view down, but only if the user
+            // was already seeing the bottom of the log.
+            if (atBottom)
+                outputDiv.scrollTop = outputDiv.scrollHeight;
         }
     } catch (error) {
-        console.log(error)
+        //console.log(error)
     }
-     // Set the scrollTop position to the total scrollable height
-    container.scrollTop = container.scrollHeight;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Fast timer to get live updates from the server
-    //setInterval(async () => {
-    //    log_update();
-    //}, 500);
-    log_update();
+    // Next update
+    setInterval(async () => {
+        log_update(false);
+    }, 1000);
+    // The initial request is for everything
+    log_update(true);
 });
     </script>
 </html>
