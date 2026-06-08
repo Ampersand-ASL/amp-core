@@ -2497,20 +2497,29 @@ void LineIAX2::_progressCallee(Call& call) {
 }
 
 void LineIAX2::_hangupCall(Call& call) {
+
+    // On 8-June-2026 Patrick N2DYI observed that HamVOIP nodes will automatically
+    // reconnect a call that does not use the !!DISCONNECT!! text message. This is 
+    // needed to avoid a reconnect loop.
+
+    IAX2FrameFull textFrame;
+    textFrame.setHeader(call.localCallId, call.remoteCallId, 
+        call.dispenseElapsedMs(_clock), 
+        call.outSeqNo, call.expectedInSeqNo, FrameType::IAX2_TYPE_TEXT, 0);
+    // NOTE: INCLUDING NULL!
+    textFrame.setBody((const uint8_t*)"!!DISCONNECT!!", 15);
+    _sendFrameToPeer(textFrame, call);
+
     IAX2FrameFull hangupFrame;
     hangupFrame.setHeader(call.localCallId, call.remoteCallId, 
         call.dispenseElapsedMs(_clock), 
         call.outSeqNo, call.expectedInSeqNo, IAX2_TYPE_IAX, IAX2_SUBCLASS_IAX_HANGUP);
-
     // Setup CAUSECODE of 16 ("normal clearing"). 
-    // On 8-June-2026 Patrick N2DYI observed that HamVOIP nodes will automatically
-    // reconnect a call that does not have this cause code set. This is needed to avoid
-    // a reconnect loop.
     const char causeCode[] = { 16 };
     hangupFrame.addIE_str(IEType::IAX2_IE_CAUSECODE, causeCode, 1);
     hangupFrame.addIE_str(IEType::IAX2_IE_CAUSE, "Call ended");
-
     _sendFrameToPeer(hangupFrame, call);
+
     // Go into a state that will publish a CALL_END message
     call.setState(Call::State::STATE_TERMINATE_REQUESTED);
 }
