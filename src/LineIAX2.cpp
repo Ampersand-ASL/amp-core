@@ -94,6 +94,9 @@ static const char* DNS_IP_ADDR = "208.67.222.222";
 // retransmit buffer
 #define RETRANSMIT_COUNT_LIMIT (16)
 
+// Controls how long we wait for a HANGUP after sending TEXT !!DISCONNECT!!
+#define DISCONNECT_TIMEOUT_MS (2000)
+
 namespace kc1fsz {
 
 static uint32_t alignToTick(uint32_t ts, uint32_t tick) {
@@ -2498,11 +2501,15 @@ void LineIAX2::_progressCallee(Call& call) {
     }
 }
 
-void LineIAX2::_disconnectCall(Call& call) {
+// On 8-June-2026 Patrick N2DYI observed that HamVOIP nodes will automatically
+// reconnect a call that does not use the !!DISCONNECT!! text message. This is 
+// needed to avoid a reconnect loop.
+//
+// This function sends the !!DISCONNECT!! text and then enters a state waiting
+// for a HANGUP to happen. If nothing happens after a few seconds then we will
+// proactively initiate a HANGUP.
 
-    // On 8-June-2026 Patrick N2DYI observed that HamVOIP nodes will automatically
-    // reconnect a call that does not use the !!DISCONNECT!! text message. This is 
-    // needed to avoid a reconnect loop.
+void LineIAX2::_disconnectCall(Call& call) {
 
     IAX2FrameFull textFrame;
     textFrame.setHeader(call.localCallId, call.remoteCallId, 
@@ -2513,8 +2520,7 @@ void LineIAX2::_disconnectCall(Call& call) {
     _sendFrameToPeer(textFrame, call);
 
     // Wait for a few seconds to see if we get a hangup from the side
-
-    call.setState(Call::State::STATE_DISCONNECT_WAIT, 5000, 
+    call.setState(Call::State::STATE_DISCONNECT_WAIT, DISCONNECT_TIMEOUT_MS, 
         Call::State::STATE_HANGUP_REQUESTED);
 }
 
