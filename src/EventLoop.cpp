@@ -52,6 +52,8 @@ void EventLoop::run(Log& log, Clock& clock,
     unsigned long loopCount = 0;   
     unsigned long maxLateUs = 0;
 
+    unsigned long usedUs[16] = { 0 };
+
     // IMPORTANT POINT: THIS IS THE ACTUAL EVENT LOOP OF THE APPLICATION. THIS
     // WHILE LOOP WILL NEVER EXIT!
 
@@ -118,20 +120,32 @@ void EventLoop::run(Log& log, Clock& clock,
 
         unsigned long workStartUs = clock.timeUs();
 
-        for (unsigned i = 0; i < task1Count; i++)
+        for (unsigned i = 0; i < task1Count; i++) {
+            uint64_t startUs = clock.timeUs();
             tasks1[i]->run();
+            uint64_t endUs = clock.timeUs();
+            usedUs[i] += (endUs - startUs);
+        }
 
         // This timer has highest priority since the audio tick rate is time-critical
         uint64_t intervalUs = 0;
         if (timer20ms.poll(&intervalUs)) {
             if (timer20ms.getLateUs() > maxLateUs)
                 maxLateUs = timer20ms.getLateUs();
-            for (unsigned i = 0; i < taskCount; i++)
+            for (unsigned i = 0; i < taskCount; i++) {
+                uint64_t startUs = clock.timeUs();
                 tasks[i]->audioRateTick(intervalUs / 1000);
+                uint64_t endUs = clock.timeUs();
+                usedUs[i] += (endUs - startUs);
+            }
         }  
 
-        for (unsigned i = 0; i < taskCount; i++)
+        for (unsigned i = 0; i < taskCount; i++) {
+            uint64_t startUs = clock.timeUs();
             tasks[i]->run2();             
+            uint64_t endUs = clock.timeUs();
+            usedUs[i] += (endUs - startUs);
+        }
 
         if (timer250ms.poll()) {
             for (unsigned i = 0; i < taskCount; i++)
@@ -182,6 +196,11 @@ void EventLoop::run(Log& log, Clock& clock,
             maxLateUs = 0;
             slowestLoopUs = 0;
             loopCount = 0;            
+
+            log.info("Stats:");
+            for (unsigned i = 0; i < taskCount; i++) {
+                log.info("Task %02u %lu", i, usedUs[i]);
+            }
         }
 
         loopCount++;
