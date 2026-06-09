@@ -32,6 +32,7 @@ extern "C" {
 #include "httplib.h"
 
 #include "kc1fsz-tools/Log.h"
+#include "kc1fsz-tools/CircularBuffer2Locked.h"
 #include "kc1fsz-tools/Clock.h"
 #include "kc1fsz-tools/threadsafequeue.h"
 #include "kc1fsz-tools/linux/FileUtils.h"
@@ -50,6 +51,8 @@ extern "C" {
 #include "SerialUtil.h"
 
 #define CMEDIA_VENDOR_ID ("0d8c")
+// The largest number of log lines that will be returned in a single response
+#define LOG_PAYLOAD_LIMIT 128
 
 using namespace std;
 
@@ -147,7 +150,7 @@ bool WebUi::_checkAuthorization(const string& auth) const {
     return auth == target;
 }
 
-void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
+void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* logBuffer) {
 
     amp::setThreadName("amp-ui");
     
@@ -504,25 +507,56 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus) {
         //res.set_file_content("../amp-core/www/log.html");
     });
 
-    static int c = 0;
+    svr.Get("/log-data", [ui, logBuffer](const httplib::Request& req, httplib::Response &res) {
 
-    svr.Get("/log-data", [ui](const httplib::Request& req, httplib::Response &res) {
+        string logState = "0";
+        if (req.has_param("log_state")) 
+            logState = req.get_param_value("log_state");
+
+        // When starting from the beginning of the log the client is given 
+        // the instruction to clear the screen. Otherwise, new lines are 
+        // just appended to the existing screen.
         json o;
-        if (req.has_param("log_state") && req.get_param_value("log_state") == "0") {
+        if (logState == "0")
             o["clear"] = true;
-        }
-        else {
+        else
             o["clear"] = false;
-        }
-        o["log_state"] = 1;
+
         auto a = json::array();
-        for (unsigned i = 0; i < 10; i++) {
-            char temp[64];
-            snprintf(temp, sizeof(temp), "Development in process (%d)", c++);
-            a.push_back(temp);
-        }
+        unsigned startingSeq = atoi(logState.c_str());
+        unsigned maxSeq = startingSeq;
+        unsigned payloadSize = 0;
+
+        //ui->_log.info("Starting seq %s", logState.c_str());
+
+        // GO FAST! This is blocking the multi-threaded logger!
+        logBuffer->visit([&a, startingSeq, &maxSeq, &payloadSize](const void* b, unsigned len) {
+
+            assert(len <= sizeof(LogEntry));
+            LogEntry entry;
+            memcpy(&entry, b, len);
+
+            // Ignore what we've seen already
+            if (entry.seq <= startingSeq) 
+                return;
+
+            // There is a limit to the number of rows we'll give out in one pull
+            if (payloadSize < LOG_PAYLOAD_LIMIT) {
+                maxSeq = std::max(maxSeq, entry.seq);
+                // This works because the data is null-terminated
+                a.push_back((const char*)entry.text);
+                payloadSize++;
+            }
+        });
+
         o["lines"] = a;
-            // GO FAST! This is blocking the multi-threaded logger
+
+        char token[16];
+        snprintf(token, sizeof(token), "%u", maxSeq);
+        o["log_state"] = token;
+
+        //ui->_log.info("Ending seq %s", token);
+
         res.set_content(o.dump(), "application/json");
     });
 

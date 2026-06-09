@@ -37,6 +37,7 @@ class Log;
 class Clock;
 class MessageConsumer; 
 class TraceLog;
+class CircularBuffer2Locked;
 
     namespace amp {
 
@@ -72,8 +73,10 @@ public:
     /**
      * Start this on a background thread since the HTTP server listen call 
      * is blocking.
+     * 
+     * @param logBuffer The source of console log data for display on the Log tab.
      */
-    static void uiThread(WebUi* ui, MessageConsumer* bus);
+    static void uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* logBuffer);
 
     // ----- MessageConsumer --------------------------------------------
 
@@ -99,6 +102,14 @@ private:
     copyableatomic<json> _config;
     copyableatomic<json> _status;
     copyableatomic<json> _levels;
+};
+
+/**
+ * An instance of this structure is put into the log buffer for each line logged.
+ */
+struct LogEntry {
+    unsigned seq;
+    char text[80];
 };
 
     }

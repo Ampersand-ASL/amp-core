@@ -81,7 +81,7 @@ Copyright (C) 2026, Bruce MacKinnon KC1FSZ
         </div>
         <div class="content-row" role="tabpanel">
             <div class="terminal-window">
-                <div class="terminal-header">bash - user@system:~</div>
+                <div class="terminal-header">Ampersand Server Log</div>
                 <!-- Content will build up inside this container -->
                 <div class="terminal-body" id="output"></div>
             </div>
@@ -100,7 +100,7 @@ const lineLimit = 1024;
 
 async function log_update(initialLoad) {
     const outputDiv = document.getElementById("output");
-    atBottom = Math.abs(outputDiv.scrollHeight - outputDiv.scrollTop - outputDiv.clientHeight) < 1
+    atBottom = Math.abs(outputDiv.scrollHeight - outputDiv.scrollTop - outputDiv.clientHeight) < 16
     if (initialLoad)
         log_state = "0";
     try {
