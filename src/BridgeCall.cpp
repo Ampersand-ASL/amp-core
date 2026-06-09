@@ -112,6 +112,8 @@ BridgeCall::BridgeCall() {
                 assert(false);
         } else if (_mode == Mode::TONE) {
             // No input in tone mode
+        } else if (_mode == Mode::PROGRAM) {
+            // Ignore audio in program mode
         } else {
             assert(false);
         }
