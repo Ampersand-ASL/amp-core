@@ -101,6 +101,9 @@ void ConfigPoller::_populateDefaults(json& j) {
     setDefault(j, "courtesyTone", "(1000,0,100,2048)");
     setDefault(j, "courtesyDelay", "500");
     setDefault(j, "rxDelay", "0");
+    setDefault(j, "aslAudioDevice", "");
+    setDefault(j, "aslCosDevice", "");
+    setDefault(j, "aslPttDevice", "");
 
     // If there is no USB sound device selected, default to the first C-Media 
     // device we can find.
