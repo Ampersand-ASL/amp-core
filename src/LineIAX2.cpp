@@ -519,11 +519,16 @@ int LineIAX2::getPolls(pollfd* fds, unsigned fdsCapacity) {
     return used;
 }
 
+// These are background tasks that need the fastest possible response
 bool LineIAX2::run2() {   
     bool w1 = _processInboundIAXData();
     bool w2 = _processInboundDNSData();
-    bool w3 = _progressCalls();
-    return w1 || w2 || w3;
+    return w1 || w2;
+}
+
+// These are the tasks that aren't quite as time-sensitive
+void LineIAX2::audioRateTick(uint32_t) {
+    _progressCalls();
 }
 
 //static unsigned dropRecvCount = 0;
@@ -2208,30 +2213,20 @@ void LineIAX2::_processDNSResponsePublicKey(Call& call,
         CALL_INITIATION_TIMEOUS_MS, Call::State::STATE_AUTH_REQUESTED_0c);                
 }
 
-bool LineIAX2::_progressCalls() {
-
-    // IMPORTANT: If any of the calls say that they may need more work then 
-    // the entire line should say that it might need more work.
-    bool moreNeeded = false;
-
+void LineIAX2::_progressCalls() {
     _visitActiveCallsIf(
         // Visitor
-        [line=this, &moreNeeded](Call& call) {
-            bool w = line->_progressCall(call);
-            if (w)
-                moreNeeded = true;
+        [line=this](Call& call) {
+            line->_progressCall(call);
         },
         // Predicate
         [](const Call& call) { return true; }
     );
-    return moreNeeded;
 }
 
 // #### TODO: MOVE TO CALL CLASS
 
-bool LineIAX2::_progressCall(Call& call) {
-
-    const Call::State originalState = call.state;
+void LineIAX2::_progressCall(Call& call) {
 
     // Check for timeout
     if (call.stateTimeoutMs != 0)
@@ -2274,10 +2269,6 @@ bool LineIAX2::_progressCall(Call& call) {
         _log.info("Call %u/%d has ended", call.localCallId, call.remoteCallId);
         call.reset();
     }
-
-    // If the state changes then its possible that more work is 
-    // needed immediately.
-    return call.state != originalState;
 }
 
 // This function does the call-level state machine that is specific to 

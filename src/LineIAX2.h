@@ -233,7 +233,7 @@ public:
     // ----- Runnable -------------------------------------------------------
 
     virtual bool run2();
-  
+    virtual void audioRateTick(uint32_t tickTimeMs);
     virtual void oneSecTick();
     virtual void tenSecTick();
 
@@ -514,15 +514,8 @@ private:
      */
     unsigned _dropIf(std::function<bool(const Call& call)> pred);
 
-    /**
-     * @return true if there might be more work to be done
-     */
-    bool _progressCalls();
-
-    /**
-     * @return true if there might be more work to be done
-     */
-    bool _progressCall(Call& call);
+    void _progressCalls();
+    void _progressCall(Call& call);
     void _progressCaller(Call& call);
     void _progressCallee(Call& call);
 
