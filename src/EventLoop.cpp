@@ -197,10 +197,10 @@ void EventLoop::run(Log& log, Clock& clock,
             slowestLoopUs = 0;
             loopCount = 0;            
 
-            log.info("Stats:");
-            for (unsigned i = 0; i < taskCount; i++) {
-                log.info("Task %02u %lu", i, usedUs[i]);
-            }
+            //log.info("Stats:");
+            //for (unsigned i = 0; i < taskCount; i++) {
+            //    log.info("Task %02u %lu", i, usedUs[i]);
+            //}
         }
 
         loopCount++;
