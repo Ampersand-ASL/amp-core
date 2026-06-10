@@ -158,7 +158,7 @@ void ConfigPoller::_populateDefaults(json& j) {
     setDefault(j, "aslPttInvert", "0");
 
     if (!j.contains("favorites"))
-        j["favorites"] = "2002:ASL Parrot";
+        j["favorites"] = "2002:ASL Parrot,61057:AMP Parrot,27339:East Coast Reflector";
     setDefault(j, "kfnodes", "");
     if (!j.contains("kfdelay"))
         j["kfdelay"] = "2000";
