@@ -257,6 +257,10 @@ int LineUsb::_open() {
     //const snd_pcm_uframes_t stopThreshold = USB_PLAY_BUFFER_SIZE_FRAMES - USB_PLAY_PERIOD_SIZE_FRAMES;
     //snd_pcm_sw_params_set_stop_threshold(playH, play_sw_params, stopThreshold);
 
+    // 10-June-2026: Bruce was investigating some problems caused when the NTP server shifted
+    // the system time asynchronously. Could this possibly be the cause of the periodic freezing
+    // that was observed by David NR9V on his UnoQ board?
+    snd_pcm_sw_params_set_tstamp_type(playH, play_sw_params, SND_PCM_TSTAMP_TYPE_MONOTONIC_RAW);
 
     if ((err = snd_pcm_sw_params(playH, play_sw_params)) < 0) {
         _log.error("Unable to configure play SW parameters %d", err);
@@ -295,6 +299,16 @@ int LineUsb::_open() {
 
     if ((err = snd_pcm_hw_params(captureH, capture_hw_params)) < 0) {
         _log.error("Capture parameters %d", err);
+        return -1;
+    }
+
+    // ALSA software parameters
+    snd_pcm_sw_params_t* capture_sw_params;
+    snd_pcm_sw_params_alloca(&capture_sw_params);
+    snd_pcm_sw_params_current(captureH, capture_sw_params);
+    snd_pcm_sw_params_set_tstamp_type(captureH, capture_sw_params, SND_PCM_TSTAMP_TYPE_MONOTONIC_RAW);
+    if ((err = snd_pcm_sw_params(captureH, capture_sw_params)) < 0) {
+        _log.error("Unable to configure capture SW parameters %d", err);
         return -1;
     }
 
@@ -602,10 +616,8 @@ void LineUsb::_playIfPossible() {
         return;
 
     // After an overrun create a delay to try to recover
-    if (_clock.isInWindow(_lastWriteOverrunMs, 500)) {
-        _log.info("In overrun recovery delay");
+    if (_clock.isInWindow(_lastWriteOverrunMs, 500))
         return;
-    }
 
     // Look at the status of the PCM
     //snd_pcm_status_t *status;
