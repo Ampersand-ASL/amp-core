@@ -410,6 +410,7 @@ void LineRadio::_sendTalkerId() {
 }
 
 void LineRadio::_signalOpen(bool echo, float echoGainDb) {    
+
     // Generate the same kind of call start message that would
     // come from the IAX2Line after a new connection.
     PayloadCallStart payload;
@@ -423,6 +424,19 @@ void LineRadio::_signalOpen(bool echo, float echoGainDb) {
     payload.originated = true;
     payload.permanent = true;
     _sendSignal(Message::SignalType::CALL_START, &payload, sizeof(payload));
+
+    // Get back to the idle state
+    if (_playState == PlayState::STATE_IDLE) {
+    }
+    else {
+        _playSpurtEnd();
+        _playState.setState(PlayState::STATE_IDLE);
+    }
+
+    // Kick into the playing mode so that there is some audio 
+    // indication that the interface is opened.  
+    _playState.setState(PlayState::STATE_PLAYING);
+    _playSpurtStart();
 }
 
 void LineRadio::_signalClose() {
