@@ -18,6 +18,7 @@
 
 #include <fstream>
 #include <cmath>
+#include <functional>
 
 // NOTE: This may be the real ALSA library or a mock, depending on the
 // platfom that we are builing for.
@@ -147,13 +148,15 @@ int setMixer(const char* deviceName, const char *paramName, unsigned count, int 
 int setMixer1(const char* deviceName, const char *paramName, int v);
 int setMixer2(const char* deviceName, const char *paramName, int v1, int v2);
 
+int convertMixerValueToDb(const char* deviceName, const char* paramName, int value, int* db);
+int convertMixerDbToValue(const char* deviceName, const char* paramName, int dB, int* value);
+
 /**
+ * Visits each legal mixer value in dB.
+
  * @returns 0 if the range was obtained. -1 means that the device name was invalid. -2 means 
  * that the parameter is not found.
  */
-int getMixerRange(const char* deviceName, const char* paramName, int* minV, int* maxV);
-
-int convertMixerValueToDb(const char* deviceName, const char* paramName, int value, int* db);
-int convertMixerDbToValue(const char* deviceName, const char* paramName, int dB, int* value);
+int visitMixerRangeDb(const char* deviceName, const char* paramName, std::function<void(int)> cb);
 
 }

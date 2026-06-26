@@ -98,7 +98,7 @@ namespace kc1fsz {
     namespace amp {
 
 json enumAudioDevice();
-json enumMixSet(const string& menuName, const string& arg);
+json enumMixSet(const string& menuName, const string& arg, Log& log);
 json enumIODevice();
 json enumInputSignal(const string& device);
 json enumOutputSignal(const string& device);
@@ -348,7 +348,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
     // This is the end-point that supplies choices for the dynamic select/option
     // menus.
     svr.Get("/config-select-options", 
-        [](const httplib::Request& req, httplib::Response &res) {
+        [ui](const httplib::Request& req, httplib::Response &res) {
 
         json a;
         const string menuName = req.get_param_value("name");      
@@ -357,7 +357,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
         if (menuName == "aslTxMixASet" || 
             menuName == "aslTxMixBSet" || 
             menuName == "aslRxMixerSet")
-            a = enumMixSet(menuName, arg);
+            a = enumMixSet(menuName, arg, ui->_log);
         else if (menuName == "aslAudioDevice")
             a = enumAudioDevice();
         else if (menuName == "aslCosDevice" || menuName == "aslCtcssDevice" ||
@@ -607,7 +607,7 @@ json enumAudioDevice() {
     return a;
 }
 
-json enumMixSet(const string& menuName, const string& arg) {
+json enumMixSet(const string& menuName, const string& arg, Log& log) {
     auto a = json::array();
 #ifndef _WIN32            
     if (arg.starts_with("usbaud ")) {
@@ -616,39 +616,40 @@ json enumMixSet(const string& menuName, const string& arg) {
         string ossDev;
         int rc = resolveUSBSoundDevice(arg.substr(7).c_str(), alsaDev, ossDev);
         if (rc == 0) {
-            // Get range, first in units and then convert to dB
+
             char name[32];
             snprintf(name, 32, "hw:%d", alsaDev);
-            int rc2, minV, maxV;
-            // The parameter name depends on whether we are talking about play or capture
+
+            // The mixer parameter name depends on whether we are talking about play or capture
             if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
-                rc2 = getMixerRange(name, "Speaker Playback Volume", &minV, &maxV);
+                int rc2 = visitMixerRangeDb(name, "Speaker Playback Volume",
+                    [&a](int db) {
+                        json o;
+                        char t[32];
+                        snprintf(t, sizeof(t), "%d", db);
+                        o["value"] = t;
+                        snprintf(t, sizeof(t), "%ddB", db);
+                        o["desc"] = t;
+                        a.push_back(o);
+                    }
+                );
+                if (rc2 != 0) 
+                    log.error("Failed to enumerate mixer %s", name);
             }
             else if (menuName == "aslRxMixerSet") {
-                rc2 = getMixerRange(name, "Mic Capture Volume", &minV, &maxV);
-            }
-            else {
-                rc2 = -1;
-            }
-            if (rc2 == 0) {
-                int minDb = 0, maxDb = 0;
-                if (menuName == "aslTxMixASet" || menuName == "aslTxMixBSet") {
-                    convertMixerValueToDb(name, "Speaker Playback Volume", minV, &minDb);
-                    convertMixerValueToDb(name, "Speaker Playback Volume", maxV, &maxDb);
-                }
-                else if (menuName == "aslRxMixerSet") {
-                    convertMixerValueToDb(name, "Mic Capture Volume", minV, &minDb);
-                    convertMixerValueToDb(name, "Mic Capture Volume", maxV, &maxDb);
-                }
-                for (int g = maxDb; g >= minDb; g--) {
-                    json o;
-                    char t[32];
-                    snprintf(t, 32, "%d", g);
-                    o["value"] = t;
-                    snprintf(t, 32, "%ddB", g);
-                    o["desc"] = t;
-                    a.push_back(o);
-                }
+                int rc2 = visitMixerRangeDb(name, "Mic Capture Volume",
+                    [&a](int db) {
+                        json o;
+                        char t[32];
+                        snprintf(t, sizeof(t), "%d", db);
+                        o["value"] = t;
+                        snprintf(t, sizeof(t), "%ddB", db);
+                        o["desc"] = t;
+                        a.push_back(o);
+                    }
+                );
+                if (rc2 != 0) 
+                    log.error("Failed to enumerate mixer %s", name);
             }
         }
     }

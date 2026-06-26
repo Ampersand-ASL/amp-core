@@ -105,7 +105,7 @@ int setMixer2(const char* deviceName, const char *paramName, int v1, int v2) {
 int withMixerElementInfo(const char* deviceName, const char* paramName, 
 	std::function<int(snd_hctl_elem_t*, snd_ctl_elem_info_t*)> cb) {
 
-		snd_hctl_t *hctl;
+	snd_hctl_t *hctl;
 	if (snd_hctl_open(&hctl, deviceName, 0))
 		return -1;
     // Make sure the handle gets cleaned up no matter how we go out of scope
@@ -131,61 +131,6 @@ int withMixerElementInfo(const char* deviceName, const char* paramName,
 	snd_hctl_elem_info(elem, info);
 
 	return cb(elem, info);
-}
-
-int getMixerRange(const char* deviceName, const char* paramName, int* minV, int* maxV) {
-	return withMixerElementInfo(deviceName, paramName, 
-		[minV, maxV](snd_hctl_elem_t*, snd_ctl_elem_info_t* info) {
-			// At the moment we only support integer values
-			int type = snd_ctl_elem_info_get_type(info);
-			if (type == SND_CTL_ELEM_TYPE_INTEGER) {
-				*minV = snd_ctl_elem_info_get_min(info);
-				*maxV = snd_ctl_elem_info_get_max(info);
-				return 0;
-			} else {
-				return -3;
-			}
-		}
-	);
-}
-
-int convertMixerValueToDb(const char* deviceName, const char* paramName, int value, int* db) {
-    return withMixerElementInfo(deviceName, paramName, 
-		[value, db](snd_hctl_elem_t* elem, snd_ctl_elem_info_t* info) {
-		// At the moment we only support integer values
-		int type = snd_ctl_elem_info_get_type(info);
-		if (type == SND_CTL_ELEM_TYPE_INTEGER) {
-			const unsigned int tlvSize = 32;
-			unsigned int tlv[tlvSize];
-			int rc2 = snd_hctl_elem_tlv_read(elem, tlv, tlvSize);
-			if (rc2 != 0)
-				return -2;
-			unsigned int* dbTlv = 0;
-			// NOTE: It's possible that this call will return a negative 
-			// value to indicate a problem. 
-			//
-			// There is no discussion in the documentation about releasing
-			// the pointer that we get back in dbTlv.
-			int tlvInfoSize = snd_tlv_parse_dB_info(tlv, 32, &dbTlv);
-			if (tlvInfoSize > 0) {                
-				long dbGain = 0;
-				int rc3 = snd_tlv_convert_to_dB(dbTlv, 
-					snd_ctl_elem_info_get_min(info),
-					snd_ctl_elem_info_get_max(info), 
-					value, &dbGain);
-				if (rc3 == 0) {
-					*db = dbGain / 100;
-					return 0;
-				} else {
-					return -3;
-				}
-			} else {
-				return -4;
-			}
-		} else {
-			return -5;
-		}
-	});
 }
 
 int convertMixerDbToValue(const char* deviceName, const char* paramName, int db, int* value) {
@@ -228,5 +173,61 @@ int convertMixerDbToValue(const char* deviceName, const char* paramName, int db,
 	});
 }
 
+int visitMixerRangeDb(const char* deviceName, const char* paramName,
+	std::function<void(int)> cb) {
+	
+	return withMixerElementInfo(deviceName, paramName, 
+		// The outer step converts the device name and parameter name into a
+		// snd_ctl_elem_info_t structure that can be operated on.
+		[cb](snd_hctl_elem_t* elem, snd_ctl_elem_info_t* info) {
+
+			// At the moment we only support integer values
+			int type = snd_ctl_elem_info_get_type(info);
+			if (type == SND_CTL_ELEM_TYPE_INTEGER) {
+
+				const int minV = snd_ctl_elem_info_get_min(info);
+				const int maxV = snd_ctl_elem_info_get_max(info);
+				const unsigned int tlvSize = 32;
+				unsigned int tlv[tlvSize];
+				int rc2 = snd_hctl_elem_tlv_read(elem, tlv, tlvSize);
+				if (rc2 != 0) {
+					return -2;
+				}
+
+				// NOTE: It's possible that this call will return a negative 
+				// value to indicate a problem. 
+				//
+				// There is no discussion in the documentation about releasing
+				// the pointer that we get back in dbTlv.
+				unsigned int* dbTlv = 0;
+				int tlvInfoSize = snd_tlv_parse_dB_info(tlv, tlvSize, &dbTlv);
+				if (tlvInfoSize > 0) {                
+
+					// We do this value->dB conversion once for each value in the range
+					for (int value = minV; value <= maxV; value++) {
+						long dbGain = 0;
+						int rc3 = snd_tlv_convert_to_dB(dbTlv, 
+							snd_ctl_elem_info_get_min(info),
+							snd_ctl_elem_info_get_max(info), 
+							value, &dbGain);
+						if (rc3 == 0) {
+							// If the conversion is successful then give it to the caller,
+							// scaled to decibels.
+							cb(dbGain / 100);
+						} else {
+							return -3;
+						}
+					}
+				} else {
+					return -4;
+				}
+			} else {
+				return -5;
+			}
+
+			return 0;
+		}
+	);
+}
 
 }
