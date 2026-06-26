@@ -348,11 +348,13 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
     // This is the end-point that supplies choices for the dynamic select/option
     // menus.
     svr.Get("/config-select-options", 
-        [](const httplib::Request& req, httplib::Response &res) {
+        [ui](const httplib::Request& req, httplib::Response &res) {
 
         json a;
         const string menuName = req.get_param_value("name");      
         const string arg = req.get_param_value("arg");      
+
+        ui->_log.info("config-select-options start %s", menuName.c_str());
 
         if (menuName == "aslTxMixASet" || 
             menuName == "aslTxMixBSet" || 
@@ -371,10 +373,14 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
             a = enumSerialDevice();
 
         res.set_content(a.dump(), "application/json");
+
+        ui->_log.info("config-select-options stop %s", menuName.c_str());
     });
 
-    svr.Get("/hiddevice-list", [](const httplib::Request &, httplib::Response &res) {
-        
+    svr.Get("/hiddevice-list", [ui](const httplib::Request &, httplib::Response &res) {
+
+        ui->_log.info("hiddevice-list start");
+
         auto a = json::array();
 
 #ifndef _WIN32        
@@ -409,6 +415,8 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
         );
 #endif        
         res.set_content(a.dump(), "application/json");
+
+        ui->_log.info("hiddevice-list stop");
     });
 
 #ifndef _WIN32            
