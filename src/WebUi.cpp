@@ -354,7 +354,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
         const string menuName = req.get_param_value("name");      
         const string arg = req.get_param_value("arg");      
 
-        ui->_log.info("config-select-options start %s", menuName.c_str());
+        //ui->_log.info("config-select-options start %s", menuName.c_str());
 
         if (menuName == "aslTxMixASet" || 
             menuName == "aslTxMixBSet" || 
@@ -374,7 +374,7 @@ void WebUi::uiThread(WebUi* ui, MessageConsumer* bus, CircularBuffer2Locked* log
 
         res.set_content(a.dump(), "application/json");
 
-        ui->_log.info("config-select-options stop %s", menuName.c_str());
+        //ui->_log.info("config-select-options stop %s", menuName.c_str());
     });
 
     svr.Get("/hiddevice-list", [ui](const httplib::Request &, httplib::Response &res) {
